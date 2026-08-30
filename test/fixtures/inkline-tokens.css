@@ -1,0 +1,95 @@
+/* The --ink-* channel, both rooms, as the myICOR INKLINE theme declares it.
+ *
+ * Extracted from `myICOR INKLINE/theme.css`, limited to the tokens the
+ * plugin's own token block actually reads. This is the INKLINE half of
+ * the four-room matrix: with this file loaded the plugin resolves through the
+ * theme channel, without it through the stock fallbacks. Both halves are
+ * gated, because the degradation law is about the FALLBACKS while the contrast
+ * measurements are about the THEME values, and neither one covers the other. */
+
+body {
+  --ink-font-display: 'Bricolage Grotesque', 'Instrument Sans', system-ui, sans-serif;
+  --ink-font-body: 'Instrument Sans', system-ui, sans-serif;
+  --ink-font-hand: 'Caveat', cursive;
+  --ink-font-mono: 'Spline Sans Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --ink-text-hand-xs: 20px;
+  --ink-text-hand-sm: 22px;
+  --ink-hand-overhang: 0.25em;
+  --ink-radius-subtle: 10px;
+  --ink-radius-standard: 16px;
+  --ink-radius-control: 4px;
+  --ink-radius-pill: 999px;
+  --ink-ease-draw: cubic-bezier(0.22, 1, 0.36, 1);
+}
+body.theme-dark {
+  /* The page ground, mapped the way theme.css:419-422 maps it. Without these
+     the gate's INKLINE rooms composited against STOCK Obsidian's #1E1E1E and
+     #FFFFFF - pessimistic in the ink room and OPTIMISTIC in the paper one,
+     which is the direction that eventually passes a real failure. Measured
+     before the fix: the DECISION kicker read 4.03:1 in the gate against 4.83:1
+     (ink) / 5.75:1 (paper) in the live captures. */
+  --background-primary: var(--ink);
+  --background-primary-alt: var(--ink-2);
+  --background-secondary: var(--ink-deep);
+  --background-secondary-alt: var(--ink-3);
+  --ink: #0c0e12;
+  --ink-deep: #0a0c0f;
+  --ink-2: #12151b;
+  --ink-3: #181c24;
+  --ink-overlay: #1c212b;
+  --ink-input: #10131a;
+  --ink-paper: #f6f3ec;
+  --ink-paper-dim: #c9c4b8;
+  --ink-paper-faint: #8e897d;
+  --ink-marker: #ff5a2d;
+  --ink-marker-fill: #ff5a2d;
+  --ink-marker-fill-hover: #ff7248;
+  --ink-marker-text: #ff5a2d;
+  --ink-on-marker: #180e08;
+  --ink-marker-soft: rgba(255, 90, 45, 0.13);
+  --ink-marker-border: rgba(255, 90, 45, 0.38);
+  --ink-hairline: rgba(246, 243, 236, 0.14);
+  --ink-hairline-subtle: rgba(246, 243, 236, 0.09);
+  --ink-hairline-emphasis: rgba(246, 243, 236, 0.22);
+  --ink-hover-wash: rgba(246, 243, 236, 0.09);
+  --ink-track: rgba(246, 243, 236, 0.10);
+  --ink-float-shadow: 0 0 0 1px rgba(246, 243, 236, 0.12), 0 24px 48px rgba(10, 12, 15, 0.55);
+  --ink-destructive: #d33737;
+  --ink-destructive-text: #e36350;
+  --ink-warning: #c2a35c;
+  --ink-success-dot: #7d9a7f;
+  --ink-hand-ink: #ff5a2d;
+}
+body.theme-light {
+  --background-primary: var(--ink);
+  --background-primary-alt: var(--ink-2);
+  --background-secondary: var(--ink-deep);
+  --background-secondary-alt: var(--ink-3);
+  --ink: #f6f3ec;
+  --ink-deep: #f1ede2;
+  --ink-2: #fffdf7;
+  --ink-3: #ede9df;
+  --ink-overlay: #fffdf7;
+  --ink-input: #fffdf7;
+  --ink-paper: #171a20;
+  --ink-paper-dim: #4d4a42;
+  --ink-paper-faint: #5a574e;
+  --ink-marker: #d43f16;
+  --ink-marker-fill: #b93613;
+  --ink-marker-fill-hover: #8f2e10;
+  --ink-marker-text: #b93613;
+  --ink-on-marker: #fff6f0;
+  --ink-marker-soft: rgba(212, 63, 22, 0.12);
+  --ink-marker-border: rgba(212, 63, 22, 0.35);
+  --ink-hairline: rgba(23, 26, 32, 0.14);
+  --ink-hairline-subtle: rgba(23, 26, 32, 0.09);
+  --ink-hairline-emphasis: rgba(23, 26, 32, 0.2);
+  --ink-hover-wash: rgba(23, 26, 32, 0.10);
+  --ink-track: rgba(23, 26, 32, 0.10);
+  --ink-float-shadow: 0 0 0 1px rgba(23, 26, 32, 0.14), 0 24px 48px rgba(23, 26, 32, 0.18);
+  --ink-destructive: #d33737;
+  --ink-destructive-text: #b33a2b;
+  --ink-warning: #866c32;
+  --ink-success-dot: #5e7a60;
+  --ink-hand-ink: #b93613;
+}

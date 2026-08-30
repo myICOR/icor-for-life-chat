@@ -1,0 +1,123 @@
+/* THE HOSTILE HOST. Read this before changing a control rule in styles.css.
+ *
+ * Two hosts, not one: Obsidian's own app.css and the theme on top of it. Both
+ * style bare elements, and both outrank a single-class plugin rule.
+ *
+ * The theme this plugin ships beside - myICOR INKLINE - states, verbatim, at
+ * theme.css:1345:
+ *
+ *     button:not(.clickable-icon) {
+ *       background: var(--ink-3);
+ *       color: var(--ink-paper-dim);
+ *       border: 1px solid var(--ink-hairline);
+ *       box-shadow: none;
+ *       font-family: var(--ink-font-body);
+ *       font-weight: 500;
+ *     }
+ *
+ * `:not()` takes the specificity of its argument, so that selector computes to
+ * (0,1,1) and OUTRANKS every single-class rule at (0,1,0). Its :hover twin is
+ * (0,2,1) and outranks a two-class rule.
+ *
+ * This file reproduces those selectors at their exact specificity and paints
+ * them in SENTINEL values that appear nowhere in the plugin's design system, so
+ * a control that loses the cascade computes to something no reader could
+ * mistake for an authored value. The gate asserts against the sentinels AND
+ * against the resolved tokens, because "not the sentinel" and "the right value"
+ * are two different claims and only the second one is the spec.
+ *
+ * The sentinels are deliberately hideous. If one of them ever reaches a
+ * screenshot, the fixture is being loaded into the product by mistake. */
+
+:root {
+  --aic-host-sentinel-bg: rgb(1, 2, 3);
+  --aic-host-sentinel-fg: rgb(4, 5, 6);
+  --aic-host-sentinel-edge: rgb(7, 8, 9);
+}
+
+/* Obsidian app.css:6678 - the app's own disabled-button dial, (0,1,1). This is
+   the `opacity: 0.7` the plugin retires by name: our .aic-send:disabled rule wins
+   background and color at (0,2,0) and then never mentions opacity, so the dial
+   composites the whole control anyway - fill, label and border together - which
+   is why the label solved to a = 0.700 on three channels. Quiet is a token
+   step, so the plugin must state `opacity: 1` and mean it. */
+button[disabled],
+button[aria-disabled="true"],
+button[disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* app.css:6675 - the app rings focused buttons; the plugin draws its own pen. */
+button:focus-visible {
+  box-shadow: 0 0 0 3px rgb(1, 2, 3);
+}
+
+/* theme.css:1345 - the selector, at its real specificity. */
+button:not(.clickable-icon) {
+  background: rgb(1, 2, 3);
+  color: rgb(4, 5, 6);
+  border: 1px solid rgb(7, 8, 9);
+  box-shadow: none;
+  font-family: HostSentinelFace, serif;
+  font-weight: 500;
+}
+/* theme.css:1353 - (0,2,1), which a two-class plugin rule ties or loses to. */
+button:not(.clickable-icon):hover {
+  background: rgb(1, 2, 3);
+  color: rgb(4, 5, 6);
+  border-color: rgb(7, 8, 9);
+}
+
+/* theme.css input family: an :is() list guarded by :not() clauses. :is() takes
+   the specificity of its most specific argument, so this computes to (0,5,1) -
+   the measurement behind the four-times-repeated class on .aic-input. */
+:is(input[type='text'], input[type='search'], textarea):not(.no-host):not(.no-host2):not(.no-host3):not(.no-host4) {
+  background: rgb(1, 2, 3);
+  color: rgb(4, 5, 6);
+  border: 1px solid rgb(7, 8, 9);
+  border-radius: 6px;
+  padding: 6px;
+}
+
+/* app.css - the pane's own padding, at (0,2,0). The chat view's contentEl IS a
+   .view-content, so this is the rule the plugin's root has to beat. It used to
+   be beaten with `!important`; it is now beaten with `.aic-root.aic-root.aic-root`
+   at (0,3,0), and that claim is worthless unless the competing rule is actually
+   in the room. */
+.workspace-leaf-content .view-content {
+  padding: 12px;
+}
+
+/* Stock Obsidian's own variables, so the plugin's STOCK fallback chain is the
+   one under test in the stock rooms. Values read from Obsidian 1.8.x. */
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  background-color: var(--background-primary);
+  color: var(--text-normal);
+}
+body.theme-dark {
+  --background-primary: #1e1e1e;
+  --background-primary-alt: #1a1a1a;
+  --background-secondary: #161616;
+  --background-modifier-border: #333;
+  --background-modifier-hover: rgba(255, 255, 255, 0.075);
+  --text-normal: #dadada;
+  --text-muted: #b3b3b3;
+  --text-faint: #666;
+  --text-error: #ff3333;
+  --shadow-s: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+body.theme-light {
+  --background-primary: #ffffff;
+  --background-primary-alt: #fafafa;
+  --background-secondary: #f2f3f5;
+  --background-modifier-border: #ddd;
+  --background-modifier-hover: rgba(0, 0, 0, 0.05);
+  --text-normal: #222222;
+  --text-muted: #5c5c5c;
+  --text-faint: #999;
+  --text-error: #e93147;
+  --shadow-s: 0 1px 2px rgba(0, 0, 0, 0.1);
+}

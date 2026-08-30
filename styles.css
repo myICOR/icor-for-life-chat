@@ -1,0 +1,1702 @@
+/* ICOR AI Chat - INKLINE visual grammar.
+ * Every colour rides an --ink-* token with a stock Obsidian fallback, so the
+ * plugin degrades legibly outside the INKLINE theme. A raw hex outside the
+ * token block below is a defect. Every gap is a 4/8/12/16/24/32/48/64 rung;
+ * hairlines and 2px accent devices are the named exemptions. */
+
+/* ------------------------------------------------------------ 0.1 tokens */
+
+.aic-root, .aic-settings, .aic-menu {
+  /* SIXTH room split, and the loudest of the six. A single
+     fallback here painted the INK room's #FF5A2D in BOTH stock rooms, so on
+     stock light the focus ring measured 2.80:1 against the composer card on 52
+     of 58 controls (SC 1.4.11 wants 3:1 and the ring's only adjacency is its
+     ground, because outline-offset: 2px puts ground on both sides), the send
+     pill's fill measured the same 2.80:1, and the 6px marker dot cleared by
+     0.11. One token, three symptoms, one edit. `--aic-marker-fill` collapsed
+     onto the same ramp outside INKLINE, so the MARK-vs-FILL split below was
+     inoperative in exactly the two stock rooms these fallbacks exist to protect.
+     `--aic-on-marker` moves WITH the fill and that half is load-bearing, not
+     tidying: fill #B93613 under the ink room's #180E08 label would read
+     3.24:1 - a text failure worse than the boundary failure it closed. Paired
+     with #FFF6F0 it reads 5.47:1, the certified paper figure.
+     Every value below is what `myICOR INKLINE/theme.css`
+     already declares in `body.theme-light`; no new colour is invented here. */
+  --aic-marker: var(--ink-marker, #d43f16);
+  /* MARK vs FILL, and the two are different rungs in the paper room. The
+     durable test: a token that NAMES
+     AN ON-COLOUR is a FILL and takes marker_fill_on_paper; a token that names
+     none is a MARK and keeps #D43F16. --aic-marker is the MARK - the 2px
+     underlines, the dot, the focus pen. --aic-marker-fill is the FILL, and the
+     send pill is its only consumer. The build already read the FILL ramp for
+     HOVER (--ink-marker-fill-hover) while reading MARK for REST, which is why
+     the paper-room hover changed character instead of lifting, and why the
+     enabled pill measured 4.35:1 - the exact number this split exists to have
+     killed. */
+  --aic-marker-fill: var(--ink-marker-fill, #b93613);
+  --aic-marker-up: var(--ink-marker-fill-hover, #8f2e10);
+  /* Small marker TEXT is a third rung: marker_on_paper measures 3.59-4.19:1
+     below large scale, under the 2.8 floor. The settings
+     index is the one consumer - the mode chips took the quiet ink instead,
+     because a status ink never rides its own hue's tint. */
+  --aic-marker-text: var(--ink-marker-text, #b93613);
+  /* --aic-marker-border and --aic-marker-soft are RETIRED here, not split.
+     marker-soft never had a consumer at all; marker-border had
+     exactly one, the composer's focus step, and that now takes the
+     full-strength mark. Splitting a dead token is work that can only ever be
+     wrong, so the family that gets a room split is FOUR tokens, not six. */
+  --aic-on-marker: var(--ink-on-marker, #fff6f0);
+  --aic-paper: var(--ink-paper, var(--text-normal));
+  --aic-dim: var(--ink-paper-dim, var(--text-muted));
+  /* stock fallback is --text-muted, NOT --text-faint: stock --text-faint measures
+     2.12:1 light / 2.57:1 dark, under half the AA floor. Stock --text-muted measures
+     6.19:1 / 7.03:1; the INKLINE rooms keep --ink-paper-faint. */
+  --aic-faint: var(--ink-paper-faint, var(--text-muted));
+  --aic-hairline: var(--ink-hairline, var(--background-modifier-border));
+  --aic-hairline-subtle: var(--ink-hairline-subtle, var(--background-modifier-border));
+  --aic-hairline-emphasis: var(--ink-hairline-emphasis, var(--background-modifier-border));
+  --aic-surface: var(--ink-2, var(--background-primary-alt));
+  --aic-input: var(--ink-input, var(--background-secondary));
+  --aic-overlay: var(--ink-overlay, var(--background-secondary));
+  --aic-track: var(--ink-track, rgba(134, 134, 134, 0.12));
+  /* SIX fallback families carry a ROOM SPLIT, because the design system gives each of them two
+     rungs and a single fallback paints one room's value in both. Measured on
+     stock white before the split: the amber 2.42:1 on every device at once
+     (gutter dot, decision rail, statusline dot), the hand ink 3.11:1 at 20px/500
+     where the floor is 4.5. The light rungs are stated here and the dark rungs
+     in the .theme-dark block below - the base block is the LIGHT room because
+     stock Obsidian's light room carries no class of its own. Both defer to the
+     --ink-* channel first, so a theme that maps the token always wins.
+     The sixth is the marker family above.
+     Light values: warning #8A6F33 (4.69:1 on white),
+     success_dot #5E7A60 (5.16:1; #7D9A7F cleared by 0.09 and the floor is not a
+     target), the hand voice on paper #B93613 (5.55:1),
+     destructive_text #B33A2B, marker_text_on_paper #B93613. */
+  --aic-warning: var(--ink-warning, #8a6f33);
+  --aic-destructive: var(--ink-destructive, #d33737);
+  /* Outside INKLINE this used to inherit Obsidian's --text-error (#FF3333 dark,
+     #E93147 light), which is not a design-system value and was never swept: the
+     failed tool-row name measured 4.20:1 on stock light, the Stop label 3.79:1.
+     destructive_text was cut to these two rungs for exactly this job. */
+  --aic-destructive-text: var(--ink-destructive-text, #b33a2b);
+  --aic-success-dot: var(--ink-success-dot, #5e7a60);
+  --aic-hand-ink: var(--ink-hand-ink, var(--ink-marker, #b93613));
+  --aic-display: var(--ink-font-display, var(--font-interface));
+  --aic-body: var(--ink-font-body, var(--font-interface));
+  --aic-hand: var(--ink-font-hand, cursive);
+  --aic-mono: var(--ink-font-mono, ui-monospace, SFMono-Regular, monospace);
+  --aic-ease: var(--ink-ease-draw, cubic-bezier(0.22, 1, 0.36, 1));
+  --aic-wash: var(--ink-hover-wash, var(--background-modifier-hover));
+  --aic-float-shadow: var(--ink-float-shadow, var(--shadow-s));
+  --aic-r-subtle: var(--ink-radius-subtle, 10px);
+  --aic-r-standard: var(--ink-radius-standard, 16px);
+  --aic-r-pill: var(--ink-radius-pill, 999px);
+  --aic-r-control: var(--ink-radius-control, 4px);
+}
+
+/* The ink room's rungs for the SIX split families. (0,2,0) beats the base
+   block's (0,1,0); both still read the --ink-* channel first, so this changes
+   nothing at all inside a theme that maps them - INKLINE dark, INKLINE light
+   and stock dark all come back byte-identical, and the cost of the split is
+   zero everywhere it is not needed. */
+.theme-dark .aic-root,
+.theme-dark .aic-settings,
+.theme-dark .aic-menu {
+  --aic-marker: var(--ink-marker, #ff5a2d);
+  --aic-marker-fill: var(--ink-marker-fill, var(--aic-marker));
+  --aic-marker-up: var(--ink-marker-fill-hover, #ff7248);
+  --aic-on-marker: var(--ink-on-marker, #180e08);
+  --aic-warning: var(--ink-warning, #c2a35c);
+  --aic-success-dot: var(--ink-success-dot, #7d9a7f);
+  --aic-hand-ink: var(--ink-hand-ink, var(--ink-marker, #ff5a2d));
+  --aic-destructive-text: var(--ink-destructive-text, #e36350);
+  --aic-marker-text: var(--ink-marker-text, var(--aic-marker));
+}
+
+/* -------------------------------------------------------- shared voices */
+
+.aic-kicker {
+  font-family: var(--aic-mono);
+  text-transform: uppercase;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  font-size: 10.5px;
+  color: var(--aic-faint);
+}
+.aic-kicker-wide { letter-spacing: 0.14em; font-size: 11px; }
+.aic-middot { color: var(--aic-faint); margin: 0 4px; }
+.aic-icon { display: inline-flex; align-items: center; }
+.aic-icon .svg-icon { width: 12px; height: 12px; }
+
+.aic-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+.aic-dot-marker { background: var(--aic-marker); animation: aic-pulse 1.6s ease-in-out infinite; }
+.aic-dot-warning { background: var(--aic-warning); }
+.aic-dot-destructive { background: var(--aic-destructive); }
+.aic-dot-success { background: var(--aic-success-dot); }
+.aic-dot-faint { background: var(--aic-faint); }
+
+@keyframes aic-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+/* The focus pen is NOT stated here. It is stated at the very bottom of this
+   file, above the control layer, because the control reset zeroes outline -
+   see "THE FOCUS PEN" at the end. A pen written here reads correctly and paints
+   nothing. */
+
+/* The composer's focus is the CARD border stepping to marker (6.1), never a
+   second ring drawn around the textarea inside it. The theme styles every
+   textarea, so this is stated at a specificity that wins in both rooms. */
+/* The repeated class is deliberate and measured against the live theme.
+   The theme's input rule is an :is() list guarded by four :not() clauses;
+   :is() takes the specificity of its most specific argument, so it computes to
+   (0,5,1). Three repetitions of our class also land on (0,5,1) - a TIE, which
+   the theme won on document order, and the composer kept rendering as a form
+   well inside a card (measured: border 1px rgba(246,243,236,0.41) on the live
+   textarea). Four repetitions is (0,6,1) and wins outright, without depending
+   on load order or !important. */
+.aic-root .aic-composer textarea.aic-input.aic-input.aic-input.aic-input,
+.aic-root .aic-composer textarea.aic-input.aic-input.aic-input.aic-input:hover,
+.aic-root .aic-composer textarea.aic-input.aic-input.aic-input.aic-input:active,
+.aic-root .aic-composer textarea.aic-input.aic-input.aic-input.aic-input:focus,
+.aic-root .aic-composer textarea.aic-input.aic-input.aic-input.aic-input:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  /* `color` belongs in this block and not in .aic-input: the host's input rule
+     sets it too, and a (0,1,0) declaration hands the composer's own type back
+     to the theme while every other property here wins. */
+  color: var(--aic-paper);
+  /* The caret is the marker. Specified 2026-08-28 and never built - grep
+     returned zero - so the one focus device that lives INSIDE the field was
+     the host's default the whole time. It belongs at this specificity for the
+     same reason `color` does: the host's input rule sets caret-color too. */
+  caret-color: var(--aic-marker);
+}
+
+/* THE CONTROL PREFIX, and it is a measurement rather than a habit.
+ *
+ * Two hosts style bare <button> and both outrank a bare class rule. Obsidian's
+ * app.css states `button[disabled]` and `button:focus-visible`; the myICOR
+ * INKLINE theme states `button:not(.clickable-icon)` (theme.css:1345) - `:not()`
+ * takes its argument's weight, so both compute to (0,1,1) against a plugin rule
+ * at (0,1,0). Their :hover twins are (0,2,1), which beats a SINGLE root prefix
+ * at (0,2,0): raising to `.aic-root.aic-root .aic-send` fixes the resting pill and still
+ * hands `color` and `border-color` back to the host the moment the pointer
+ * arrives. Measured, in that order, by test/computed-style.test.mjs.
+ *
+ * So every control this plugin draws is stated `.aic-root.aic-root.aic-root .aic-*`,
+ * which is (0,3,0) at rest and (0,4,0) on :hover - above both hosts in both
+ * states, without depending on load order and without `!important`, which stays
+ * banned here. The repeated root class is the whole idiom; the control class
+ * itself is never doubled, so the meaningful half of the selector stays clean.
+ *
+ * The plugin ALSO declares `data-ink-plugin="icor-for-life-chat"` on every root it
+ * owns, which is how INKLINE stands its own control
+ * skins down at zero specificity. The attribute does not retire this raise and
+ * never will: the plugin ships into vaults running other themes, and a control
+ * that is only correct under one theme is not correct. */
+.aic-root.aic-root.aic-root .aic-seg-btn,
+.aic-root.aic-root.aic-root .aic-text-btn,
+.aic-root.aic-root.aic-root .aic-icon-btn,
+.aic-root.aic-root.aic-root .aic-agent-chip,
+.aic-root.aic-root.aic-root .aic-thumb-x,
+.aic-root.aic-root.aic-root .aic-sub-back {
+  box-shadow: none;
+  background-image: none;
+  font-family: inherit;
+}
+/* .aic-badge and .aic-code-chip are deliberately NOT in that list: they carry
+   the mono voice, and `font-family: inherit` above would defeat their own
+   declaration at equal weight and later source order. */
+.aic-root.aic-root.aic-root .aic-badge,
+.aic-root.aic-root.aic-root .aic-code-chip {
+  box-shadow: none;
+  background-image: none;
+}
+/* The :hover twins are deliberately ABSENT from this list, and their absence is
+   a measurement rather than a tidy-up. With them present the reset stood at
+   (0,5,0) and outranked the leaf that paints the hover wash at (0,4,0): the
+   plugin killed its own hover ground, in all four rooms - the same shape as the
+   host-cascade defect, one layer in. They are not needed either, because the rest-state
+   entries here are (0,4,0) and already beat the host's :hover twin at (0,2,1);
+   specificity compares class counts before element counts. */
+.aic-root.aic-root.aic-root .aic-seg-btn,
+.aic-root.aic-root.aic-root .aic-text-btn,
+.aic-root.aic-root.aic-root .aic-icon-btn,
+.aic-root.aic-root.aic-root .aic-sub-back,
+.aic-root.aic-root.aic-root .aic-approve-deny {
+  border: none;
+  background-color: transparent;
+}
+/* The thumbnail's remove control keeps its OWN ground: it sits on top of an
+   image, and a transparent button over arbitrary photo pixels has no
+   contrast anyone can predict. It is therefore absent from the list above. */
+.aic-root.aic-root.aic-root .aic-seg-btn.is-active[data-tone='bypassPermissions'] {
+  border: 1px solid var(--aic-destructive);
+}
+
+/* ------------------------------------------------------------ 0 the page */
+
+/* The repeated root class replaces an `!important` (0.1 bans it flat). What it
+   beats is Obsidian's own `.workspace-leaf-content .view-content` padding at
+   (0,2,0) - this pane IS a .view-content - so (0,3,0) clears it outright and
+   the plugin keeps the same idiom it uses for the control layer. A local
+   `!important` is the tell that a specificity problem was met and not counted;
+   it was met here twice before, on the approval borders and on the textarea. */
+.aic-root.aic-root.aic-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+  font-family: var(--aic-body);
+}
+
+.aic-stream { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; }
+
+.aic-column {
+  max-width: 70ch;
+  margin-inline: auto;
+  padding: 16px 16px 24px;
+}
+
+/* --------------------------------------------------------- 1 empty state */
+
+.aic-empty { padding-top: 32px; }
+.aic-empty-display {
+  margin-top: 12px;
+  font-family: var(--aic-display);
+  font-weight: 640;
+  letter-spacing: -0.022em;
+  line-height: 1.08;
+  color: var(--aic-paper);
+  font-size: clamp(22px, 6cqw, 30px);
+}
+.aic-empty-hand {
+  margin-top: 8px;
+  font-family: var(--aic-hand);
+  font-size: var(--ink-text-hand-sm, 22px);
+  font-weight: 500;
+  color: var(--aic-faint);
+  transform: rotate(-2deg);
+  transform-origin: left center;
+  padding-inline-end: var(--ink-hand-overhang, 0.25em);
+}
+
+/* ------------------------------------------------------------- 2 stream */
+
+.aic-user {
+  background: var(--aic-surface);
+  border: 1px solid var(--aic-hairline-subtle);
+  border-radius: var(--aic-r-subtle);
+  padding: 8px 12px;
+  margin-top: 24px;
+}
+.aic-user:first-child { margin-top: 0; }
+.aic-user-text {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--aic-paper);
+  white-space: pre-wrap;
+  /* overflow-wrap, not word-break: break-word - same soft-wrapping of long
+     tokens, but the spelling that is actually in the CSS baseline. */
+  overflow-wrap: break-word;
+}
+.aic-user-context {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--aic-hairline-subtle);
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.aic-assistant {
+  margin-top: 12px;
+  font-size: 17px;
+  line-height: 1.68;
+  color: var(--aic-paper);
+  white-space: pre-wrap;
+  /* overflow-wrap, not word-break: break-word - same soft-wrapping of long
+     tokens, but the spelling that is actually in the CSS baseline. */
+  overflow-wrap: break-word;
+}
+.aic-assistant.is-rendered { white-space: normal; }
+.aic-assistant > :first-child { margin-top: 0; }
+.aic-assistant > :last-child { margin-bottom: 0; }
+
+.aic-thinking {
+  margin-top: 12px;
+  font-family: var(--aic-hand);
+  font-size: var(--ink-text-hand-xs, 20px);
+  font-weight: 500;
+  color: var(--aic-faint);
+  padding-inline-end: var(--ink-hand-overhang, 0.25em);
+}
+.aic-thinking-dot { animation: aic-pulse 1.6s ease-in-out infinite; }
+.aic-thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+.aic-thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+
+.aic-fold { margin-top: 12px; }
+.aic-fold-summary { list-style: none; cursor: pointer; }
+.aic-fold-summary::-webkit-details-marker { display: none; }
+.aic-fold-body {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--aic-dim);
+  white-space: pre-wrap;
+}
+
+.aic-boundary {
+  margin-top: 24px;
+  padding-top: 12px;
+  border-top: 1px solid var(--aic-hairline-subtle);
+}
+
+.aic-error {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 13px;
+}
+.aic-error-glyph { font-family: var(--aic-mono); color: var(--aic-destructive-text); }
+.aic-error-text { color: var(--aic-destructive-text); }
+
+/* -------------------------------------------------- 2.2 tool-call rows */
+
+.aic-toolgroup { margin-top: 12px; }
+/* The summary row exists only when the group is collapsible, and that fact
+   already lives on the group as `has-summary` - so the stylesheet derives
+   visibility from it instead of an inline display the code would have to keep
+   in sync with the class. */
+.aic-toolgroup:not(.has-summary) .aic-tool-summary { display: none; }
+.aic-tool-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  cursor: pointer;
+}
+.aic-tool-summary .aic-chevron { display: inline-flex; color: var(--aic-faint); }
+.aic-tool-summary .aic-chevron .svg-icon { width: 12px; height: 12px; }
+.aic-tool-summary.is-open .aic-chevron { transform: rotate(90deg); }
+.aic-chevron { transition: transform 160ms var(--aic-ease); }
+.aic-tool-summary-label { color: var(--aic-dim); }
+.aic-toolgroup.is-collapsed .aic-tool-rows { display: none; }
+
+.aic-tool {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  gap: 8px;
+  align-items: baseline;
+  min-height: 28px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--aic-hairline-subtle);
+}
+.aic-tool-gutter { display: inline-flex; align-items: center; height: 100%; }
+.aic-tool-main { min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+.aic-tool-name {
+  font-size: 11px;
+  color: var(--aic-dim);
+  flex: 0 0 auto;
+}
+.aic-tool.is-running .aic-tool-name { color: var(--aic-paper); }
+.aic-tool.is-failed .aic-tool-name { color: var(--aic-destructive-text); }
+.aic-tool-target {
+  font-size: 12.5px;
+  color: var(--aic-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* THE ROW OPENS, and the whole row is the control.
+   A Bash payload is cut at the pane's width and the cut lands after the `cd`,
+   so every row in a session reads the same for its first sixty characters and
+   the part that differs is always the part that is gone.
+
+   No disclosure glyph. The pickers just lost theirs, and a stream that grows an
+   arrow per row is chrome in the one region meant to be content - so the
+   affordance is the cursor and a hover ground, and the ground is the wash the
+   session rows already use rather than a new one.
+
+   It is stated only on `.is-expandable`, which is set from a MEASUREMENT: a row
+   whose payload fits gets no pointer and no tab stop, because an expand
+   affordance on a row with nothing to reveal is an empty promise. */
+/* THE WASH IS THE PLUGIN'S "THIS ROW RESPONDS" GROUND, and it is fenced:
+   actionable rows only, the ground ALONE with no second device, never on
+   prose, 140ms, and NOT hover-only - which is why the row is focusable, wears
+   `aria-expanded`, and lights on `:focus-visible` as well. A cue only a mouse
+   can find is a cue half the users never get. */
+.aic-tool.is-expandable { cursor: pointer; transition: background-color 140ms var(--aic-ease); }
+.aic-tool.is-expandable:hover,
+.aic-tool.is-expandable:focus-visible { background: var(--aic-wash); }
+/* WRAP, never scroll. A horizontal scrollbar inside a chat row hides the end of
+   the string behind a gesture and takes the row out of the column's reading
+   rhythm. `anywhere` because a shell command is one long token as often as not,
+   and a path that will not break is a row that overflows anyway. */
+.aic-tool.is-expanded .aic-tool-target {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: visible;
+  text-overflow: clip;
+}
+/* The name and the duration keep their places: the row is a three-column grid
+   and only the middle cell grows, so the timing - often the reason the row was
+   opened - stays where the eye left it. */
+.aic-tool.is-expanded { align-items: start; }
+.aic-tool.is-expanded .aic-tool-main { align-items: baseline; flex-wrap: wrap; }
+.aic-tool-right {
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  color: var(--aic-faint);
+  font-variant-numeric: tabular-nums;
+}
+.aic-tool.is-approval {
+  border-left: 2px solid var(--aic-warning);
+  padding-left: 8px;
+  /* OPTICAL CORRECTION, 5.7 fence 3, labelled because an unlabelled off-rung
+     value is drift. -10 = -(8 rung + 2 rail), which pulls the row's text back
+     onto the column it sits on when the rail is absent. The same device as the
+     -17px on .aic-rail.is-first, and it earned the same sentence. */
+  margin-left: -10px;
+}
+.aic-glyph-fail { font-family: var(--aic-mono); font-size: 11px; color: var(--aic-destructive-text); }
+
+.aic-approval { display: inline-flex; gap: 8px; align-items: center; }
+/* The shared geometry is stated on the three classes, not on `.aic-approval
+   button` - an element-tagged descendant is (0,2,1) and would outrank the
+   colour rules below it. The two `!important` borders this replaces were the
+   same specificity defect, met once and patched locally instead of diagnosed. */
+.aic-root.aic-root.aic-root .aic-approve-deny,
+.aic-root.aic-root.aic-root .aic-approve-once,
+.aic-root.aic-root.aic-root .aic-approve-always {
+  /* The explicit control reset (was `all: unset`, which the directory's
+     scanner rejects wholesale). Property-for-property equivalent for
+     everything the two hosts actually attack - app.css button chrome and the
+     theme's button:not(.clickable-icon) block (background, color, border,
+     box-shadow, font-family, font-weight), plus the disabled-opacity dial and
+     UA padding. Inherited properties go to inherit, non-inherited to their
+     initial values, which is precisely what `unset` computed to. The pixel
+     gate measures every control against sentinel values in four rooms, so an
+     incomplete reset here goes red rather than shipping. */
+  appearance: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  opacity: 1;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+  cursor: inherit;
+  cursor: pointer;
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-radius: var(--aic-r-pill);
+  padding: 2px 10px;
+}
+/* The wider grant sits one visual step quieter than the narrow one. That step
+   is the whole point of the treatment, so both ends of it are gated. */
+.aic-root.aic-root.aic-root .aic-approve-once,
+.aic-root.aic-root.aic-root .aic-approve-once:hover {
+  color: var(--aic-paper);
+  border: 1px solid var(--aic-hairline);
+  background-color: transparent;
+}
+.aic-root.aic-root.aic-root .aic-approve-always {
+  color: var(--aic-dim);
+  border: 1px solid var(--aic-hairline);
+  background-color: transparent;
+}
+.aic-root.aic-root.aic-root .aic-approve-always:hover { color: var(--aic-paper); background-color: transparent; }
+.aic-root.aic-root.aic-root .aic-approve-deny { color: var(--aic-dim); }
+.aic-root.aic-root.aic-root .aic-approve-deny:hover { color: var(--aic-destructive-text); }
+
+/* ------------------------------------------------------------ 6 composer */
+
+.aic-dock { flex: 0 0 auto; padding: 0 16px 12px; }
+
+.aic-composer {
+  max-width: 70ch;
+  margin-inline: auto;
+  background: var(--aic-input);
+  border: 1px solid var(--aic-hairline);
+  border-radius: var(--aic-r-standard);
+  padding: 12px;
+  transition: border-color 140ms var(--aic-ease);
+}
+/* THE COMPOSER'S FOCUS, narrowed and then strengthened.
+ *
+ * The trigger was the bigger half of this defect. `:focus-within` fires on
+ * ANY descendant, and even after the statusline moved out the card still holds
+ * nine fixed focus stops of which eight are not the textarea - the send pill,
+ * the badge, four mode chips, the attach and model controls - and every one of
+ * them already wears the 2px pen. So the card was announcing "your keystrokes
+ * land in the input" while focus sat on the send button, which is a lie the
+ * user acts on. At `--aic-marker-border`'s 38% alpha the step measured 1.26:1
+ * against its own resting state and the lie was invisible; at full strength it
+ * would have been loud. NARROWING THE TRIGGER IS THE PRECONDITION FOR
+ * STRENGTHENING IT, never a softening of it.
+ *
+ * `:has(> textarea.aic-input:focus)` is (0,3,1) - :has() takes its most
+ * specific argument, `> textarea.aic-input:focus` = (0,2,1), plus the class.
+ * That clears `.aic-composer` (0,1,0) and every host rule that reaches the card.
+ * `:focus` and not `:focus-visible`: a text field earns its affordance from a
+ * click as much as from a tab, and the caret is already showing either way.
+ *
+ * ONE DEVICE, at full alpha, 1px, and no second carrier: no shadow, no glow.
+ * Measured against the room-split marker values, floor 3.0 (card fill / page ground /
+ * its own resting border): INKLINE dark 5.98 / 6.21 / 4.10, INKLINE light
+ * 4.57 / 4.19 / 3.43, stock dark 5.82 / 5.36 / 4.06, stock light 4.18 / 4.64 /
+ * 3.42. Shipped before this: 1.80 / 1.87 / 1.24 in ink dark. */
+.aic-composer:has(> textarea.aic-input:focus) { border-color: var(--aic-marker); }
+
+.aic-badge-slot:empty,
+.aic-tray.is-empty,
+.aic-thumbs.is-empty { display: none; }
+.aic-badge-slot { margin-bottom: 8px; }
+.aic-tray { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+
+/* THE ATTACHMENT STRIP, inside the card and above the prompt line.
+ *
+ * Inside is the point: the images are part of the message being composed, so
+ * they live in the thing that holds the message. It is not a focus problem the
+ * way the statusline was, because everything in here is focusable and belongs
+ * to the input's own affordance. */
+.aic-thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.aic-thumb {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border: 1px solid var(--aic-hairline);
+  border-radius: var(--aic-r-subtle);
+  overflow: hidden;
+}
+.aic-thumb-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Top-LEFT, over the image's own corner. The control reset puts this in the control
+   layer, so it is stated at (0,3,0) like every other control here.
+
+   Revealed by hover OR focus, and never by `display: none`: a control that is
+   display:none cannot be tabbed to, so a keyboard user could attach an image
+   and then have no way to take it off again. Opacity keeps it in the tab order
+   at every moment, and :focus-visible is what makes the reveal honest. */
+.aic-root.aic-root.aic-root .aic-thumb-x {
+  /* The explicit control reset - see the annotated copy at its first use. */
+  appearance: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  opacity: 1;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+  cursor: inherit;
+  cursor: pointer;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--aic-r-pill);
+  background: var(--aic-overlay);
+  color: var(--aic-paper);
+  opacity: 0;
+}
+.aic-root.aic-root.aic-root .aic-thumb-x .svg-icon { width: 12px; height: 12px; }
+.aic-thumb:hover .aic-thumb-x,
+.aic-root.aic-root.aic-root .aic-thumb-x:focus-visible { opacity: 1; }
+.aic-root.aic-root.aic-root .aic-thumb-x:hover { color: var(--aic-destructive-text); }
+
+/* The drop affordance is the card's own border stepping to the mark, which is
+   the SAME device the focused card uses. One vocabulary: the card is either
+   the thing your input lands in or it is not, and a second treatment here
+   would be a third focus-shaped device competing with two that already mean
+   something. */
+.aic-composer.is-dropping { border-color: var(--aic-marker); }
+
+.aic-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--aic-hairline);
+  border-radius: var(--aic-r-pill);
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  color: var(--aic-dim);
+}
+.aic-chip-icon { display: inline-flex; color: var(--aic-faint); }
+.aic-chip-icon .svg-icon { width: 12px; height: 12px; }
+.aic-chip-detail { font-variant-numeric: tabular-nums; }
+/* Revealed by hover OR focus, and never by `display: none`.
+   It was display:none until the chip was hovered, which takes a control out of
+   the tab order entirely: a keyboard user could pin a note as context and then
+   had no route at all to unpin it. The function existed and could not be
+   reached, which is the same defect as a control whose only housing is hidden.
+   Opacity keeps it in the tab order at every moment, and :focus-visible is what
+   makes the reveal honest rather than a control that is focusable and still
+   invisible while focused. */
+.aic-root.aic-root .aic-chip-x {
+  /* The explicit control reset - see the annotated copy at its first use. */
+  appearance: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  opacity: 1;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+  cursor: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  color: var(--aic-faint);
+  opacity: 0;
+}
+.aic-root.aic-root .aic-chip-x .svg-icon { width: 12px; height: 12px; }
+.aic-chip:hover .aic-chip-x,
+.aic-root.aic-root .aic-chip-x:focus-visible { opacity: 1; }
+.aic-root.aic-root .aic-chip-x:hover { color: var(--aic-destructive-text); }
+
+.aic-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  /* Deliberate: the composer grows itself (autoGrow) and a user-draggable
+     resize corner would fight it. The property is universally supported in
+     Electron; the baseline rule is calibrated for the open web. */
+  /* eslint-disable-next-line css/use-baseline -- autoGrow owns the height */
+  resize: none;
+  outline: none;
+  box-shadow: none;
+  padding: 0;
+  font-family: var(--aic-body);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--aic-paper);
+  max-height: 260px;
+}
+.aic-input::placeholder { color: var(--aic-faint); opacity: 1; }
+
+.aic-action { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.aic-action-spacer { flex: 1 1 auto; }
+
+.aic-seg {
+  display: inline-flex;
+  border: 1px solid var(--aic-hairline);
+  border-radius: var(--aic-r-pill);
+  padding: 2px;
+  gap: 2px;
+}
+.aic-root.aic-root .aic-seg-btn {
+  /* The explicit control reset - see the annotated copy at its first use. */
+  appearance: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  opacity: 1;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+  cursor: inherit;
+  cursor: pointer;
+  font-family: var(--aic-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: var(--aic-r-pill);
+  color: var(--aic-dim);
+}
+.aic-root.aic-root .aic-seg-btn:hover { color: var(--aic-paper); }
+/* The pickers are their VALUE and nothing else. The `chevron-down` after each
+   label was removed on request: three arrows in one thin row is three glyphs
+   saying the same thing, and the row is already read as controls. What the
+   arrow never carried is the fact that these open a MENU - it was
+   `aria-hidden`, correctly - so that moved to `aria-haspopup` on the trigger,
+   which is where it always belonged. `inline-flex` stays: it is what keeps the
+   label on the control's baseline box at any font size. */
+.aic-root.aic-root .aic-seg-btn,
+.aic-root.aic-root .aic-text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* The picker's own `.aic-chevron` rules were deleted with the glyph. The class
+   survives on ONE element, the tool row's disclosure arrow, and its rules live
+   with the tool row where the rotation is stated. A rule kept for a class the
+   composer no longer emits is a rule the next reader has to disprove. */
+.aic-root.aic-root .aic-seg-btn.is-active[data-tone='default'] { background: var(--aic-wash); color: var(--aic-paper); }
+/* A STATUS INK NEVER RIDES ITS OWN HUE'S TINT.
+   Measured across the whole active-chip family in four rooms: Ask (wash, quiet
+   ink) 12.94-17.33 and Auto-accept (amber tint, quiet ink) 10.26-15.38, against
+   Plan (marker tint, marker ink) 2.41-5.30 and Bypass (destructive tint,
+   destructive ink) 4.37-5.10. The two chips that put a coloured ink on their own
+   coloured tint are an order of magnitude quieter and were the only two that
+   failed. The tint and the ink are the same signal; stacking them buys nothing
+   and costs about two thirds of the contrast. Both inks stay legal on a NEUTRAL
+   ground - it is the tint that is the fence. */
+.aic-root.aic-root .aic-seg-btn.is-active[data-tone='plan'] {
+  background: color-mix(in srgb, var(--aic-marker) 14%, transparent);
+  color: var(--aic-paper);
+}
+.aic-root.aic-root .aic-seg-btn.is-active[data-tone='acceptEdits'] {
+  background: color-mix(in srgb, var(--aic-warning) 14%, transparent);
+  color: var(--aic-paper);
+}
+/* Bypass keeps its red and does not get quieter: the hue is carried by the tint
+   AND by the full-strength border, which is two devices. The red-text licence
+   predates that border, and was written when the hue had one carrier;
+   the label's job is to be READ, and it goes 4.37:1 to 11.77:1 in the worst
+   room. */
+.aic-root.aic-root .aic-seg-btn.is-active[data-tone='bypassPermissions'] {
+  background: color-mix(in srgb, var(--aic-destructive) 14%, transparent);
+  border: 1px solid var(--aic-destructive);
+  color: var(--aic-paper);
+}
+
+.aic-root.aic-root .aic-text-btn {
+  /* The explicit control reset - see the annotated copy at its first use. */
+  appearance: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  opacity: 1;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+  cursor: inherit;
+  cursor: pointer;
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--aic-dim);
+}
+.aic-root.aic-root .aic-text-btn:hover { color: var(--aic-paper); }
+
+.aic-root.aic-root .aic-icon-btn {
+  /* The explicit control reset - see the annotated copy at its first use. */
+  appearance: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  opacity: 1;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+  cursor: inherit;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--aic-r-subtle);
+  color: var(--aic-faint);
+}
+.aic-root.aic-root .aic-icon-btn:hover { color: var(--aic-paper); background: var(--aic-wash); }
+.aic-root.aic-root .aic-icon-btn .svg-icon { width: 16px; height: 16px; }
+
+.aic-root.aic-root .aic-send {
+  /* The explicit control reset - see the annotated copy at its first use. */
+  appearance: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  opacity: 1;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+  cursor: inherit;
+  cursor: pointer;
+  border-radius: var(--aic-r-pill);
+  /* The FILL ramp, not the MARK ramp. This control sets a background AND
+     an on-colour, which is the fill-vs-mark test itself, so in the paper room it
+     takes #B93613 and not #D43F16. It also puts rest and hover on ONE ramp:
+     --aic-marker-up already read --ink-marker-fill-hover, so the paper-room
+     hover used to change character (#D43F16 -> #8F2E10) instead of lifting. */
+  background: var(--aic-marker-fill);
+  color: var(--aic-on-marker);
+  font-family: var(--aic-display);
+  font-weight: 600;
+  font-size: 12px;
+  height: 28px;
+  line-height: 28px;
+  padding: 0 16px;
+  text-align: center;
+}
+.aic-root.aic-root .aic-send:hover { background: var(--aic-marker-up); }
+.aic-root.aic-root .aic-send:disabled {
+  cursor: default;
+  /* The same ramp as the rest state: the disabled pill is this control quieter,
+     not a different control. Mixing from the MARK rung here would have left one
+     button reading two rungs, which is the defect named one line up. */
+  background: color-mix(in srgb, var(--aic-marker-fill) 55%, var(--aic-input));
+  color: var(--aic-paper);
+  /* Obsidian's app.css:6678 dials every disabled button to 0.7. That dial is
+     retired on this control by name and replaced with a measured token
+     step, so the step has to be the whole treatment: quiet is a token step,
+     never an opacity dial, in every syntax. Left
+     inherited, it composited fill AND label toward the composer ground and put
+     three of four rooms under 4.5:1 in the plugin's most common state. */
+  opacity: 1;
+}
+.aic-root.aic-root .aic-send.is-stop {
+  background: transparent;
+  border: 1px solid var(--aic-destructive);
+  color: var(--aic-destructive-text);
+  line-height: 26px;
+}
+
+/* The statusline strip, as a SIBLING of the composer card. It used to be mounted
+   inside .aic-composer, which put a non-focusable readout inside the input's
+   :focus-within affordance, measured its overflow ladder against a width short
+   by 24px of padding, and let a 16px radius inset the first and last characters
+   of a strip whose whole voice is alignment. The hairline is the separation, so
+   there is no margin-top. */
+/* Two heights and no third. `display: none` until a session event has arrived,
+   24px from then on whether or not a single fact has been measured - so the
+   strip reflows ONCE, while the empty state is being replaced by the stream
+   anyway, instead of popping open again at the first turn-end. Every readout
+   switched off returns it to zero, hairline included: absence, not an empty
+   bar. Nothing here transitions; a chrome bar that grows is motion at the
+   pane's edge. */
+.aic-facts { display: none; }
+.aic-facts.is-live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  padding: 0 16px;
+  border-top: 1px solid var(--aic-hairline-subtle);
+  flex: 0 0 auto;
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  color: var(--aic-dim);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------ 1 empty-state sessions */
+
+.aic-sessions { margin-top: 32px; }
+.aic-sessions .aic-kicker { margin-bottom: 8px; }
+.aic-session-row {
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--aic-hairline-subtle);
+  cursor: pointer;
+  position: relative;
+}
+.aic-session-row:last-child { border-bottom: none; }
+.aic-session-row:hover { background: var(--aic-wash); }
+.aic-session-title {
+  font-size: 14px;
+  font-weight: 560;
+  color: var(--aic-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+.aic-session-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -3px;
+  width: 26px;
+  height: 2px;
+  background: var(--aic-marker);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 240ms var(--aic-ease);
+}
+.aic-session-row:hover .aic-session-title::after { transform: scaleX(1); }
+.aic-session-meta {
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  color: var(--aic-faint);
+  font-variant-numeric: tabular-nums;
+  margin-top: 4px;
+}
+
+/* -------------------------------------------------- 4 the statusline facts */
+
+/* One CELL per readout, keyed and reused across renders so the ring's SVG node
+   survives and its transition can run. The cell carries the separator, so
+   ordering the strip is only ever appending cells; the first one hides it. */
+.aic-fact-cell { display: inline-flex; align-items: center; flex: 0 0 auto; }
+.aic-fact-cell.is-first .aic-middot { display: none; }
+/* MEASURED REMOVAL, never clipping: a fact renders whole or not at all, and a
+   dropped one contributes zero elements and zero width. */
+.aic-fact-cell.is-dropped { display: none; }
+.aic-facts .aic-middot { margin: 0 8px 0 0; }
+
+.aic-fact { display: inline-flex; align-items: center; gap: 4px; }
+/* An element with no content still takes a gap, and a gap is width the ladder
+   would then measure. Absent means absent here too. */
+.aic-fact .is-off { display: none; }
+.aic-fact-desc { display: none; }
+.aic-fact-icon { display: inline-flex; color: var(--aic-faint); }
+.aic-fact-icon .svg-icon { width: 12px; height: 12px; }
+.aic-fact-label { color: var(--aic-faint); }
+/* The direction word rides the label's voice, because it IS part of the label:
+   a percentage with no direction is two readings, not one. */
+.aic-fact-dir { color: var(--aic-faint); }
+.aic-fact-value { color: var(--aic-dim); }
+.aic-fact.is-danger .aic-fact-label,
+.aic-fact.is-danger .aic-fact-dir,
+.aic-fact.is-danger .aic-fact-value { color: var(--aic-destructive-text); }
+/* An escalated BUDGET fact carries its own state word beside the ring,
+   in the quiet ink voice and never in amber. A ring with no word is not a
+   quieter escalation, it is an unlabelled one (SC 1.4.1). */
+.aic-fact-state { color: var(--aic-faint); }
+
+/* THE RING, and it is earned by a BUDGET and by nothing else: an arc from empty
+   to full needs a DENOMINATOR, and a token count, an agent count, a clock and a
+   duration have none. It replaces the state dot rather than joining it - the
+   dot's job was already "how bad is this", and the ring is that dot with a
+   magnitude - so the pane census does not grow.
+
+   `stroke-linecap: butt` is load-bearing: a round cap at a 1.5px stroke draws a
+   visible lozenge at 1% consumption, which asserts a magnitude the measurement
+   does not have. The rotation starts the arc at twelve o'clock.
+
+   Contrast, stated because the track cannot clear 3:1 and does not need to. The
+   ARC is a meaningful non-text graphic and takes the 3:1 tier, which all three
+   of its inks clear. The TRACK composites near the ground and does not, and SC
+   1.4.11 is not engaged on it, because the track never identifies the state on
+   its own: the printed percentage sits one character-width away at the 4.5:1
+   text floor and is ALWAYS there - a ring never renders without its value
+   beside it. A ring drawn without its number would make the track load-bearing.
+   Do not build that ring. */
+.aic-ring { flex: 0 0 auto; width: 12px; height: 12px; overflow: visible; }
+.aic-ring-track { fill: none; stroke: var(--aic-track); stroke-width: 1.5; }
+.aic-ring-arc {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: butt;
+  stroke: var(--aic-dim);
+  transform: rotate(-90deg);
+  transform-origin: center;
+  /* The same rung as the underline slide. NOT `gauge_fill` (1600ms + 250ms
+     delay): that token is for a hero gauge that draws once, and this arc
+     updates every turn - a 1600ms draw-on would be a permanent animation at the
+     pane's edge. */
+  transition: stroke-dashoffset 240ms var(--aic-ease);
+}
+.aic-fact.is-warning .aic-ring-arc { stroke: var(--aic-warning); }
+.aic-fact.is-danger .aic-ring-arc { stroke: var(--aic-destructive); }
+
+/* ------------------------------------ 11 structured replies (the ICOR card) */
+
+.aic-structured { margin-top: 12px; }
+/* (0,2,0), because the only rule it has to beat is `.aic-dot-marker`'s own
+   pulse at (0,1,0) and every static dot carries both classes. The reduced-motion
+   block at the foot of this file wins by tripled specificity instead of the
+   `!important` it used to carry - the file is clean of the flag entirely. */
+.aic-dot.aic-dot-static { animation: none; }
+
+.aic-card {
+  border-top: 1px solid var(--aic-hairline-emphasis);
+  border-bottom: 1px solid var(--aic-hairline-emphasis);
+  padding-top: 12px;
+  padding-bottom: 16px;
+  margin-top: 24px;
+}
+.aic-card:first-child { margin-top: 0; }
+
+.aic-card-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.aic-card-name {
+  font-family: var(--aic-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--aic-paper);
+}
+.aic-card-scope {
+  font-size: 12.5px;
+  color: var(--aic-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+/* 6px, off the 4/8 rung set on purpose and labelled: this gap sits between a
+   6px status DOT and its status word, and a 4px gap crowds the dot while an 8px
+   gap reads as a separator between two facts. It is the dot's own diameter,
+   which is the one measurement the pairing has. Same value, same reason, on
+   .aic-sub-status below. */
+.aic-card-status { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+
+.aic-band { margin-top: 16px; }
+.aic-band:first-of-type { margin-top: 12px; }
+.aic-band .aic-kicker { margin-bottom: 4px; }
+
+.aic-asked-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--aic-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.aic-answer-text { font-size: 15px; font-weight: 560; line-height: 1.5; color: var(--aic-paper); }
+.aic-why-text { font-size: 13px; line-height: 1.5; color: var(--aic-dim); max-width: 60ch; }
+
+/* The voice change IS the marker: no icon, no kicker, at most one per card. */
+.aic-insight {
+  font-family: var(--aic-hand);
+  font-size: var(--ink-text-hand-xs, 20px);
+  font-weight: 500;
+  color: var(--aic-hand-ink);
+  line-height: 1.35;
+  margin: 16px 0;
+  padding-inline-end: var(--ink-hand-overhang, 0.25em);
+}
+
+.aic-srow {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  gap: 8px;
+  align-items: baseline;
+  min-height: 24px;
+  /* 3px, deliberately off-rung: the row's height is set by min-height 24px
+     (rung) and this padding only has to keep a 13px/1.5 line from touching its
+     neighbours inside that box. A 4px rung would make the row 26px and break
+     the 24px ladder the gutter dots are centred on. */
+  padding: 3px 0;
+}
+.aic-srow-gutter { display: inline-flex; align-items: center; justify-content: flex-start; }
+.aic-srow-label {
+  font-size: 13px;
+  color: var(--aic-dim);
+  /* Truncation is ellipsis, never wrap-to-crush. Stock Obsidian's
+     wider metrics wrapped these labels onto a second line and broke the row
+     grid; measured in both stock rooms. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aic-srow-right {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+.aic-srow-value, .aic-srow-qual { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aic-srow-value {
+  font-family: var(--aic-mono);
+  font-size: 13px;
+  font-weight: 560;
+  color: var(--aic-paper);
+  font-variant-numeric: tabular-nums;
+}
+.aic-srow-qual {
+  font-family: var(--aic-mono);
+  font-size: 11px;
+  color: var(--aic-faint);
+  font-variant-numeric: tabular-nums;
+}
+.aic-gutter-tick { display: inline-flex; color: var(--aic-faint); }
+.aic-gutter-tick .svg-icon { width: 12px; height: 12px; }
+.aic-ring {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1px solid var(--aic-faint);
+  background: transparent;
+  display: inline-block;
+}
+
+/* Rank by rail WEIGHT, never by hue: both rails stay full strength. */
+.aic-rail { border-left: 1px solid var(--aic-destructive); padding-left: 8px; margin-left: -16px; }
+/* -17px is an OPTICAL correction, not a rung, and 5.7 fence 3 exempts one only
+   when it is labelled: the 2px rail is stated one device pixel further left so
+   its INNER edge lands on the same line as the 1px rail beside it. */
+.aic-rail.is-first { border-left-width: 2px; margin-left: -17px; }
+
+.aic-finding { display: grid; grid-template-columns: 16px 1fr; gap: 8px; align-items: baseline; margin-top: 8px; }
+.aic-finding-claim {
+  font-size: 14px;
+  font-weight: 560;
+  color: var(--aic-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aic-finding-own { font-size: 12.5px; color: var(--aic-dim); margin-top: 4px; }
+.aic-finding-ev {
+  font-family: var(--aic-mono);
+  font-size: 11px;
+  color: var(--aic-faint);
+  font-variant-numeric: tabular-nums;
+  margin-top: 4px;
+}
+
+.aic-next-row { display: grid; grid-template-columns: 20px 1fr; gap: 8px; align-items: baseline; padding: 4px 0 0; }
+.aic-next-num {
+  font-family: var(--aic-mono);
+  font-size: 11px;
+  color: var(--aic-faint);
+  font-variant-numeric: tabular-nums;
+}
+.aic-next-text { font-size: 13px; color: var(--aic-paper); }
+
+.aic-file, .aic-link {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 28px;
+  cursor: pointer;
+  border-radius: var(--aic-r-control);
+  padding: 0 4px;
+  margin-left: -4px;
+  text-decoration: none;
+}
+/* The link row is an <a>, so both hosts hand it their link colour and every
+   child without a colour of its own inherits it - including the row's icons.
+   The row's parts state their own voices; the row itself states none. */
+.aic-root.aic-root .aic-link { color: inherit; }
+.aic-link { grid-template-columns: 1fr auto; }
+.aic-file:hover, .aic-link:hover { background: var(--aic-wash); }
+.aic-file-icon { display: inline-flex; color: var(--aic-faint); }
+.aic-file-icon .svg-icon { width: 14px; height: 14px; }
+.aic-file-path {
+  font-family: var(--aic-mono);
+  font-size: 11px;
+  display: flex;
+  min-width: 0;
+  white-space: nowrap;
+}
+.aic-file-parent { color: var(--aic-faint); overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; min-width: 0; }
+.aic-file-base { color: var(--aic-dim); font-weight: 600; flex-shrink: 0; }
+.aic-link-host {
+  font-family: var(--aic-mono);
+  font-size: 11.5px;
+  font-weight: 560;
+  color: var(--aic-dim);
+}
+.aic-link:hover .aic-link-host { color: var(--aic-paper); }
+.aic-link-rest {
+  font-family: var(--aic-mono);
+  font-size: 11px;
+  color: var(--aic-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aic-file-actions { display: inline-flex; gap: 4px; opacity: 0; transition: opacity 120ms var(--aic-ease); }
+.aic-file:hover .aic-file-actions, .aic-link:hover .aic-file-actions,
+.aic-file:focus-within .aic-file-actions, .aic-link:focus-within .aic-file-actions { opacity: 1; }
+.aic-root.aic-root .aic-icon-btn.aic-mini { width: 20px; height: 20px; }
+.aic-root.aic-root .aic-icon-btn.aic-mini .svg-icon { width: 12px; height: 12px; }
+
+/* 11.8 the decision block: the highlighter stroke, never a box */
+.aic-decision {
+  background: color-mix(in srgb, var(--aic-warning) 10%, transparent);
+  border-left: 2px solid var(--aic-warning);
+  border-radius: 0;
+  padding: 12px 16px;
+  margin-inline: -16px;
+  margin-top: 8px;
+  transition: background 240ms var(--aic-ease), border-color 240ms var(--aic-ease);
+}
+.aic-decision:first-child { margin-top: 24px; }
+.aic-decision.is-blocked {
+  background: color-mix(in srgb, var(--aic-destructive) 10%, transparent);
+  border-left-color: var(--aic-destructive);
+}
+.aic-decision.is-resolved,
+.aic-decision.is-cleared {
+  background: transparent;
+  border-left-color: transparent;
+  border-left-width: 0;
+  padding-left: 0;
+  margin-inline: 0;
+}
+.aic-decision-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.aic-decision-dot { display: inline-flex; }
+.aic-decision-title { font-size: 14px; font-weight: 600; color: var(--aic-paper); }
+.aic-decision.is-resolved .aic-decision-title { color: var(--aic-dim); }
+/* A resolved block folds its body away entirely; the head line is the record.
+   Driven by the same class that quiets the title, never by an inline style. */
+.aic-decision.is-resolved .aic-decision-body { display: none; }
+.aic-decision-body {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--aic-dim);
+  margin-top: 8px;
+  max-width: 60ch;
+  /* 11.8 caps the body at three lines. Ellipsis, never fade (5.1.2) - the same
+     recipe 11.3 already uses on ASKED. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.aic-root.aic-root .aic-code-chip {
+  /* The explicit control reset - see the annotated copy at its first use. */
+  appearance: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  opacity: 1;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+  cursor: inherit;
+  cursor: pointer;
+  font-family: var(--aic-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--aic-paper);
+  padding: 1px 7px;
+  border: 1px solid var(--aic-warning);
+  border-radius: var(--aic-r-control);
+  background: var(--ink, var(--background-primary));
+}
+.aic-root.aic-root .aic-code-chip:hover:not(:disabled) { background: var(--aic-wash); }
+.aic-root.aic-root .aic-code-chip:disabled { cursor: default; border-color: var(--aic-success-dot); }
+.aic-decision.is-blocked .aic-code-chip { border-color: var(--aic-destructive); }
+.aic-decision.is-cleared .aic-code-chip { border-color: var(--aic-hairline); }
+/* 0 5px: the mini chip is the 12px chip's 10px twin, and its padding is scaled
+   with its type rather than snapped to a rung - 4px lets the two-to-five
+   character code touch the border, 8px makes a 10px chip wider than the 12px
+   one it is a quieter copy of. Optical, labelled (5.7 fence 3). */
+.aic-code-mini { font-size: 10px; padding: 0 5px; cursor: inherit; }
+
+.aic-flag {
+  background: color-mix(in srgb, var(--aic-destructive) 8%, transparent);
+  border-left: 2px solid var(--aic-destructive);
+  padding: 12px 16px;
+  margin-inline: -16px;
+}
+.aic-flag-body { font-size: 13px; color: var(--aic-paper); margin-top: 4px; }
+
+.is-flash { animation: aic-flash 600ms var(--aic-ease) 1; }
+@keyframes aic-flash {
+  0%, 100% { background-color: transparent; }
+  30% { background-color: var(--aic-wash); }
+}
+
+/* ----------------------------------------- 11.11 badge, list, mention bar */
+
+/* Hidden at zero decisions by CLASS, not by an inline style: absence is the
+   done signal, and visibility has one driver. Doubled to match the geometry
+   rule's own weight so ordering cannot flip it. */
+.aic-root.aic-root .aic-badge.is-hidden { display: none; }
+.aic-root.aic-root .aic-badge {
+  /* The explicit control reset - see the annotated copy at its first use. */
+  appearance: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  opacity: 1;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+  cursor: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: var(--aic-r-pill);
+  border: 1px solid var(--aic-warning);
+  background: color-mix(in srgb, var(--aic-warning) 22%, var(--aic-input));
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--aic-paper);
+  font-variant-numeric: tabular-nums;
+}
+.aic-root.aic-root .aic-badge:hover { background: color-mix(in srgb, var(--aic-warning) 28%, var(--aic-input)); }
+
+.aic-popover {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 260px;
+  max-width: 420px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--aic-overlay);
+  border: 1px solid var(--aic-hairline-emphasis);
+  border-radius: var(--aic-r-subtle);
+  box-shadow: var(--aic-float-shadow);
+  padding: 4px;
+}
+.aic-badge-slot { position: relative; }
+.aic-popover-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--aic-r-control);
+  cursor: pointer;
+}
+.aic-popover-row:hover { background: var(--aic-wash); }
+.aic-popover-title {
+  font-size: 12.5px;
+  color: var(--aic-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aic-popover-age {
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  color: var(--aic-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.aic-dock { position: relative; }
+.aic-mention-bar {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 4px 0 10px;
+  border-radius: var(--aic-r-pill);
+  background: var(--aic-overlay);
+  border: 1px solid var(--aic-hairline-emphasis);
+  box-shadow: var(--aic-float-shadow);
+}
+.aic-mention-code, .aic-mention-count {
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.aic-mention-code { font-weight: 600; color: var(--aic-dim); }
+.aic-mention-count { color: var(--aic-faint); }
+
+/* ------------------------------------------------ replay note and seam */
+
+/* The plugin's own voice, never the team's: no well, no card, no marker. */
+.aic-note {
+  max-width: 70ch;
+  margin: 0 auto 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--aic-faint);
+}
+
+/* The seam between a replayed sitting and the live one that follows. */
+.aic-seam {
+  max-width: 70ch;
+  margin: 24px auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--aic-faint);
+}
+.aic-seam::before,
+.aic-seam::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--aic-hairline);
+}
+
+/* --------------------------------------------- 3 subagent chips and view */
+
+.aic-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 70ch;
+  margin: 0 auto 8px;
+}
+.aic-chips.is-empty { display: none; }
+
+.aic-root.aic-root .aic-agent-chip {
+  /* The explicit control reset - see the annotated copy at its first use. */
+  appearance: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  opacity: 1;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+  cursor: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--aic-hairline);
+  border-radius: var(--aic-r-pill);
+  background: transparent;
+}
+.aic-root.aic-root .aic-agent-chip:hover { border-color: var(--aic-hairline-emphasis); }
+.aic-agent-name {
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--aic-dim);
+}
+.aic-root.aic-root .aic-agent-chip:hover .aic-agent-name { color: var(--aic-paper); }
+.aic-agent-time {
+  font-family: var(--aic-mono);
+  font-size: 9px;
+  color: var(--aic-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.aic-sub-header {
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--aic-hairline);
+  flex: 0 0 auto;
+}
+.aic-sub-kicker { display: flex; align-items: center; gap: 8px; }
+.aic-root.aic-root .aic-sub-back {
+  /* The explicit control reset - see the annotated copy at its first use. */
+  appearance: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  opacity: 1;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+  cursor: inherit;
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--aic-faint);
+  font-size: 18px;
+  line-height: 1;
+}
+.aic-root.aic-root .aic-sub-back:hover { color: var(--aic-paper); }
+.aic-sub-type { color: var(--aic-dim); }
+.aic-sub-status { display: inline-flex; align-items: center; gap: 6px; } /* dot-to-word pairing, see .aic-card-status */
+.aic-sub-title {
+  font-family: var(--aic-display);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--aic-paper);
+  margin-top: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+.aic-sub-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  width: 26px;
+  height: 2px;
+  background: var(--aic-marker);
+}
+.aic-sub-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 12px;
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--aic-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.aic-task { margin-bottom: 24px; }
+.aic-task-body {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--aic-dim);
+  max-width: 70ch;
+  white-space: pre-wrap;
+}
+
+/* ------------------------------------------------------------ 7 settings */
+
+.aic-settings-section {
+  font-family: var(--aic-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  border-top: 1px solid var(--aic-hairline-subtle);
+  padding-top: 24px;
+  margin-top: 24px;
+  margin-bottom: 8px;
+}
+.aic-settings-section:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+/* 11px mono, so it is small marker TEXT and rides marker_text_on_paper rather
+   than the mark rung: measured 4.19:1 (INKLINE paper) and 3.11:1 (stock light,
+   where the single fallback painted the ink room's #FF5A2D on white). */
+.aic-settings-index { color: var(--aic-marker-text); margin-right: 8px; }
+.aic-settings-name { color: var(--aic-faint); }
+/* The one prose line a section may carry. Body face, not the mono kicker's:
+   it is a sentence to read, not a label to scan, and running it in 11px
+   uppercase mono would make documentation look like chrome. */
+.aic-settings-note {
+  font-size: 12.5px;
+  color: var(--aic-dim);
+  margin-bottom: 12px;
+  max-width: 62ch;
+}
+
+/* ------------------------------------------------------- 9 THE FOCUS PEN */
+
+/* Stated LAST and stated ABOVE the control layer, and both halves are load-bearing.
+ *
+ * The control rules in this file open with the explicit reset, which includes
+ * `outline-style`, which it resets to `none`. Those rules are stated
+ * `.aic-root.aic-root .aic-*` = (0,3,0) - the raise that put them above both
+ * hosts. A pen at `.aic-root :focus-visible` is (0,2,0), so the plugin
+ * outranked its own focus ring: forced `:focus-visible` returned `none` on all
+ * sixteen focusable controls in all four rooms, while a bare <button> injected
+ * under .aic-root - styled by nobody - still painted the ring. That control
+ * group is what turned this from "the pen looks wrong" into "the pen is dead",
+ * and it is now a permanent assertion in test/computed-style.test.mjs.
+ *
+ * This is the host-cascade mechanism one rule further in: the specificity raise walked
+ * past the one rule that had to be raised WITH it. (0,4,0) clears the control
+ * layer at rest and its :hover twins, and the trailing position means no future
+ * control rule can win on source order either.
+ *
+ * The pen states TWO declarations and no third, and that absence is the fix.
+ * A `border-radius` here was inert at the pen's old (0,2,0) - it lost to
+ * every control - and the raise to (0,4,0) raised ALL THREE declarations, so a
+ * keyboard user tabbing to the send pill watched a 999px capsule become a 4px
+ * rectangle. `border-radius` is the ELEMENT's geometry, never the outline's:
+ * Chrome has followed the element's radius with the outline since Chrome 94 and
+ * Obsidian's Electron is far past that, so the declaration bought nothing and
+ * cost the whole radius ladder. This is the same mechanism a
+ * third time: count a specificity raise against every declaration it carries,
+ * not only against the competing selector.
+ *
+ * The composer textarea is deliberately NOT reached: its own block above is
+ * (0,7,1) and kills the outline, because the composer's focus lives on the
+ * CARD border stepping to full --aic-marker. One ring, on the card. Both ends
+ * of that are gated. */
+.aic-root.aic-root.aic-root :focus-visible,
+.aic-menu.aic-menu.aic-menu :focus-visible {
+  outline: 2px solid var(--aic-marker);
+  outline-offset: 2px;
+}
+
+/* --------------------------------------------------------- 9 degradation */
+
+/* No `!important` - the override wins on SPECIFICITY plus position instead.
+   Every animation and transition carrier in this file measures at most two
+   classes plus a pseudo-element ((0,2,1)); the tripled root here is (0,3,0)
+   with the universal selector, and this block is the last rule in the file, so
+   it outranks every carrier and ties break its way. A new carrier heavier than
+   (0,3,0) would escape it - which is exactly the kind of change that must not
+   happen quietly, and the suite pins this block's shape.
+
+   The old `opacity: 1 !important` line on the pulsing dots is GONE, not moved:
+   the pulse animates opacity and the dots' resting opacity is already 1, so
+   with `animation: none` applied the line held nothing up. */
+@media (prefers-reduced-motion: reduce) {
+  .aic-root.aic-root.aic-root *,
+  .aic-menu.aic-menu.aic-menu * {
+    animation: none;
+    transition: none;
+  }
+}

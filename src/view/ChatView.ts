@@ -1,0 +1,716 @@
+/* One tab, one conversation. The view owns its DOM and its session and nothing
+ * else; it never imports the Agent SDK, only the ChatSession that wraps it. */
+
+import { ItemView, MarkdownView, Notice, Platform, TFile } from 'obsidian';
+import type { WorkspaceLeaf } from 'obsidian';
+import { VIEW_TYPE_CHAT } from '../constants';
+import { ChatStore } from '../state/store';
+import { StreamRenderer } from './stream/StreamRenderer';
+import type { Composer } from './composer/Composer';
+import type { Statusline } from './composer/Statusline';
+import { listVaultSessions, readSessionMessages, resolvedDefaultModel, sessionCreatedAt, sessionExists } from '../sdk/sessions';
+import type { DecisionBadge } from './composer/DecisionBadge';
+import { buildPane } from './pane';
+import { trackDecisions, openDecisions, mentionsCode } from '../structured/decisions';
+import type { SurfacedDecision, TranscriptEntry, TrackedDecision } from '../structured/decisions';
+import { repaintDecisions } from '../structured/render';
+import { renderChipTray } from './SubagentView';
+import { ArchiveWriter } from '../archive/writer';
+import { archiveRoot, factVisibility } from '../model/settings';
+import { SDK_VERSION } from '../constants';
+import { readContext, selectionRangeLabel, withContext } from './context';
+import type { NoteContext } from './context';
+import { ChatSession } from '../sdk/session';
+import { Normalizer, userTextOf } from '../sdk/normalize';
+import { buildChildEnv, resolveCliPath, splitExtraPath } from '../sdk/cli';
+import type { PathEnvironment } from '../sdk/cli';
+import type { ChatEvent, EffortName, PermissionModeName } from '../model/types';
+import type { Attachment } from './composer/Composer';
+import type IcorChatPlugin from '../main';
+
+export class ChatView extends ItemView {
+  private readonly store = new ChatStore();
+  private stream: StreamRenderer | null = null;
+  private composer: Composer | null = null;
+  private session: ChatSession | null = null;
+  private column: HTMLElement | null = null;
+  private scroller: HTMLElement | null = null;
+  private statusline: Statusline | null = null;
+  private context: NoteContext | null = null;
+  private contextPinned = true;
+  private lastMarkdownView: MarkdownView | null = null;
+  private resumeSessionId: string | null = null;
+  private tick: number | null = null;
+  private badge: DecisionBadge | null = null;
+  /* The decision lifecycle is DERIVED from these two lists on every render and
+   * stored nowhere: the transcript is the record, so there is no flag to drift. */
+  private readonly transcript: TranscriptEntry[] = [];
+  private readonly surfaced: SurfacedDecision[] = [];
+  private readonly blockIndex = new Map<string, number>();
+  private turnCounter = 0;
+  /** One catalogue fetch per session; a resumed tab re-asks on its own init. */
+  private modelCatalogLoaded = false;
+  private readonly taskPrompts = new Map<string, string>();
+  private chipTray: HTMLElement | null = null;
+  private startedAt = Date.now();
+  /** Every provider session id this tab has held, oldest first. */
+  private readonly sessionIds: string[] = [];
+  private readonly events: ChatEvent[] = [];
+  private archiving = false;
+
+  constructor(leaf: WorkspaceLeaf, private readonly plugin: IcorChatPlugin) {
+    super(leaf);
+  }
+
+  override getViewType(): string {
+    return VIEW_TYPE_CHAT;
+  }
+
+  override getDisplayText(): string {
+    return 'AI team';
+  }
+
+  override getIcon(): string {
+    return 'messages-square';
+  }
+
+  override async onOpen(): Promise<void> {
+    /* The pane skeleton comes from `buildPane`, which the computed-style
+       fixture calls too. This method used to build the tree while the fixture
+       built a replica, so the census assertion that guards rung order and the
+       statusline's nesting could not fail against THIS file: undoing that
+       nesting here left the suite 144/144 green. One function, one tree. */
+    const pane = buildPane(this.contentEl, {
+      composer: {
+        streaming: false,
+        mode: this.plugin.settings.defaultPermissionMode,
+        model: this.plugin.settings.model,
+        effort: this.plugin.settings.effort,
+      },
+      callbacks: {
+        onSubmit: (text, attachments) => void this.submit(text, attachments),
+        onStop: () => void this.stop(),
+        onModeChange: (mode) => void this.changeMode(mode),
+        onModelChange: (model) => void this.changeModel(model),
+        onEffortChange: (effort) => this.changeEffort(effort),
+        onAttach: () => new Notice('Paste or drop an image into the composer.'),
+        onNotice: (message) => new Notice(message),
+      },
+      badge: {
+        navigate: (code, mention) => this.navigateToMention(code, mention),
+      },
+      /* Read on every render rather than captured once: a toggle flipped in
+         settings must reach the strip without reopening the tab. */
+      facts: () => factVisibility(this.plugin.settings),
+    });
+    this.scroller = pane.scroller;
+    this.column = pane.column;
+    this.chipTray = pane.chipTray;
+    this.composer = pane.composer;
+    this.badge = pane.badge;
+    this.statusline = pane.statusline;
+
+    this.stream = new StreamRenderer(this.app, this, this.column, '', {
+      onApproval: (toolUseId, choice) => {
+        this.session?.answerApproval(toolUseId, choice);
+      },
+      structured: () => this.plugin.settings.structuredReplies,
+      renderHost: {
+        home: this.plugin.homeDir,
+        insertCode: (code) => this.composer?.insert(`${code} `),
+        openFile: (path) => void this.openPath(path),
+        revealFile: (path) => this.revealPath(path),
+        openUrl: (url) => window.open(url, '_blank'),
+        copy: (text) => void navigator.clipboard.writeText(text),
+        decisionState: (code) => this.decisionState(code),
+      },
+      onDecisions: (decisions, blockId) => this.recordDecisions(decisions, blockId),
+    });
+    this.stream.renderEmptyState();
+    void this.fillResumeRows();
+    /* The trigger shows the ACTUAL model from pane open. With no plugin
+       override, the name comes from the CLI's own settings cascade - the same
+       files the session will read - so the face and the behaviour cannot
+       disagree. The composer applies it only while nothing truer is known. */
+    if (!this.plugin.settings.model) {
+      void resolvedDefaultModel(this.plugin.vaultPath).then((model) => {
+        if (model) this.composer?.presetModel(model);
+      });
+    }
+
+    this.store.subscribe((event) => this.onEvent(event));
+    this.registerEvent(
+      this.app.workspace.on('active-leaf-change', (leaf) => {
+        const view = leaf?.view;
+        if (view instanceof MarkdownView) this.lastMarkdownView = view;
+        this.refreshContext();
+      }),
+    );
+    this.registerEvent(this.app.workspace.on('file-open', () => this.refreshContext()));
+    this.registerDomEvent(document, 'selectionchange', () => this.refreshContext());
+    const current = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (current) this.lastMarkdownView = current;
+    this.refreshContext();
+    this.focusComposer();
+  }
+
+  /**
+   * Put the caret where the user is about to type. onOpen runs during
+   * setViewState, and revealing the leaf afterwards takes focus back, so the
+   * focus has to land after the reveal - opening a chat and finding the caret
+   * nowhere is the difference between a usable surface and a broken one.
+   */
+  focusComposer(): void {
+    this.composer?.focus();
+    window.setTimeout(() => this.composer?.focus(), 0);
+  }
+
+  /**
+   * The view's own claim that a conversation lives here. The leaf router reads
+   * it to decide reveal-vs-reuse-vs-create: a pane the user has merely typed
+   * into is unoccupied (reuse only reveals or resumes, never clears), but a
+   * pane whose session object exists is busy becoming a conversation even
+   * before the session event names it.
+   */
+  /** The session this pane holds or is resuming, for the leaf router. */
+  get heldSessionId(): string | null {
+    return this.store.state.sessionId ?? this.resumeSessionId;
+  }
+
+  get occupied(): boolean {
+    return this.session !== null || this.store.state.sessionId !== null || this.resumeSessionId !== null;
+  }
+
+  /** The leaf carries the session id, so a reopened tab resumes its own thread. */
+  override getState(): Record<string, unknown> {
+    return { resumeSessionId: this.store.state.sessionId ?? this.resumeSessionId };
+  }
+
+  override async setState(state: unknown, result: unknown): Promise<void> {
+    if (state && typeof state === 'object' && 'resumeSessionId' in state) {
+      const id = (state as { resumeSessionId?: unknown }).resumeSessionId;
+      if (typeof id === 'string' && id) this.resumeSessionId = id;
+    }
+    await super.setState(state, result as Parameters<ItemView['setState']>[1]);
+  }
+
+  override async onClose(): Promise<void> {
+    this.stopTicking();
+    this.statusline?.dispose();
+    this.badge?.destroy();
+    this.session?.dispose();
+    this.session = null;
+    this.stream?.destroy();
+    this.store.dispose();
+  }
+
+  /** Recent conversations for THIS vault only. Never machine-wide. */
+  private async fillResumeRows(): Promise<void> {
+    const sessions = await listVaultSessions(this.plugin.vaultPath, 6);
+    if (!this.stream || !this.stream.isEmpty) return;
+    this.stream.renderResumeRows(sessions, (sessionId) => void this.resume(sessionId));
+  }
+
+  /** Resume a prior session. A session id that no longer exists says so. */
+  async resume(sessionId: string): Promise<void> {
+    if (this.session) {
+      new Notice('This tab already has a conversation. Open a new tab to resume another.');
+      return;
+    }
+    if (!(await sessionExists(sessionId, this.plugin.vaultPath))) {
+      this.store.apply({
+        kind: 'error',
+        message: 'That conversation is no longer on disk. It may have been deleted or archived.',
+        stream: null,
+      });
+      return;
+    }
+    this.resumeSessionId = sessionId;
+    /* The ORIGINAL start, read back from the stored record, BEFORE the live
+       session event arrives. A resumed thread that stamped its start at the
+       moment it was reopened would print a plausible number with no event
+       behind it, which is the 2026-08-29 defect in a different costume. A
+       record that carries no creation time leaves the readout absent. */
+    this.store.apply({
+      kind: 'session-restored',
+      startedAt: await sessionCreatedAt(sessionId, this.plugin.vaultPath),
+      stream: null,
+    });
+    await this.replay(sessionId);
+    const session = this.ensureSession();
+    if (session) {
+      session.start();
+    }
+  }
+
+  /**
+   * Paint a resumed conversation's own history before the live session opens.
+   *
+   * The stored messages arrive in the same shape the live stream uses, so they
+   * run through the same Normalizer and the same renderer: one grammar, one
+   * code path, no second implementation to drift. A separate Normalizer is used
+   * so the replay's tool pairing and subagent bookkeeping cannot collide with
+   * the live one that takes over afterwards.
+   */
+  private async replay(sessionId: string): Promise<void> {
+    const { messages, omitted } = await readSessionMessages(sessionId, this.plugin.vaultPath);
+    if (messages.length === 0) {
+      this.stream?.note('This conversation has no stored history. Send a message to continue it.');
+      return;
+    }
+    if (omitted > 0) {
+      this.stream?.note(`Showing the last ${messages.length} messages. ${omitted} earlier ones are in the session file.`);
+    }
+    const normalizer = new Normalizer();
+    for (const raw of messages) {
+      const spoken = userTextOf(raw);
+      if (spoken !== null) {
+        this.stream?.appendUserWell(spoken, null);
+        this.transcript.push({ role: 'user', text: spoken, index: this.turnCounter, at: Date.now() });
+        this.turnCounter += 1;
+      }
+      for (const event of normalizer.normalize(raw)) {
+        this.events.push(event);
+        this.routeSubagent(event);
+        if (event.kind === 'text-final' && event.stream === null && event.text.trim()) {
+          this.transcript.push({
+            role: 'assistant',
+            text: event.text,
+            index: this.indexForBlock(event.blockId),
+            at: Date.now(),
+          });
+        }
+        if (event.stream === null) this.stream?.apply(event);
+      }
+    }
+    // Nothing in a replay is live: a subagent that was running when the
+    // transcript was written is not running now.
+    this.plugin.subagents.orphanRunning();
+    this.renderChips();
+    this.refreshDecisions();
+    this.stream?.sealReplay();
+    this.scrollToEnd();
+  }
+
+  /* -------------------------------------------------------------- context */
+
+  private refreshContext(): void {
+    if (!this.plugin.settings.contextAwareness || !this.contextPinned) {
+      this.composer?.renderTray([]);
+      this.context = null;
+      return;
+    }
+    const next = readContext(this.app, this.lastMarkdownView);
+    this.context = next;
+    if (!next) {
+      this.composer?.renderTray([]);
+      return;
+    }
+    const range = selectionRangeLabel(next);
+    this.composer?.renderTray([
+      {
+        icon: 'eye',
+        label: next.basename,
+        ...(next.selection && range ? { detail: range } : {}),
+        onDismiss: () => {
+          this.contextPinned = false;
+          this.refreshContext();
+        },
+      },
+    ]);
+  }
+
+  /* ---------------------------------------------------- decision lifecycle */
+
+  /** One monotonic position per rendered block, assigned once. */
+  private indexForBlock(blockId: string): number {
+    const existing = this.blockIndex.get(blockId);
+    if (existing !== undefined) return existing;
+    const index = this.turnCounter;
+    this.turnCounter += 1;
+    this.blockIndex.set(blockId, index);
+    return index;
+  }
+
+  private recordDecisions(decisions: Array<{ code: string; title: string; body: string; variant: 'decision' | 'blocked' | 'cleared' }>, blockId: string): void {
+    if (decisions.length === 0) return;
+    const index = this.indexForBlock(blockId);
+    const at = Date.now();
+    for (const decision of decisions) {
+      if (this.surfaced.some((s) => s.decision.code === decision.code)) continue;
+      this.surfaced.push({ decision, index, at });
+    }
+    this.refreshDecisions();
+  }
+
+  private tracked(): TrackedDecision[] {
+    return trackDecisions(this.surfaced, this.transcript);
+  }
+
+  private decisionState(code: string): TrackedDecision | null {
+    return this.tracked().find((d) => d.code === code) ?? null;
+  }
+
+  private refreshDecisions(): void {
+    const tracked = this.tracked();
+    this.badge?.render(openDecisions(tracked));
+    if (this.column) repaintDecisions(this.column);
+  }
+
+  /** Every element in the stream that names this code, in document order. */
+  private mentionElements(code: string): HTMLElement[] {
+    if (!this.column) return [];
+    const out: HTMLElement[] = [];
+    for (const el of Array.from(this.column.children)) {
+      // Obsidian's cross-window check: a plain instanceof fails against an
+      // element born in a popout window's realm.
+      if (!el.instanceOf(HTMLElement)) continue;
+      const userText = el.dataset.userText;
+      if (userText && mentionsCode(userText, code)) {
+        out.push(el);
+        continue;
+      }
+      for (const block of Array.from(el.querySelectorAll('.aic-decision'))) {
+        if (block.instanceOf(HTMLElement) && block.dataset.code === code) out.push(block);
+      }
+    }
+    return out;
+  }
+
+  private navigateToMention(code: string, mention: number): void {
+    const elements = this.mentionElements(code);
+    if (elements.length === 0) return;
+    const target = elements[Math.min(mention, elements.length - 1)];
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target.addClass('is-flash');
+    window.setTimeout(() => target.removeClass('is-flash'), 600);
+  }
+
+  private async openPath(path: string): Promise<void> {
+    const vault = this.plugin.vaultPath;
+    const relative = path.startsWith(vault) ? path.slice(vault.length + 1) : path;
+    const file = this.app.vault.getAbstractFileByPath(relative);
+    if (file instanceof TFile) {
+      await this.app.workspace.getLeaf(true).openFile(file);
+      return;
+    }
+    this.revealPath(path);
+  }
+
+  private revealPath(path: string): void {
+    // Electron only; the plugin is desktop-only for exactly this class of reason.
+    const shell = (window as unknown as { require?: (m: string) => { shell?: { showItemInFolder?: (p: string) => void } } })
+      .require?.('electron')?.shell;
+    if (shell?.showItemInFolder) shell.showItemInFolder(path);
+    else new Notice(`Could not reveal ${path}`);
+  }
+
+  /* -------------------------------------------------------------- turning */
+
+  private ensureSession(): ChatSession | null {
+    if (this.session) return this.session;
+    const settings = this.plugin.settings;
+    // Typed at the declaration, so the platform ternary is checked against
+    // the union instead of being widened to string and cast back.
+    const env: PathEnvironment = {
+      platform: Platform.isWin ? 'win32' : Platform.isMacOS ? 'darwin' : 'linux',
+      home: this.plugin.homeDir,
+      path: process.env.PATH ?? '',
+      extra: splitExtraPath(settings.extraPath),
+    };
+    let cliPath: string;
+    try {
+      cliPath = resolveCliPath(settings.cliPath, env);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.store.apply({ kind: 'error', message, stream: null });
+      return null;
+    }
+    this.session = new ChatSession(
+      {
+        cliPath,
+        cwd: this.plugin.vaultPath,
+        env: buildChildEnv(process.env, env),
+        model: settings.model,
+        effort: settings.effort,
+        permissionMode: settings.defaultPermissionMode,
+        structuredReplies: settings.structuredReplies,
+        resumeSessionId: this.resumeSessionId,
+      },
+      {
+        onEvent: (event) => this.store.apply(event),
+        onApprovalRequest: (request) =>
+          this.store.apply({
+            kind: 'tool-approval',
+            toolUseId: request.toolUseId,
+            name: request.toolName,
+            target: request.target,
+            stream: null,
+          }),
+        onApprovalSettled: (toolUseId, choice) =>
+          this.store.apply({
+            kind: 'tool-approval-resolved',
+            toolUseId,
+            allowed: choice !== 'deny',
+            stream: null,
+          }),
+      },
+    );
+    return this.session;
+  }
+
+  private async submit(text: string, attachments: Attachment[] = []): Promise<void> {
+    const session = this.ensureSession();
+    if (!session) {
+      this.composer?.setStreaming(false);
+      return;
+    }
+    const ctx = this.plugin.settings.contextAwareness && this.contextPinned ? this.context : null;
+    const index = this.turnCounter;
+    this.turnCounter += 1;
+    this.transcript.push({ role: 'user', text, index, at: Date.now() });
+    // The toolbar dismisses on the next send, and so do finished chips.
+    this.badge?.dismissToolbar();
+    this.plugin.subagents.retireFinished();
+    this.renderChips();
+    this.store.apply({
+      kind: 'user-turn',
+      text,
+      contextNote: ctx ? ctx.basename : null,
+      stream: null,
+    });
+    this.refreshDecisions();
+    session.send(
+      withContext(text, ctx),
+      attachments.map((a) => ({ mediaType: a.mediaType, data: a.data })),
+    );
+    this.scrollToBottom();
+  }
+
+  private async stop(): Promise<void> {
+    await this.session?.interrupt();
+  }
+
+  /** Ask the SDK what it can run, once per session. Empty stays empty. */
+  private async loadModelCatalog(): Promise<void> {
+    if (this.modelCatalogLoaded) return;
+    this.modelCatalogLoaded = true;
+    const models = await this.session?.supportedModels();
+    if (models && models.length) this.composer?.setModelCatalog(models);
+  }
+
+  private async changeMode(mode: PermissionModeName): Promise<void> {
+    await this.session?.setPermissionMode(mode);
+  }
+
+  private async changeModel(model: string): Promise<void> {
+    await this.session?.setModel(model);
+  }
+
+  private changeEffort(effort: EffortName): void {
+    // Effort is a launch option; it applies to the next session in this tab.
+    this.plugin.settings.effort = effort;
+    void this.plugin.saveSettings();
+  }
+
+  /* ------------------------------------------------------------ rendering */
+
+  private onEvent(event: ChatEvent): void {
+    this.events.push(event);
+    this.routeSubagent(event);
+    // The assistant's own words enter the transcript BEFORE the block renders,
+    // so the decision recorded from that block lands on the same index.
+    if (event.kind === 'text-final' && event.stream === null && event.text.trim()) {
+      this.transcript.push({
+        role: 'assistant',
+        text: event.text,
+        index: this.indexForBlock(event.blockId),
+        at: Date.now(),
+      });
+    }
+    if (event.stream === null) this.stream?.apply(event);
+    if (event.kind === 'user-turn') this.composer?.setStreaming(true);
+    if (event.kind === 'turn-end' || event.kind === 'aborted' || event.kind === 'error') {
+      this.composer?.setStreaming(false);
+    }
+    if (event.kind === 'session' && event.model) {
+      this.composer?.setModel(event.model);
+      /* The catalogue is asked for ONCE the session has answered, because the
+         control channel does not exist before that. It is fetched here rather
+         than at construction for the same reason the model label is: no
+         session, no catalogue, and no invented list in the meantime. */
+      void this.loadModelCatalog();
+    }
+    if (event.kind === 'user-turn') this.startTicking();
+    if (event.kind === 'turn-end' || event.kind === 'aborted' || event.kind === 'error') {
+      this.stopTicking();
+    }
+    if (event.kind === 'session' && event.sessionId && !this.sessionIds.includes(event.sessionId)) {
+      this.sessionIds.push(event.sessionId);
+    }
+    if (event.kind === 'turn-end' || event.kind === 'aborted' || event.kind === 'error') {
+      this.plugin.subagents.orphanRunning();
+      this.renderChips();
+      void this.archive();
+    }
+    this.statusline?.render(this.store.state);
+    this.scrollToBottom();
+  }
+
+  /* --------------------------------------------------------- subagents */
+
+  /** Subagent traffic is tagged with the tool-use id that spawned it. */
+  private routeSubagent(event: ChatEvent): void {
+    if (event.kind === 'subagent-start') {
+      this.plugin.subagents.open({
+        agentId: event.agentId,
+        agentType: event.agentType,
+        description: event.description,
+        task: event.task || this.taskPrompts.get(event.agentId) || '',
+        sessionId: this.store.state.sessionId,
+      });
+      this.renderChips();
+      return;
+    }
+    if (event.kind === 'subagent-end') {
+      this.plugin.subagents.close(event.agentId, event.ok);
+      this.renderChips();
+      return;
+    }
+    if (event.kind === 'tool-call' && (event.name === 'Task' || event.name === 'Agent')) {
+      const prompt = event.input.prompt;
+      if (typeof prompt === 'string') this.taskPrompts.set(event.toolUseId, prompt);
+    }
+    if (event.stream !== null) {
+      this.plugin.subagents.append(event.stream, event);
+      this.renderChips();
+    }
+  }
+
+  private renderChips(): void {
+    if (!this.chipTray) return;
+    renderChipTray(this.chipTray, this.plugin.subagents.active(), (agentId) => {
+      this.plugin.subagents.markOpened(agentId);
+      this.renderChips();
+      void this.plugin.openSubagent(agentId);
+    });
+  }
+
+  /* ----------------------------------------------------------- archive */
+
+  /**
+   * The whole conversation as the session file has it, falling back to what
+   * this tab saw if the file cannot be read. Built with its own Normalizer so
+   * it never disturbs the live one.
+   */
+  private async sessionRecord(): Promise<{
+    turns: Array<{ role: 'user' | 'assistant'; text: string; at: number }>;
+    events: ChatEvent[];
+  }> {
+    const sessionId = this.sessionIds[this.sessionIds.length - 1];
+    if (!sessionId) return { turns: [], events: [] };
+    const { messages } = await readSessionMessages(sessionId, this.plugin.vaultPath, 5000);
+    if (messages.length === 0) {
+      return {
+        turns: this.transcript.map((t) => ({ role: t.role, text: t.text, at: t.at })),
+        events: this.events,
+      };
+    }
+    const normalizer = new Normalizer();
+    const turns: Array<{ role: 'user' | 'assistant'; text: string; at: number }> = [];
+    const events: ChatEvent[] = [];
+    const at = Date.now();
+    for (const raw of messages) {
+      const spoken = userTextOf(raw);
+      if (spoken !== null) turns.push({ role: 'user', text: spoken, at });
+      for (const event of normalizer.normalize(raw)) {
+        events.push(event);
+        if (event.kind === 'text-final' && event.stream === null && event.text.trim()) {
+          turns.push({ role: 'assistant', text: event.text, at });
+        }
+      }
+    }
+    return { turns, events };
+  }
+
+  /** Rewritten in full after every completed turn: idempotent and cheap. */
+  private async archive(): Promise<void> {
+    if (!this.plugin.settings.archiveEnabled || this.archiving) return;
+    if (this.transcript.length === 0 || this.sessionIds.length === 0) return;
+    this.archiving = true;
+    try {
+      const root = archiveRoot(this.plugin.settings, this.plugin.scaffoldDetected);
+      const writer = new ArchiveWriter(this.app, root);
+      // Read the session back rather than archiving this tab's own slice: a
+      // second tab on the same conversation sees only its own half, and an
+      // archive that records half a conversation is worse than none.
+      const record = await this.sessionRecord();
+      const first = record.turns.find((t) => t.role === 'user');
+      await writer.write({
+        title: (first?.text ?? 'Conversation').split('\n')[0]?.slice(0, 72) ?? 'Conversation',
+        startedAt: this.startedAt,
+        sessionIds: this.sessionIds,
+        cwd: this.plugin.vaultPath,
+        model: this.store.state.model,
+        permissionMode: this.store.state.permissionMode,
+        turns: record.turns,
+        events: record.events,
+        subagents: this.plugin.subagents.all(),
+        tokens: this.store.state.usage?.totalTokens ?? 0,
+        pluginVersion: this.plugin.manifest.version,
+        sdkVersion: SDK_VERSION,
+      });
+      await writer.sweep(this.plugin.settings.archiveRetentionDays);
+    } catch (error) {
+      new Notice(`Could not archive this session: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      this.archiving = false;
+    }
+  }
+
+  /** Repaint rung 4 alone. The settings tab calls this when a switch flips. */
+  repaintFacts(): void {
+    this.statusline?.render(this.store.state);
+  }
+
+  /* The elapsed fact is the only thing on screen that changes without an
+   * event, so it gets the only interval in the plugin, and only while a turn
+   * is actually running. */
+  private startTicking(): void {
+    if (this.tick !== null) return;
+    this.tick = window.setInterval(() => this.statusline?.render(this.store.state), 1000);
+    this.registerInterval(this.tick);
+  }
+
+  private stopTicking(): void {
+    if (this.tick === null) return;
+    window.clearInterval(this.tick);
+    this.tick = null;
+  }
+
+  /**
+   * Follow the stream, but never yank a user who has scrolled up to read.
+   * The guard is what makes it polite, and it is also why replay cannot use
+   * this: after painting a whole history the scroller sits at the top, nowhere
+   * near the bottom, so the guard would suppress exactly the scroll that is
+   * wanted.
+   */
+  private scrollToBottom(): void {
+    const el = this.scroller;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 160;
+    if (nearBottom) window.requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+  }
+
+  /** Land at the end of a resumed conversation: the newest turn is the point. */
+  private scrollToEnd(): void {
+    const el = this.scroller;
+    if (!el) return;
+    // Two frames: the first lets the replayed blocks lay out, the second
+    // measures a scrollHeight that is finally true.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+    });
+  }
+}

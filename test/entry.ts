@@ -1,0 +1,23 @@
+/* The pure surface under test, bundled once so node:test can import it without
+ * an Obsidian runtime. Only modules with no Obsidian import belong here. */
+export * from '../src/sdk/normalize';
+export * from '../src/sdk/cli';
+export * from '../src/sdk/permissions';
+export * from '../src/state/store';
+export * from '../src/model/types';
+export * from '../src/model/settings';
+export * from '../src/model/contextText';
+export { STRUCTURED_REPLY_PROMPT, INK_PLUGIN_NAME, PLUGIN_ID } from '../src/constants';
+export * from '../src/model/facts';
+export * from '../src/model/format';
+export * from '../src/structured/model';
+export * from '../src/structured/parser';
+export * from '../src/structured/decisions';
+export * from '../src/structured/rails';
+export * from '../src/structured/icons';
+export * from '../src/archive/naming';
+export * from '../src/archive/resume';
+export * from '../src/sdk/renderer-compat';
+export * from '../src/state/subagents';
+export * from '../src/view/leafRoute';
+export { userTextOf } from '../src/sdk/normalize';
