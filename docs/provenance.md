@@ -21,7 +21,7 @@ version 0.1.0, so the tree it is committed in is the tree it is about. Compiled
 
 ## 1. The short claim
 
-**ICOR AI Chat is an independent implementation, written from a behavioural
+**ICOR for Life - Chat is an independent implementation, written from a behavioural
 specification. No code in this repository is inherited from any other
 repository.**
 

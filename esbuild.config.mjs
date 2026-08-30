@@ -1,4 +1,4 @@
-/* Build ICOR AI Chat into a single CommonJS main.js for Obsidian.
+/* Build ICOR for Life - Chat into a single CommonJS main.js for Obsidian.
  *
  * The Agent SDK is an ESM package that uses `import.meta.url` to build a
  * CommonJS `require`. Obsidian loads plugins as CJS, where `import.meta` does

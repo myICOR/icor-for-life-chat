@@ -1,4 +1,4 @@
-/* ICOR AI Chat - the ICOR AI team inside the vault.
+/* ICOR for Life - Chat - the ICOR AI team inside the vault.
  *
  * The plugin is a window, not a second brain: it hosts a Claude Code session
  * whose working directory is the vault, so the vault's own CLAUDE.md, AGENTS.md
@@ -130,7 +130,7 @@ export default class IcorChatPlugin extends Plugin {
   }
 
   /* The icon-only launcher in the file explorer's tool-button row, under the
-   * ICOR for Life mark. The suite's own pattern: ICOR Focus mounts its map
+   * ICOR for Life mark. The suite's own pattern: ICOR for Life - Focus mounts its map
    * launcher in the same row the same way, and the INKLINE theme styles the
    * whole slot rather than any one plugin's button.
    *

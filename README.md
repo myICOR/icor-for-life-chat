@@ -1,4 +1,4 @@
-# ICOR AI Chat
+# ICOR for Life - Chat
 
 Your AI team, inside the vault. Open a conversation next to your notes, ask a
 question, and get an answer from a model that is already reading the room: it
@@ -8,7 +8,7 @@ its mouth.
 
 The plugin is a window, not a second brain. Behaviour, identity and context
 rules live in your vault's `CLAUDE.md`, `AGENTS.md` and `.claude/`, which the
-Claude Code CLI reads natively from the working directory. ICOR AI Chat sends no
+Claude Code CLI reads natively from the working directory. ICOR for Life - Chat sends no
 system prompt of its own. There is exactly one exception and it is visible in
 settings: **Structured replies**, which is ON out of the box, appends a fixed
 format instruction so the answer comes back as ICOR cards, which the plugin
@@ -57,7 +57,7 @@ this repo and it gets fixed fast.
 
 ### The Claude Code command line tool
 
-**ICOR AI Chat needs the Claude Code command line tool, which is a separate
+**ICOR for Life - Chat needs the Claude Code command line tool, which is a separate
 install from Anthropic. The Claude desktop app is not the same thing, and
 neither is claude.ai in a browser.** Having either of those gives this plugin
 nothing to talk to.
@@ -156,7 +156,7 @@ time to time; the linked page is always the authority.
 
 ## Which Claude account does this use?
 
-ICOR AI Chat has no login of its own. It never sees, stores or
+ICOR for Life - Chat has no login of its own. It never sees, stores or
 transmits a credential of any kind. It runs the Claude Code CLI
 already installed on your machine, and that CLI uses whatever
 authentication you set up yourself, directly with Anthropic.
@@ -233,7 +233,7 @@ SDK message types passing through without throwing.
 One test in the suite is not about behaviour at all. `test/computed-style.test.mjs`
 launches headless Chrome, mounts the shipped view components under a
 reproduction of both hosts this plugin renders inside - Obsidian's own `app.css`
-and the ICOR for Life INKLINE theme - and reads `getComputedStyle`. It exists because
+and the ICOR for Life - INKLINE theme - and reads `getComputedStyle`. It exists because
 the failure it guards is invisible to every other kind of test: a host rule like
 `button:not(.clickable-icon)` computes to (0,1,1) and outranks a plugin rule
 stated by a single class, so the send pill, the badge, the chips and the code
@@ -260,24 +260,24 @@ hidden node leaves the thing that produced it alive.
 
 ## ICOR for Life Obsidian Edition
 
-ICOR AI Chat is the AI surface of the **ICOR for Life Obsidian Edition**: ICOR
+ICOR for Life - Chat is the AI surface of the **ICOR for Life Obsidian Edition**: ICOR
 (Input, Control, Output, Refine), the productivity methodology by Paperless
 Movement / myICOR, implemented as a ready-to-use Obsidian vault. Best to be used
 in combination with:
 
-- **[ICOR for Life INKLINE theme](https://community.obsidian.md/themes/icor-for-life-inkline)**, the
+- **[ICOR for Life - INKLINE theme](https://community.obsidian.md/themes/icor-for-life-inkline)**, the
   hand-drawn ICOR look every surface of the Edition is designed against. It is one of
   the two hosts the shipped style gate measures this plugin against, so cards, tool
   rows and decision blocks hold their shape in ink and paper mode alike.
-- **[ICOR Planner](https://obsidian.md/plugins?id=icor-for-life-planner)**, the weekly planning
+- **[ICOR for Life - Planner](https://obsidian.md/plugins?id=icor-for-life-planner)**, the weekly planning
   board: Todoist, ClickUp, starred email and Google Calendar synced into the vault,
   planned by drag and drop. Talk a week through here, run it there.
-- **[ICOR Focus](https://obsidian.md/plugins?id=icor-for-life-focus)**, the gravity map of your
+- **[ICOR for Life - Focus](https://obsidian.md/plugins?id=icor-for-life-focus)**, the gravity map of your
   vault: what you touched today sits close, older work ripples outward.
-- **[myICOR Connect](https://obsidian.md/plugins?id=icor-for-life-connect)**, your
+- **[ICOR for Life - Connect](https://obsidian.md/plugins?id=icor-for-life-connect)**, your
   app.myicor.com account inside the vault: the ICOR Journey courses from myicor.com
   next to your notes.
-- **[ICOR Diagrams](https://obsidian.md/plugins?id=icor-for-life-diagrams)**, a fullscreen viewer
+- **[ICOR for Life - Diagrams](https://obsidian.md/plugins?id=icor-for-life-diagrams)**, a fullscreen viewer
   with zoom and pan for the mermaid diagrams in your notes, including the ones this
   plugin drafts.
 

@@ -1,6 +1,6 @@
-/* The --ink-* channel, both rooms, as the myICOR INKLINE theme declares it.
+/* The --ink-* channel, both rooms, as the ICOR for Life - INKLINE theme declares it.
  *
- * Extracted from `myICOR INKLINE/theme.css`, limited to the tokens the
+ * Extracted from `ICOR for Life - INKLINE/theme.css`, limited to the tokens the
  * plugin's own token block actually reads. This is the INKLINE half of
  * the four-room matrix: with this file loaded the plugin resolves through the
  * theme channel, without it through the stock fallbacks. Both halves are

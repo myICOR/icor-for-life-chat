@@ -3,7 +3,7 @@
 export const PLUGIN_ID = 'icor-for-life-chat';
 
 /**
- * The declaration every root this plugin owns carries. The myICOR INKLINE
+ * The declaration every root this plugin owns carries. The ICOR for Life - INKLINE
  * theme reads it and stands its own element-level
  * control skins down inside the subtree, at ZERO specificity, so the plugin's
  * controls stop having to out-rank the host on every property forever.

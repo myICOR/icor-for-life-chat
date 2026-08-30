@@ -1,7 +1,7 @@
 {
   "id": "icor-for-life-chat",
-  "name": "ICOR AI Chat",
-  "version": "0.3.6",
+  "name": "ICOR for Life - Chat",
+  "version": "0.3.7",
   "minAppVersion": "1.7.2",
   "description": "Talk to your AI team where the knowledge lives. A Claude chat inside the vault: it sees the note you have open and the text you selected, answers in readable ICOR cards, and archives your sessions as notes. Part of the ICOR for Life suite.",
   "author": "myICOR",

@@ -1,4 +1,4 @@
-/* ICOR AI Chat - INKLINE visual grammar.
+/* ICOR for Life - Chat - INKLINE visual grammar.
  * Every colour rides an --ink-* token with a stock Obsidian fallback, so the
  * plugin degrades legibly outside the INKLINE theme. A raw hex outside the
  * token block below is a defect. Every gap is a 4/8/12/16/24/32/48/64 rung;
@@ -20,7 +20,7 @@
      tidying: fill #B93613 under the ink room's #180E08 label would read
      3.24:1 - a text failure worse than the boundary failure it closed. Paired
      with #FFF6F0 it reads 5.47:1, the certified paper figure.
-     Every value below is what `myICOR INKLINE/theme.css`
+     Every value below is what `ICOR for Life - INKLINE/theme.css`
      already declares in `body.theme-light`; no new colour is invented here. */
   --aic-marker: var(--ink-marker, #d43f16);
   /* MARK vs FILL, and the two are different rungs in the paper room. The
