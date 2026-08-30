@@ -233,7 +233,7 @@ SDK message types passing through without throwing.
 One test in the suite is not about behaviour at all. `test/computed-style.test.mjs`
 launches headless Chrome, mounts the shipped view components under a
 reproduction of both hosts this plugin renders inside - Obsidian's own `app.css`
-and the myICOR INKLINE theme - and reads `getComputedStyle`. It exists because
+and the ICOR for Life INKLINE theme - and reads `getComputedStyle`. It exists because
 the failure it guards is invisible to every other kind of test: a host rule like
 `button:not(.clickable-icon)` computes to (0,1,1) and outranks a plugin rule
 stated by a single class, so the send pill, the badge, the chips and the code
@@ -265,7 +265,7 @@ ICOR AI Chat is the AI surface of the **ICOR for Life Obsidian Edition**: ICOR
 Movement / myICOR, implemented as a ready-to-use Obsidian vault. Best to be used
 in combination with:
 
-- **[myICOR INKLINE theme](https://community.obsidian.md/themes/icor-for-life-inkline)**, the
+- **[ICOR for Life INKLINE theme](https://community.obsidian.md/themes/icor-for-life-inkline)**, the
   hand-drawn ICOR look every surface of the Edition is designed against. It is one of
   the two hosts the shipped style gate measures this plugin against, so cards, tool
   rows and decision blocks hold their shape in ink and paper mode alike.
