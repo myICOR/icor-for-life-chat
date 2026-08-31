@@ -4,13 +4,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseStructured, decisionsOf, stripGlyphs, trackDecisions, openDecisions,
-  badgeLabel, mentionsCode, isCode,
+  badgeLabel, mentionsCode, isCode, STRUCTURED_REPLY_PROMPT,
 } from './build/pure.mjs';
 
 const card = [
   'Two lines of ordinary lead prose.',
   '',
-  'FELIX · icor-for-life-chat P3 · COMPLETE',
+  'FELIX · icor-chat P3 · COMPLETE',
   'ASKED',
   'Does the parser hold?',
   'ANSWER',
@@ -26,12 +26,12 @@ const card = [
   '1. Ship the renderer',
   '2. Wire the badge',
   'FILES',
-  '/Users/tom/Dev/icor-for-life-chat/src/structured/parser.ts',
+  '/Users/tom/Dev/icor-chat/src/structured/parser.ts',
   'LINKS',
-  'https://github.com/myICOR/icor-for-life-chat',
+  'https://github.com/myICOR/icor-chat',
   '',
   'DECISION a1b2c · plugin id',
-  'Keep the slug or rename? Recommend keep.',
+  'Keep icor-chat or rename? Recommend keep.',
 ].join('\n');
 
 test('plain chat is never claimed by the parser', () => {
@@ -53,7 +53,7 @@ test('a well-formed reply parses into its regions', () => {
 test('the header carries name, scope and status', () => {
   const { header } = parseStructured(card).segments[1];
   assert.equal(header.name, 'FELIX');
-  assert.equal(header.scope, 'icor-for-life-chat P3');
+  assert.equal(header.scope, 'icor-chat P3');
   assert.equal(header.status, 'COMPLETE');
 });
 
@@ -213,4 +213,88 @@ test('glyph stripping leaves the words alone', () => {
   assert.equal(stripGlyphs('🟢 handled'), 'handled');
   assert.equal(stripGlyphs('no glyph here'), 'no glyph here');
   assert.equal(stripGlyphs('✅ 🔶 done'), 'done');
+});
+
+/* ============================================ the reply is not in a terminal ==
+ *
+ * The card format was designed for a terminal, where the model wraps its own
+ * lines because nothing else will. The plugin is a resizable panel that wraps
+ * text itself, so a hard-wrapped reply arrives as a row followed by the
+ * leftovers of its own value. Measured on screen: a row reading "duplicate
+ * fact :: the 2026-07-27 video is" with "told twice, line 53 and line 57"
+ * adrift below the group as loose prose. The parser was not losing the text -
+ * the model had already broken it into pieces that are not rows. */
+
+test('a value the model hard-wrapped is still one value', () => {
+  const doc = parseStructured([
+    'LARRY · paco-cantero.md · PARTIAL',
+    '',
+    'WHAT I SEE',
+    '🔴 duplicate fact :: the 2026-07-27 video is',
+    'told twice, line 53 and line 57',
+    '🟡 timeline order :: 2026-08-06 sits at the',
+    'top, 2026-08-04 near the bottom',
+  ].join('\n'));
+  const card = doc.segments.find((s) => s.kind === 'card');
+  const group = card.blocks.find((b) => b.kind === 'group');
+  assert.equal(group.rows.length, 2, 'the wrapped lines were counted as extra rows');
+  assert.equal(group.rows[0].value, 'the 2026-07-27 video is told twice, line 53 and line 57',
+    'the tail of the first row was dropped out of the card');
+  assert.equal(group.rows[1].value, '2026-08-06 sits at the top, 2026-08-04 near the bottom');
+  // And nothing was left over as orphaned prose, which is what the reader saw.
+  assert.equal(card.blocks.filter((b) => b.kind === 'prose').length, 0,
+    'a fragment of a row escaped the group as loose prose');
+});
+
+test('a blank line still ends the group, so real prose is left alone', () => {
+  /* The discriminator, and the only honest one available: a hard wrap has no
+     blank line, a new paragraph has one. Without this the fold would eat any
+     paragraph written under a group. */
+  const doc = parseStructured([
+    'LARRY · scope · COMPLETE',
+    '',
+    'WHAT I SEE',
+    '🔴 duplicate fact :: told twice',
+    '',
+    'This is a real paragraph the author wrote under the group.',
+  ].join('\n'));
+  const card = doc.segments.find((s) => s.kind === 'card');
+  const group = card.blocks.find((b) => b.kind === 'group');
+  assert.equal(group.rows[0].value, 'told twice', 'a separated paragraph was folded into the row');
+  const prose = card.blocks.find((b) => b.kind === 'prose');
+  assert.ok(prose && prose.text.startsWith('This is a real paragraph'),
+    'the paragraph was swallowed instead of rendered');
+});
+
+test('a row missing its :: is not silently glued to the row above', () => {
+  // It carries a disposition glyph, so it is a row the author fumbled, not a
+  // continuation. Folding it would hide the mistake inside another row's value.
+  const doc = parseStructured([
+    'LARRY · scope · COMPLETE',
+    '',
+    'WHAT I SEE',
+    '🔴 duplicate fact :: told twice',
+    '🟡 timeline order is wrong',
+  ].join('\n'));
+  const card = doc.segments.find((s) => s.kind === 'card');
+  const group = card.blocks.find((b) => b.kind === 'group');
+  assert.equal(group.rows.length, 1);
+  assert.equal(group.rows[0].value, 'told twice',
+    'a malformed row was absorbed into the value of the row above it');
+});
+
+test('the format tells the model it is not writing into a terminal', () => {
+  /* The parser fold above is the net; this is the fix. Without it the model
+     keeps wrapping, and every wrapped row depends on a heuristic to survive. */
+  assert.match(STRUCTURED_REPLY_PROMPT, /not a terminal/i,
+    'the prompt does not tell the model what surface it is writing into');
+  assert.match(STRUCTURED_REPLY_PROMPT, /never wrap a line to\na column width/i,
+    'the prompt does not forbid wrapping to a column');
+  assert.match(STRUCTURED_REPLY_PROMPT, /no character limit on any line/i,
+    'the prompt leaves a line-length limit the panel does not have');
+  /* And it must not throw out the format's own editorial limits with the
+     column rule: "at most two lines of prose" is about how much to say, which
+     a wider panel does not change. */
+  assert.match(STRUCTURED_REPLY_PROMPT, /editorial and still\nhold/i,
+    'the no-wrap rule also cancelled the limits on how much to write');
 });

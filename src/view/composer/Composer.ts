@@ -30,7 +30,9 @@
 
 import { Menu, setIcon, setTooltip } from 'obsidian';
 import type { EffortName, ModelChoice, PermissionModeName } from '../../model/types';
-import { iconButton } from '../dom';
+import { applyCommand, filterCommands, normalizeCommands, slashQuery } from './slash';
+import { applyMention, filterMentions, mentionQuery } from './mention';
+import type { MentionFile } from './mention';
 
 const MODES: Array<{ id: PermissionModeName; label: string }> = [
   { id: 'plan', label: 'Plan' },
@@ -65,6 +67,19 @@ export interface Attachment {
  * because a rejection there arrives as a wall of provider error text. */
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 
+/** One counter per plugin load; see `slashId`. */
+let composerSeq = 0;
+
+/** A row the picker can show, whichever source produced it. */
+interface PickerRow {
+  /** What accepting it inserts: a command name, or a vault-relative path. */
+  id: string;
+  label: string;
+  /** The folder, for mentions. Empty when there is nothing to disambiguate. */
+  detail: string;
+  prefix: string;
+}
+
 /* 5MB per image, which is the API's own per-image ceiling. Checked on the raw
  * bytes rather than on the base64, because base64 inflates by a third and a
  * limit applied to the encoded form would reject files the API accepts. */
@@ -76,7 +91,6 @@ export interface ComposerCallbacks {
   onModeChange: (mode: PermissionModeName) => void;
   onModelChange: (model: string) => void;
   onEffortChange: (effort: EffortName) => void;
-  onAttach: () => void;
   /** Something the user did that could not be honoured, in their words. */
   onNotice?: (message: string) => void;
 }
@@ -99,6 +113,20 @@ export class Composer {
   private readonly modelBtn: HTMLButtonElement;
   private readonly effortBtn: HTMLButtonElement;
   private readonly sendBtn: HTMLButtonElement;
+  /** Rung 4 lives INSIDE the card now; see the note over its creation. */
+  readonly factsEl: HTMLElement;
+  private readonly slashEl: HTMLElement;
+  private slashNames: string[] = [];
+  /* ONE PICKER, TWO SOURCES. `/` and `@` differ only in where the query comes
+     from and what accepting one types; everything about opening, filtering,
+     arrowing and dismissing is identical. Two pickers would be two places for
+     the Enter-key handling to drift apart. */
+  private picker: PickerRow[] = [];
+  private pickerKind: 'slash' | 'mention' = 'slash';
+  private slashActive = 0;
+  private slashOpen = false;
+  /** The vault's notes, supplied by the view. Empty until it hands them over. */
+  private mentionFiles: readonly MentionFile[] = [];
   private state: ComposerState;
   /** The SDK's catalogue, or null while it has not answered yet. */
   private catalog: ModelChoice[] | null = null;
@@ -106,6 +134,9 @@ export class Composer {
   private resolvedModel: string | null = null;
   private attachments: Attachment[] = [];
   private attachSeq = 0;
+  /* A document-wide id, and a vault can hold two chat tabs: without the counter
+     the second pane's `aria-activedescendant` would name the FIRST pane's row. */
+  private readonly slashId = `aic-slash-${composerSeq++}`;
 
   constructor(parent: HTMLElement, initial: ComposerState, private readonly cb: ComposerCallbacks) {
     this.state = { ...initial };
@@ -142,13 +173,52 @@ export class Composer {
     for (const btn of [this.modeBtn, this.modelBtn, this.effortBtn]) {
       btn.setAttr('aria-haspopup', 'menu');
     }
-    iconButton(action, 'plus', 'Attach a file or image', () => this.cb.onAttach());
+    /* THE ATTACH BUTTON IS GONE, and removing it is the honest move.
+     *
+       It could not attach anything. Clicking it raised a toast telling the user
+       to paste or drop an image instead, which is a control whose entire
+       function is to explain that it has none - and it sat in the action row
+       looking exactly as operable as the three pickers beside it. Paste and
+       drop are wired on the card itself and are what the placeholder and the
+       toast were both pointing at, so nothing was lost with it. */
     action.createDiv({ cls: 'aic-action-spacer' });
     this.sendBtn = action.createEl('button', { cls: 'aic-send', type: 'button' });
+
+    /* RUNG 4, THE READOUT STRIP, inside the card and below the action row.
+     *
+       It was the pane's last child, a sibling of this card, and on a right
+       sidebar Obsidian's own status bar is painted straight over that band: the
+       strip rendered perfectly and was invisible. Inside the card it clears the
+       bar, and the card's bottom padding is pulled back so the hairline still
+       spans edge to edge.
+
+       The old placement had a real reason and it has since been retired
+       independently. The card's focus affordance is `:has(> textarea.aic-input:
+       focus)`, a DIRECT-child trigger, so a non-focusable readout in here can no
+       longer light up as part of the input's focus state - which was the entire
+       argument for keeping it outside. The property that mattered is enforced
+       by the selector now, not by the geometry. */
+    this.factsEl = this.el.createDiv({ cls: 'aic-facts' });
+
+    /* The command picker, positioned over the card rather than inside its flow:
+       a list that pushed the textarea down would move the target the user is
+       typing at, every keystroke. */
+    this.slashEl = this.el.createDiv({ cls: 'aic-slash' });
+    this.slashEl.id = this.slashId;
+    this.slashEl.setAttr('role', 'listbox');
+    this.slashEl.setAttr('aria-label', 'Slash commands');
+    /* The field is the combobox and the list is what it controls, stated so a
+       screen reader announces the row the arrow keys are moving over. Without
+       these the picker is visible chrome that nothing narrates. */
+    this.textarea.setAttr('role', 'combobox');
+    this.textarea.setAttr('aria-autocomplete', 'list');
+    this.textarea.setAttr('aria-controls', this.slashId);
+    this.closeSlash();
 
     this.sendBtn.addEventListener('click', () => this.fire());
     this.textarea.addEventListener('input', () => {
       this.autoGrow();
+      this.refreshSlash();
       // The send pill's enabled state is derived from the textarea, so it has
       // to be re-derived when the textarea changes. Without this the pill only
       // ever left `disabled` on a full repaint, which nothing on the typing
@@ -156,10 +226,45 @@ export class Composer {
       this.syncSend();
     });
     this.textarea.addEventListener('keydown', (ev: KeyboardEvent) => {
+      /* The picker owns these keys while it is open, and only while it is open.
+         Enter must accept the highlighted command rather than send: a list you
+         can see but cannot choose from with the keyboard is a list that forces
+         the mouse. */
+      if (this.slashOpen && !ev.isComposing) {
+        if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+          ev.preventDefault();
+          const step = ev.key === 'ArrowDown' ? 1 : -1;
+          const n = this.picker.length;
+          if (n > 0) this.slashActive = (this.slashActive + step + n) % n;
+          this.paintSlash();
+          return;
+        }
+        if (ev.key === 'Enter' || ev.key === 'Tab') {
+          ev.preventDefault();
+          this.accept(this.picker[this.slashActive]);
+          return;
+        }
+        if (ev.key === 'Escape') {
+          ev.preventDefault();
+          this.closeSlash();
+          return;
+        }
+      }
       if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing) {
         ev.preventDefault();
         this.fire();
       }
+    });
+    /* Moving the caret changes the answer without changing the text: clicking
+       behind the slash, or arrowing out of the word, has to close the picker. */
+    this.textarea.addEventListener('keyup', (ev: KeyboardEvent) => {
+      if (ev.key.startsWith('Arrow') || ev.key === 'Home' || ev.key === 'End') this.refreshSlash();
+    });
+    this.textarea.addEventListener('click', () => this.refreshSlash());
+    this.textarea.addEventListener('blur', () => {
+      // A click on a row is a mousedown on the list and a blur on the field, in
+      // that order, so the close has to wait for the click to land.
+      window.setTimeout(() => this.closeSlash(), 120);
     });
 
     /* PASTE AND DROP, on the CARD rather than on the textarea.
@@ -221,6 +326,7 @@ export class Composer {
     this.textarea.setSelectionRange(caret, caret);
     this.textarea.focus();
     this.autoGrow();
+    this.refreshSlash();
     this.paint();
   }
 
@@ -265,6 +371,117 @@ export class Composer {
     return [...this.attachments];
   }
 
+  /* ----------------------------------------------------------- the pickers */
+
+  /** The provider's own command list, from the session event. Never invented. */
+  setSlashCommands(names: readonly string[]): void {
+    this.slashNames = normalizeCommands(names);
+  }
+
+  /** The vault's own notes. Never a list assembled here. */
+  setMentionFiles(files: readonly MentionFile[]): void {
+    this.mentionFiles = files;
+  }
+
+  /** Open, filter or close the picker from the field's current state. */
+  private refreshSlash(): void {
+    const caret = this.textarea.selectionStart ?? 0;
+    const rows = this.rowsFor(caret);
+    if (rows === null || rows.length === 0) {
+      this.closeSlash();
+      return;
+    }
+    /* The highlight follows the LIST, not the previous index: after typing one
+       more character the row that was second may not exist, and an index left
+       pointing past the end accepts nothing on Enter. */
+    const previous = this.picker[this.slashActive]?.id;
+    const kept = previous ? rows.findIndex((r) => r.id === previous) : -1;
+    this.picker = rows;
+    this.slashActive = kept >= 0 ? kept : 0;
+    this.slashOpen = true;
+    this.paintSlash();
+  }
+
+  /* Which picker the caret is in, and its rows. Slash is checked first because
+     its rule is the stricter one - column zero - so the two can never both
+     claim the same caret. */
+  private rowsFor(caret: number): PickerRow[] | null {
+    const value = this.textarea.value;
+    const command = slashQuery(value, caret);
+    if (command !== null && this.slashNames.length > 0) {
+      this.pickerKind = 'slash';
+      return filterCommands(this.slashNames, command).map((name) => ({
+        id: name, label: name, detail: '', prefix: '/',
+      }));
+    }
+    const mention = mentionQuery(value, caret);
+    if (mention !== null && this.mentionFiles.length > 0) {
+      this.pickerKind = 'mention';
+      return filterMentions(this.mentionFiles, mention).map((file) => ({
+        id: file.path,
+        label: file.basename,
+        // The folder, so two notes with the same name are told apart. Without
+        // it the picker offers the user a choice it has not shown them.
+        detail: file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/')) : '',
+        prefix: '@',
+      }));
+    }
+    return null;
+  }
+
+  private closeSlash(): void {
+    this.slashOpen = false;
+    this.picker = [];
+    this.slashActive = 0;
+    this.slashEl.empty();
+    this.slashEl.removeClass('is-open');
+    this.textarea.removeAttribute('aria-activedescendant');
+    this.textarea.setAttr('aria-expanded', 'false');
+  }
+
+  private paintSlash(): void {
+    this.slashEl.empty();
+    this.slashEl.addClass('is-open');
+    this.textarea.setAttr('aria-expanded', 'true');
+    this.picker.forEach((item, i) => {
+      const row = this.slashEl.createDiv({ cls: 'aic-slash-row' });
+      row.id = `${this.slashId}-${i}`;
+      row.setAttr('role', 'option');
+      row.setAttr('aria-selected', i === this.slashActive ? 'true' : 'false');
+      row.toggleClass('is-active', i === this.slashActive);
+      row.createSpan({ cls: 'aic-slash-slash', text: item.prefix });
+      row.createSpan({ cls: 'aic-slash-name', text: item.label });
+      if (item.detail) row.createSpan({ cls: 'aic-slash-detail', text: item.detail });
+      // mousedown, not click: the field blurs on mousedown and the blur handler
+      // closes the list, so a click listener would fire on a row already gone.
+      row.addEventListener('mousedown', (ev: MouseEvent) => {
+        ev.preventDefault();
+        this.accept(item);
+      });
+      row.addEventListener('mouseenter', () => {
+        this.slashActive = i;
+        this.paintSlash();
+      });
+    });
+    if (this.picker[this.slashActive] !== undefined) {
+      this.textarea.setAttr('aria-activedescendant', `${this.slashId}-${this.slashActive}`);
+    }
+  }
+
+  private accept(item: PickerRow | undefined): void {
+    if (!item) return;
+    const caret = this.textarea.selectionStart ?? this.textarea.value.length;
+    const next = this.pickerKind === 'slash'
+      ? applyCommand(this.textarea.value, item.id)
+      : applyMention(this.textarea.value, caret, item.id);
+    this.textarea.value = next.value;
+    this.textarea.setSelectionRange(next.caret, next.caret);
+    this.closeSlash();
+    this.autoGrow();
+    this.syncSend();
+    this.textarea.focus();
+  }
+
   private fire(): void {
     if (this.state.streaming) {
       this.cb.onStop();
@@ -278,6 +495,7 @@ export class Composer {
     const attachments = this.attachments;
     this.attachments = [];
     this.textarea.value = '';
+    this.closeSlash();
     this.autoGrow();
     this.paint();
     this.cb.onSubmit(text, attachments);

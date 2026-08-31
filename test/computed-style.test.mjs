@@ -143,6 +143,11 @@ ${HELPERS}
     const g = ground(el);
     return {
       bg: key(parse(cs.backgroundColor)),
+      padding: cs.padding,
+      radius: cs.borderRadius,
+      lineClamp: cs.webkitLineClamp || cs.getPropertyValue('-webkit-line-clamp') || 'none',
+      borderLeft: key(parse(cs.borderLeftColor)),
+      borderLeftWidth: cs.borderLeftWidth,
       fg: key(parse(cs.color)),
       borderTop: key(parse(cs.borderTopColor)),
       borderRight: key(parse(cs.borderRightColor)),
@@ -282,6 +287,10 @@ ${HELPERS}
        dot any more - a selector left aimed at the old dot class would have
        matched nothing and taken the amber measurement down with it silently.
        (No backticks in here: this map is inside a template literal.) */
+    bandAsked: '.aic-band-asked',
+    bandAnswer: '.aic-band-answer',
+    askedText: '.aic-asked-text',
+    bandAnswerIcon: '.aic-band-answer .aic-band-icon',
     statusWarnArc: '.aic-facts .aic-fact.is-warning .aic-ring-arc',
     statusWarnTrack: '.aic-facts .aic-fact.is-warning .aic-ring-track',
     statusWarnFact: '.aic-facts .aic-fact.is-warning',
@@ -352,6 +361,11 @@ ${HELPERS}
       height: fcs ? fcs.height : null,
       padding: fcs ? fcs.padding : null,
       marginTop: fcs ? fcs.marginTop : null,
+      margin: fcs ? fcs.margin : null,
+      dockPaddingBottom: (() => {
+        const dock = one('.aic-dock');
+        return dock ? getComputedStyle(dock).paddingBottom : null;
+      })(),
     };
   }
 
@@ -984,12 +998,31 @@ test('V5b - the wider grant sits one visual step quieter than the narrow one', (
 
 test('the quiet controls keep their transparent grounds', () => {
   forEachRoom((s, room) => {
-    for (const name of ['agentChip', 'chipX', 'textBtn', 'iconBtn']) {
+    /* `textBtn` LEFT THIS LIST when the three pickers became one pill. Mode,
+       model and effort do the same job and were drawn three ways - a chip in a
+       bordered track and two runs of bare text - so the row read as one control
+       and two labels. A pill is a shape made of its fill, so these two now
+       carry a ground on purpose and are asserted below instead. */
+    for (const name of ['agentChip', 'chipX', 'iconBtn']) {
       assert.equal(s.base.el[name].bg, 'transparent', `${room}: ${name} took the theme panel fill`);
     }
     assert.equal(s.base.el.agentChip.borderTop, s.base.tokens['--aic-hairline'], `${room}: agent chip border`);
     assert.equal(s.base.el.chipX.fg, s.base.tokens['--aic-faint'], `${room}: chip dismiss colour`);
     assert.equal(s.base.el.segActive.bg, s.base.tokens['--aic-wash'], `${room}: active mode chip ground`);
+    /* THE THREE PICKERS ARE ONE CONTROL, measured rather than eyeballed: same
+       ground, same padding, same radius, same type size. The first version of
+       this change looked right in the source and did nothing on screen - the
+       pill's ground was stated at (0,3,0) where the control layer's
+       `background-color: transparent` beat it by source order at (0,4,0) - and
+       the suite stayed green throughout, because nothing was asserting the
+       ground on the two controls that had just been given one. */
+    assert.equal(s.base.el.textBtn.bg, s.base.tokens['--aic-wash'],
+      `${room}: the model and effort pills have no fill, so they are not pills`);
+    for (const prop of ['padding', 'radius', 'size']) {
+      assert.equal(s.base.el.textBtn[prop], s.base.el.segActive[prop],
+        `${room}: the pickers disagree on ${prop} - the mode chip says ` +
+        `${s.base.el.segActive[prop]}, the model and effort say ${s.base.el.textBtn[prop]}`);
+    }
     assert.equal(s.base.el.iconBtn.fg, s.base.tokens['--aic-faint'], `${room}: icon button colour`);
     /* The tool row's DISCLOSURE arrow, which is the only chevron left in the
        plugin: it reports open or closed rather than advertising a menu. Faint,
@@ -1358,20 +1391,60 @@ test('the settings index rides the small-marker-text rung', () => {
 
 /* ------------------------------ the statusline rung and the hover wash --- */
 
-test('the statusline is a SIBLING of the composer card, never a child', () => {
+/* THE STRIP MOVED INTO THE CARD, and this assertion moved with it rather than
+ * being deleted.
+ *
+ * It used to read "rung 4 may not be a descendant of rung 3", and it was right
+ * for a reason that has since been retired: `.aic-composer` triggered its focus
+ * treatment on `:focus-within`, so a non-focusable readout inside it lit up as
+ * part of the input's focus state. That trigger is now
+ * `:has(> textarea.aic-input:focus)` - a DIRECT child - and the property is
+ * enforced by the SELECTOR instead of by the coordinates. Which means the
+ * nesting was never the real guard, only a proxy for one, and the real guard is
+ * the send-pill focus read above: `composerSend.border === --aic-hairline`
+ * proves that focusing a non-textarea descendant of the card does not step the
+ * card. That test is what protects this move, and it is asserted independently.
+ *
+ * What forced the move is Obsidian's own status bar painting over the bottom of
+ * a right-sidebar leaf: outside the card, the strip rendered perfectly and was
+ * invisible. */
+test('the statusline is the CARD\'s last child, and the card keeps its focus scope', () => {
   forEachRoom((s, room) => {
-    assert.equal(s.base.facts.insideComposer, false,
-      `${room}: 3.1's census is a NESTING property - rung 4 may not be a descendant of rung 3. ` +
-      `Inside the card the strip also sits inside the composer's :focus-within affordance.`);
-    assert.deepEqual(s.base.facts.nested, [],
-      `${room}: a rung is nested inside another rung`);
+    assert.equal(s.base.facts.insideComposer, true,
+      `${room}: rung 4 left the card. Outside it, Obsidian's status bar covers the strip ` +
+      `on a right sidebar - it renders correctly and cannot be seen.`);
     assert.equal(s.base.facts.censusOrder, 'stream,chips,composer,facts',
       `${room}: the pane's four rungs are out of order or missing (got ${s.base.facts.censusOrder})`);
+    /* THE PROPERTY THE OLD NESTING RULE WAS PROXYING FOR, asserted directly and
+       in the same breath as the move that would have broken it. If the card's
+       trigger ever widens back to :focus-within, this goes red with the strip
+       still legally inside the card - which is the whole point of measuring the
+       property instead of its old coordinates. */
+    assert.equal(s.composerSend.border, s.base.tokens['--aic-hairline'],
+      `${room}: the card steps for a focused descendant that is not the textarea, so the ` +
+      `readout strip now inside it has rejoined the input's focus affordance`);
     assert.equal(s.base.facts.borderTopStyle, 'solid', `${room}: 4's hairline separator is missing`);
     assert.equal(s.base.facts.borderTop, s.base.tokens['--aic-hairline-subtle'], `${room}: separator colour`);
     assert.equal(s.base.facts.height, '24px', `${room}: 4 specifies 24px; the build had 12`);
-    assert.equal(s.base.facts.padding, '0px 16px', `${room}: 4 specifies padding 0 16px`);
-    assert.equal(s.base.facts.marginTop, '0px', `${room}: the hairline is the separation, not a margin`);
+    /* The card's own 12px padding is pulled back and re-applied, so the hairline
+       spans the card edge to edge and the first character still lines up with
+       the text above it. */
+    assert.equal(s.base.facts.padding, '0px 12px', `${room}: 4 specifies padding 0 12px inside the card`);
+    assert.equal(s.base.facts.margin, '8px -12px -12px',
+      `${room}: the strip must pull back the card's padding, or its hairline stops short of both edges`);
+  });
+});
+
+/* WITH NO STATUS BAR THERE IS NO CLEARANCE, and the fixture has no status bar.
+ * The fallback in the custom property is what this measures: an unmeasured bar
+ * must cost zero, because the alternative - a guessed constant - would put a
+ * permanent empty band under every composer in every vault. What the clearance
+ * is when a bar IS present is geometry, and it is asserted headless against
+ * `overlapPx` in statusbar.test.mjs. */
+test('an unmeasured status bar costs the dock nothing', () => {
+  forEachRoom((s, room) => {
+    assert.equal(s.base.facts.dockPaddingBottom, '12px',
+      `${room}: the dock reserved ${s.base.facts.dockPaddingBottom} with no status bar to clear`);
   });
 });
 
@@ -1909,5 +1982,45 @@ test('the status and hand tokens carry a room split, not one room twice', () => 
       assert.equal(s.base.tokens[aic], s.base.inkTokens[ink],
         `${room}: ${aic} did not defer to the theme's ${ink}`);
     }
+  });
+});
+
+/* ------------------------------------------- the two bands the eye looks for */
+
+test('ASKED and ANSWER are banners, and ANSWER carries the hue', () => {
+  forEachRoom((s, room) => {
+    /* They were three kickers over three runs of text, so the two blocks that
+       answer "does this need me at all" read at the same speed as every other
+       label on the card. They are the first thing on it and often the only two
+       the user reads. */
+    for (const name of ['bandAsked', 'bandAnswer']) {
+      assert.notEqual(s.base.el[name].bg, 'transparent',
+        `${room}: ${name} has no ground, so it is a label and not a banner`);
+      assert.equal(s.base.el[name].borderLeftWidth, '2px', `${room}: ${name} lost its rail`);
+    }
+    // ANSWER is the payload, so it is the one that takes the accent. ASKED
+    // restates what the user already knows and stays neutral.
+    assert.equal(s.base.el.bandAnswer.borderLeft, s.base.tokens['--aic-marker'],
+      `${room}: the ANSWER rail is not the marker, so nothing distinguishes it from ASKED`);
+    assert.equal(s.base.el.bandAsked.borderLeft, s.base.tokens['--aic-hairline'],
+      `${room}: ASKED took an accent it has no claim to`);
+    /* THE HOUSE RULE, one block up from the mode chips: a status ink never
+       rides its own hue's tint. The rail is the colour and the ground stays
+       neutral, so the text keeps every point of its contrast. */
+    assert.equal(s.base.el.bandAnswer.bg, s.base.el.bandAsked.bg,
+      `${room}: the ANSWER banner tinted its own ground, which is where contrast goes to die`);
+  });
+});
+
+test('no text on a card is clipped to a line count', () => {
+  forEachRoom((s, room) => {
+    /* `-webkit-line-clamp: 2` on ASKED was the terminal format's "at most two
+       lines" rule pressed into CSS - and in a terminal that rule was about what
+       the model WRITES. Here it cut the question in half after the model had
+       already written it, with no affordance to see the rest: text that exists,
+       is on the page, and cannot be read. */
+    assert.equal(s.base.el.askedText.lineClamp, 'none',
+      `${room}: the ASKED text is clamped to ${s.base.el.askedText.lineClamp} lines and the ` +
+      `remainder is unreachable - the panel scrolls, there is nothing to save space for`);
   });
 });

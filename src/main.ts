@@ -1,4 +1,4 @@
-/* ICOR for Life - Chat - the ICOR AI team inside the vault.
+/* ICOR for Life AI Chat - the ICOR AI team inside the vault.
  *
  * The plugin is a window, not a second brain: it hosts a Claude Code session
  * whose working directory is the vault, so the vault's own CLAUDE.md, AGENTS.md
@@ -25,6 +25,7 @@ import { routeChatLeaf } from './view/leafRoute';
 import { ChatSettingsTab } from './settings/SettingsTab';
 import { DEFAULT_SETTINGS, archiveRoot } from './model/settings';
 import type { ChatSettings } from './model/settings';
+import type { ModelChoice } from './model/types';
 
 /* The file-explorer BLOCK this plugin used to inject above the file tree - a
  * whole panel section, not an icon. It is gone for good; the name survives
@@ -48,6 +49,18 @@ export default class IcorChatPlugin extends Plugin {
   override settings: ChatSettings = { ...DEFAULT_SETTINGS };
   /** One bus per vault: a subagent transcript outlives the chip that opened it. */
   readonly subagents = new SubagentBus();
+
+  /* THE PROVIDER'S OWN MODEL CATALOGUE, cached the first time a session
+   * reports it, and empty until then.
+   *
+   * It lives on the plugin rather than on the view because the SETTINGS TAB
+   * needs it and has no session to ask. The settings tab used to carry a
+   * hand-typed list - Haiku, Sonnet, Opus - which is exactly the invented
+   * catalogue the composer's own header forbids, and it aged the way an
+   * invented list always ages: the day Fable shipped, the picker could not
+   * offer it and nothing in the build could notice. Empty stays EMPTY and the
+   * tab says so; it is never backfilled with a guess. */
+  modelCatalog: ModelChoice[] = [];
 
   override async onload(): Promise<void> {
     // Before anything can launch a query. See renderer-compat.ts for why.
@@ -166,11 +179,7 @@ export default class IcorChatPlugin extends Plugin {
   private archivedSessionId(file: TFile): string | null {
     const cache = this.app.metadataCache.getFileCache(file);
     const frontmatter = cache?.frontmatter;
-    if (!frontmatter) return null;
-    // The legacy source value is vault data written by the pre-rename build;
-    // read both so existing archives keep their resume affordance.
-    const source: unknown = frontmatter.source;
-    if (source !== 'icor-for-life-chat' && source !== 'icor-chat') return null;
+    if (!frontmatter || frontmatter.source !== 'icor-chat') return null;
     return resumableSessionId(frontmatter.session_ids);
   }
 
@@ -348,11 +357,16 @@ export default class IcorChatPlugin extends Plugin {
     // settings shape, and every missing field falls back to the default.
     const stored = (await this.loadData()) as Partial<ChatSettings> | null;
     this.settings = Object.assign({}, DEFAULT_SETTINGS, stored ?? {});
-    // A stored Bypass default would silently re-arm the dangerous mode on every
-    // launch. Bypass is a per-conversation choice, never a startup state.
-    if (this.settings.defaultPermissionMode === 'bypassPermissions') {
-      this.settings.defaultPermissionMode = 'default';
-    }
+    /* A stored Bypass default is HONOURED, and the silent rewrite that used to
+       live here is gone.
+     *
+       It reset the stored mode back to Ask on every launch, on the reasoning
+       that Bypass is a per-conversation choice. What it actually produced was a
+       setting that could not be set: the user picked it, the tab saved it, and
+       the next reload undid it with nothing on screen to say so. A default the
+       product refuses to keep should not be offered as a default, and this one
+       is worth offering - so it is kept. Ask is still what ships, still what
+       `DEFAULT_SETTINGS` says, and still the recommendation in the tab. */
   }
 
   async saveSettings(): Promise<void> {

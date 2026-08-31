@@ -3,13 +3,7 @@
  * The rule it enforces: we only ever delete a folder whose NAME matches our own
  * shape AND which carries our own manifest. */
 
-export const ARCHIVE_SCHEMA = 'icor-for-life-chat/session-archive@1';
-/* VAULT-DATA COMPATIBILITY, not branding: this string exists inside archive
- * folders that real vaults already hold, written before the plugin id changed.
- * Refusing to read it would strand those folders outside the retention sweep
- * and make a continued conversation mint a duplicate folder beside its own
- * history. It is read, never written. */
-export const LEGACY_ARCHIVE_SCHEMA = 'icor-chat/session-archive@1';
+export const ARCHIVE_SCHEMA = 'icor-chat/session-archive@1';
 export const MANIFEST_FILE = 'session-manifest.json';
 export const LEGACY_MANIFEST_FILE = 'manifest.json';
 
@@ -101,7 +95,7 @@ export interface ArchiveManifest {
 export function isOurManifest(value: unknown): value is ArchiveManifest {
   if (typeof value !== 'object' || value === null) return false;
   const schema = (value as { schema?: unknown }).schema;
-  return schema === ARCHIVE_SCHEMA || schema === LEGACY_ARCHIVE_SCHEMA;
+  return schema === ARCHIVE_SCHEMA;
 }
 
 /** Folders older than the cut, by their own recorded end time. */

@@ -370,17 +370,52 @@ function takeParagraph(c: Cursor): string {
   return out.join(' ').trim();
 }
 
+/* A WRAPPED VALUE IS STILL ONE VALUE.
+ *
+ * The prompt now tells the model this is a panel and not a terminal, which is
+ * the real fix. This is the net under it, because the model brings a
+ * terminal-formatting habit with it and will sometimes wrap anyway. Before it,
+ * a wrapped row ended the group at the first continuation line and the rest of
+ * the value fell out of the card as loose prose - the reader saw a row that
+ * stopped mid-sentence and a paragraph of orphaned fragments underneath.
+ *
+ * The discriminator is the BLANK LINE, and it is the only honest one available:
+ * a hard wrap has none, a new paragraph has one. `takeRows` already stops at a
+ * blank line, so a continuation is a non-empty line that directly follows a row
+ * and is not itself a row, a kicker, a header or a decision. Anything a blank
+ * line separates from the group is still prose and is still left alone.
+ *
+ * It is deliberately conservative: it can only ever join text to a row that
+ * already exists, and it never invents a row.
+ */
 function takeRows(c: Cursor): Row[] {
   const rows: Row[] = [];
   while (c.i < c.lines.length) {
     const line = (peek(c) ?? '').trim();
     if (!line) break;
     const row = parseRow(line);
-    if (!row) break;
+    if (!row) {
+      const last = rows[rows.length - 1];
+      // Nothing to continue, or the line is a structure of its own.
+      if (!last || !isContinuation(line, c)) break;
+      last.value = last.value ? `${last.value} ${line}` : line;
+      c.i += 1;
+      continue;
+    }
     rows.push(row);
     c.i += 1;
   }
   return rows;
+}
+
+/** A line that can only be the tail of the row above it. */
+function isContinuation(line: string, c: Cursor): boolean {
+  if (isKicker(line)) return false;
+  if (parseDecisionOpen(line)) return false;
+  if (parseHeader(line, nextNonEmpty(c, 1))) return false;
+  // A disposition glyph opens a row, so a line carrying one is a row the
+  // author forgot the `::` on, not a continuation of the row above.
+  return leadingDisposition(line).disposition === null;
 }
 
 function takeFindings(c: Cursor): Finding[] {

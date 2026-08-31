@@ -32,10 +32,9 @@
  * The census, in document order, and the order is the contract:
  *   1  .aic-stream   (scroller) > .aic-column
  *   2  .aic-dock     > .aic-chips.is-empty
- *   3  .aic-dock     > .aic-composer   (the card, and the only :focus-within scope)
- *   4  .aic-facts    the statusline strip, a SIBLING of the card and the pane's
- *                    last child - outside the card's focus scope, which is the
- *                    REASON the nesting matters and not merely its coordinates.
+ *   3  .aic-dock     > .aic-composer   (the card)
+ *   4  .aic-composer > .aic-facts      the statusline strip, the CARD'S last
+ *                    child - see the note over its creation for why it moved.
  */
 
 import { INK_PLUGIN_ATTR, INK_PLUGIN_NAME } from '../constants';
@@ -87,13 +86,23 @@ export function buildPane(root: HTMLElement, opts: PaneOptions): Pane {
   const composer = new Composer(dock, opts.composer, opts.callbacks);
   const badge = new DecisionBadge(composer.badgeContainer, dock, opts.badge);
 
-  /* Rung 4 is mounted on the ROOT and not on the dock, and the reason is the
-     focus scope rather than the geometry: `.aic-composer:focus-within` is the
-     only focus-within rule in the stylesheet, and a readout nobody can focus
-     was lighting up as part of the input's focus state. Mounting it one level
-     up but still inside that scope would have moved the element and kept the
-     defect. */
-  const facts = root.createDiv({ cls: 'aic-facts' });
+  /* RUNG 4 IS THE CARD'S LAST CHILD, and it used to be the ROOT's.
+   *
+     The old placement answered a real defect: `.aic-composer:focus-within`
+     fired on any descendant, so a readout nobody can focus lit up as part of
+     the input's focus state, and moving the strip out was the fix. That trigger
+     has since been narrowed to `:has(> textarea.aic-input:focus)` - a DIRECT
+     child - for an unrelated reason, and narrowing it retired the argument: the
+     strip can sit in the card now without joining its focus affordance, and the
+     property is enforced by the selector rather than by the coordinates.
+
+     What forced the move is Obsidian's own status bar. It paints over the
+     bottom-right of the window, so in a right sidebar it covered this band
+     entirely: a strip that rendered correctly and could not be seen. Inside the
+     card it clears the bar, and `statusbar.ts` measures what is left. The
+     element is created by the Composer so the card owns its own last child;
+     this function still hands the Statusline to it, so there is one tree. */
+  const facts = composer.factsEl;
   const statusline = opts.facts ? new Statusline(facts, opts.facts) : new Statusline(facts);
 
   return { root, scroller, column, dock, chipTray, composer, badge, statusline, facts };

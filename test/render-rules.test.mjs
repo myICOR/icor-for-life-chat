@@ -52,8 +52,8 @@ test('paths split into a truncatable parent and a basename that never truncates'
 });
 
 test('links show the host first and survive a malformed URL', () => {
-  assert.deepEqual(splitUrl('https://github.com/myICOR/icor-for-life-chat'), {
-    host: 'github.com', rest: '/myICOR/icor-for-life-chat',
+  assert.deepEqual(splitUrl('https://github.com/myICOR/icor-chat'), {
+    host: 'github.com', rest: '/myICOR/icor-chat',
   });
   assert.deepEqual(splitUrl('https://example.com/'), { host: 'example.com', rest: '' });
   assert.deepEqual(splitUrl('not a url'), { host: 'not a url', rest: '' });

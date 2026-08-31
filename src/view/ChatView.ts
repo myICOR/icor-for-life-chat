@@ -24,7 +24,8 @@ import { ChatSession } from '../sdk/session';
 import { Normalizer, userTextOf } from '../sdk/normalize';
 import { buildChildEnv, resolveCliPath, splitExtraPath } from '../sdk/cli';
 import type { PathEnvironment } from '../sdk/cli';
-import type { ChatEvent, EffortName, PermissionModeName } from '../model/types';
+import type { ChatEvent, EffortName, PermissionModeName, TurnImage } from '../model/types';
+import { applyStatusBarClearance } from './statusbar';
 import type { Attachment } from './composer/Composer';
 import type IcorChatPlugin from '../main';
 
@@ -57,9 +58,23 @@ export class ChatView extends ItemView {
   private readonly sessionIds: string[] = [];
   private readonly events: ChatEvent[] = [];
   private archiving = false;
+  /* THE MODE THIS TAB IS IN, which is not the same thing as the mode SETTINGS
+   * start new tabs in.
+   *
+   * `ensureSession` used to launch with `settings.defaultPermissionMode`
+   * directly, so a mode picked in the composer BEFORE the first message was
+   * dropped on the floor: the picker called `setPermissionMode` on a session
+   * that did not exist yet, nothing remembered the choice, and the session then
+   * launched in the settings mode. Combined with the CLI's refusal to enter
+   * bypass at runtime without the launch flag, that is the whole of "clicking
+   * Bypass does not bypass". The picker writes here; the launcher reads here. */
+  private permissionMode: PermissionModeName;
+  /** Repaints the status-bar clearance when the window or the bar changes size. */
+  private clearanceObserver: ResizeObserver | null = null;
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: IcorChatPlugin) {
     super(leaf);
+    this.permissionMode = plugin.settings.defaultPermissionMode;
   }
 
   override getViewType(): string {
@@ -83,7 +98,7 @@ export class ChatView extends ItemView {
     const pane = buildPane(this.contentEl, {
       composer: {
         streaming: false,
-        mode: this.plugin.settings.defaultPermissionMode,
+        mode: this.permissionMode,
         model: this.plugin.settings.model,
         effort: this.plugin.settings.effort,
       },
@@ -93,7 +108,6 @@ export class ChatView extends ItemView {
         onModeChange: (mode) => void this.changeMode(mode),
         onModelChange: (model) => void this.changeModel(model),
         onEffortChange: (effort) => this.changeEffort(effort),
-        onAttach: () => new Notice('Paste or drop an image into the composer.'),
         onNotice: (message) => new Notice(message),
       },
       badge: {
@@ -151,7 +165,34 @@ export class ChatView extends ItemView {
     const current = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (current) this.lastMarkdownView = current;
     this.refreshContext();
+    this.trackStatusBar();
+    this.loadMentionFiles();
+    /* The vault changes under an open chat: a note created while the pane is
+       up must be mentionable without reopening it. Rename and delete matter for
+       the same reason, and a stale path in the list is a mention that resolves
+       to nothing. */
+    this.registerEvent(this.app.vault.on('create', () => this.loadMentionFiles()));
+    this.registerEvent(this.app.vault.on('delete', () => this.loadMentionFiles()));
+    this.registerEvent(this.app.vault.on('rename', () => this.loadMentionFiles()));
     this.focusComposer();
+  }
+
+  /* OBSIDIAN'S STATUS BAR IS MEASURED, never assumed away.
+   *
+   * It is painted over the bottom-right of the window, so in a right sidebar it
+   * covers the bottom of this pane. The clearance is the real overlap between
+   * the two rectangles and it is re-taken whenever either can have changed: the
+   * pane resizing, and the workspace relaying out. Zero is a real answer - a
+   * main-area tab that the bar does not reach pays nothing. */
+  private trackStatusBar(): void {
+    const measure = (): void => { applyStatusBarClearance(this.contentEl, this.app.workspace.containerEl.doc); };
+    measure();
+    if (typeof ResizeObserver !== 'undefined') {
+      this.clearanceObserver = new ResizeObserver(() => measure());
+      this.clearanceObserver.observe(this.contentEl);
+    }
+    this.registerEvent(this.app.workspace.on('resize', measure));
+    this.registerEvent(this.app.workspace.on('layout-change', measure));
   }
 
   /**
@@ -196,12 +237,23 @@ export class ChatView extends ItemView {
 
   override async onClose(): Promise<void> {
     this.stopTicking();
+    this.clearanceObserver?.disconnect();
+    this.clearanceObserver = null;
     this.statusline?.dispose();
     this.badge?.destroy();
     this.session?.dispose();
     this.session = null;
     this.stream?.destroy();
     this.store.dispose();
+  }
+
+  /* THE VAULT'S OWN NOTES, for the @ picker. Markdown only: the reference is
+   * handed to the CLI to read, and offering a PNG would be offering a mention
+   * that cannot be read back as text. */
+  private loadMentionFiles(): void {
+    this.composer?.setMentionFiles(
+      this.app.vault.getMarkdownFiles().map((f) => ({ path: f.path, basename: f.basename })),
+    );
   }
 
   /** Recent conversations for THIS vault only. Never machine-wide. */
@@ -434,7 +486,8 @@ export class ChatView extends ItemView {
         env: buildChildEnv(process.env, env),
         model: settings.model,
         effort: settings.effort,
-        permissionMode: settings.defaultPermissionMode,
+        // This tab's mode, which the composer may already have changed.
+        permissionMode: this.permissionMode,
         structuredReplies: settings.structuredReplies,
         resumeSessionId: this.resumeSessionId,
       },
@@ -455,6 +508,11 @@ export class ChatView extends ItemView {
             allowed: choice !== 'deny',
             stream: null,
           }),
+        onModeRefused: (mode, message) => {
+          // The provider's own words. A refusal the user cannot see is a
+          // control that lies, which is what this replaced.
+          new Notice(`Could not switch to ${mode}: ${message}`);
+        },
       },
     );
     return this.session;
@@ -474,17 +532,21 @@ export class ChatView extends ItemView {
     this.badge?.dismissToolbar();
     this.plugin.subagents.retireFinished();
     this.renderChips();
+    const images: TurnImage[] = attachments.map((a) => ({
+      name: a.name,
+      mediaType: a.mediaType,
+      data: a.data,
+    }));
     this.store.apply({
       kind: 'user-turn',
       text,
       contextNote: ctx ? ctx.basename : null,
+      contextPath: ctx ? ctx.path : null,
+      images,
       stream: null,
     });
     this.refreshDecisions();
-    session.send(
-      withContext(text, ctx),
-      attachments.map((a) => ({ mediaType: a.mediaType, data: a.data })),
-    );
+    session.send(withContext(text, ctx), images);
     this.scrollToBottom();
   }
 
@@ -497,11 +559,30 @@ export class ChatView extends ItemView {
     if (this.modelCatalogLoaded) return;
     this.modelCatalogLoaded = true;
     const models = await this.session?.supportedModels();
-    if (models && models.length) this.composer?.setModelCatalog(models);
+    if (models && models.length) {
+      this.composer?.setModelCatalog(models);
+      // The settings tab has no session to ask, so the plugin holds the answer.
+      this.plugin.modelCatalog = models;
+    }
   }
 
+  /**
+   * The tab's mode. Remembered whether or not a session exists yet.
+   *
+   * With no session this is the whole job: the choice is stored and the session
+   * launches in it. With one running the provider is asked, and a refusal is
+   * put back on screen - the composer chip returns to the mode that is actually
+   * live, because a chip reading BYPASS over an ask-mode session is the defect
+   * this method used to have.
+   */
   private async changeMode(mode: PermissionModeName): Promise<void> {
-    await this.session?.setPermissionMode(mode);
+    const previous = this.permissionMode;
+    this.permissionMode = mode;
+    if (!this.session) return;
+    const ok = await this.session.setPermissionMode(mode);
+    if (ok) return;
+    this.permissionMode = previous;
+    this.composer?.setMode(previous);
   }
 
   private async changeModel(model: string): Promise<void> {
@@ -533,6 +614,11 @@ export class ChatView extends ItemView {
     if (event.kind === 'user-turn') this.composer?.setStreaming(true);
     if (event.kind === 'turn-end' || event.kind === 'aborted' || event.kind === 'error') {
       this.composer?.setStreaming(false);
+    }
+    if (event.kind === 'session') {
+      // The provider's own command list. The composer's placeholder has always
+      // promised "/ runs commands"; this is what finally keeps the promise.
+      this.composer?.setSlashCommands(event.slashCommands);
     }
     if (event.kind === 'session' && event.model) {
       this.composer?.setModel(event.model);

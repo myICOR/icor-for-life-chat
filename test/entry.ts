@@ -21,3 +21,8 @@ export * from '../src/sdk/renderer-compat';
 export * from '../src/state/subagents';
 export * from '../src/view/leafRoute';
 export { userTextOf } from '../src/sdk/normalize';
+export * from '../src/view/composer/slash';
+export * from '../src/view/composer/mention';
+export * from '../src/view/statusbar';
+export * from '../src/archive/redact';
+export * from '../src/sdk/launch';

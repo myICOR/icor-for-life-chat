@@ -10,13 +10,14 @@
 
 import { Component, MarkdownRenderer, setIcon, setTooltip } from 'obsidian';
 import type { App } from 'obsidian';
-import type { ChatEvent, ToolStatus } from '../../model/types';
+import type { ChatEvent, ToolStatus, TurnImage } from '../../model/types';
 import { dot, kicker, shortAge, shortDuration } from '../dom';
 import type { ApprovalChoice } from '../../sdk/permissions';
 import { parseStructured, decisionsOf } from '../../structured/parser';
 import { renderStructured } from '../../structured/render';
 import type { RenderHost } from '../../structured/render';
 import type { DecisionBlock } from '../../structured/model';
+import { Lightbox } from './Lightbox';
 
 const COLLAPSE_AFTER = 3;
 
@@ -38,6 +39,15 @@ interface ToolRow {
   expanded: boolean;
   /** Measured, never assumed: true only while the payload is actually cut. */
   expandable: boolean;
+}
+
+/** The live "thinking / writing" row and the box it opens. */
+interface WorkingIndicator {
+  el: HTMLElement;
+  head: HTMLElement;
+  labelEl: HTMLElement;
+  body: HTMLElement;
+  label: string;
 }
 
 interface ToolGroup {
@@ -66,8 +76,24 @@ export class StreamRenderer {
   private readonly blockText = new Map<string, string>();
   private readonly tools = new Map<string, ToolRow>();
   private group: ToolGroup | null = null;
-  private thinkingEl: HTMLElement | null = null;
   private emptyEl: HTMLElement | null = null;
+  /* THE WORKING INDICATOR, one per renderer, reused for the whole turn.
+   *
+   * It used to be a bare "thinking..." line that appeared on the first thinking
+   * token and was destroyed by the next tool call, so the reasoning it was
+   * named after was never visible - the label promised a window onto the work
+   * and showed a row of dots. It is now a disclosure: the dots while there is
+   * nothing to read, a control that opens the live reasoning the moment there
+   * is. */
+  private working: WorkingIndicator | null = null;
+  /** Opened by clicking a sent image. Mounted on the pane root, not on body. */
+  private readonly lightbox: Lightbox;
+  /** This turn's reasoning, kept across hide/show so reopening restores it. */
+  private thinkingText = '';
+  /** The block currently being withheld, so the box can show the live draft. */
+  private heldBlockId: string | null = null;
+  /** Open/closed survives every repaint; a box that shut itself is unreadable. */
+  private thinkingOpen = false;
 
   constructor(
     private readonly app: App,
@@ -76,6 +102,9 @@ export class StreamRenderer {
     private readonly sourcePath: string,
     private readonly callbacks: StreamCallbacks,
   ) {
+    // Any element in the right document will do; the Lightbox mounts on that
+    // document's body so a popout window gets its own overlay.
+    this.lightbox = new Lightbox(this.column);
     /* Whether a payload is CUT is a function of the pane's width, so the answer
        has to be re-taken when the pane changes width and not only when a tool
        call arrives. Without this, narrowing a leaf leaves rows that are now
@@ -145,29 +174,41 @@ export class StreamRenderer {
   apply(event: ChatEvent): void {
     switch (event.kind) {
       case 'user-turn':
-        this.appendUserWell(event.text, event.contextNote);
+        this.appendUserWell(event.text, event.contextNote, event.images, event.contextPath);
         break;
       case 'text-open':
         this.closeToolGroup();
-        this.ensureBlock(event.blockId, 'aic-assistant');
+        /* HELD BACK, when the reply is going to be a card.
+           Creating the block here is what made the raw format visible: the
+           source streams in section by section as plain text and is only
+           replaced by the rendered card at the end. In hold mode the block is
+           not created until there is a finished document to put in it. */
+        if (this.holding()) this.showWorking('writing');
+        else this.ensureBlock(event.blockId, 'aic-assistant');
         break;
       case 'text-delta':
         this.appendDelta(event.blockId, event.text);
         break;
       case 'text-final':
+        this.hideWorking();
+        this.commitThinking();
         void this.finalizeMarkdown(event.blockId, event.text);
         break;
       case 'thinking-open':
-        this.showThinking();
+        this.showWorking('thinking');
         break;
       case 'thinking-delta':
+        /* The reasoning is READ, not counted. These deltas used to be dropped
+           on the floor, which is why a long silent stretch of thinking looked
+           exactly like a stalled session: there was nothing on screen that
+           could change. */
+        this.appendThinking(event.text);
         break;
       case 'thinking-final':
-        this.hideThinking();
-        this.appendThinkingRecord(event.text);
+        this.setThinking(event.text);
         break;
       case 'tool-call':
-        this.hideThinking();
+        this.hideWorking();
         this.upsertTool(event.toolUseId, event.name, event.target).status = 'running';
         this.paintTool(event.toolUseId);
         break;
@@ -201,11 +242,15 @@ export class StreamRenderer {
         break;
       case 'turn-end':
       case 'aborted':
-        this.hideThinking();
+        this.hideWorking();
+        this.commitThinking();
+        this.flushHeld();
         this.settleRunningRows();
         break;
       case 'error':
-        this.hideThinking();
+        this.hideWorking();
+        this.commitThinking();
+        this.flushHeld();
         this.settleRunningRows();
         this.appendError(event.message);
         break;
@@ -216,18 +261,65 @@ export class StreamRenderer {
 
   /* ------------------------------------------------------------- messages */
 
-  appendUserWell(text: string, contextNote: string | null): void {
+  /* THE USER'S OWN TURN, pictures included.
+   *
+   * The images arrive here because a message is what was SENT, and a screenshot
+   * that previewed in the composer and then vanished on send reads as a message
+   * that failed. They render above the words for the same reason the SDK block
+   * puts them first: the picture is the subject and the sentence is about it.
+   *
+   * `text` may be empty when the turn was an image on its own, which is a real
+   * message ("what is this?") and not an empty one - so the text line is
+   * omitted rather than left as a blank row. */
+  appendUserWell(
+    text: string,
+    contextNote: string | null,
+    images: readonly TurnImage[] = [],
+    contextPath: string | null = null,
+  ): void {
     this.clearEmptyState();
     this.closeToolGroup();
     const well = this.column.createDiv({ cls: 'aic-user' });
     well.dataset.userText = text;
-    well.createDiv({ cls: 'aic-user-text', text });
+    if (images.length > 0) {
+      const strip = well.createDiv({ cls: 'aic-user-images' });
+      for (const image of images) {
+        if (!image.data) continue;
+        const src = `data:${image.mediaType};base64,${image.data}`;
+        const alt = image.name || 'attached image';
+        /* A BUTTON, because it does something. It was a div, which meant the
+           only way to read a screenshot back was to squint at a 240px
+           thumbnail - and a keyboard user had no way at all. */
+        const cell = strip.createEl('button', { cls: 'aic-user-image', type: 'button' });
+        const img = cell.createEl('img', { cls: 'aic-user-image-img' });
+        img.src = src;
+        img.alt = alt;
+        cell.setAttr('aria-label', `Open ${alt} full size`);
+        setTooltip(cell, alt);
+        cell.addEventListener('click', () => this.lightbox.open({ src, alt }));
+      }
+    }
+    if (text) well.createDiv({ cls: 'aic-user-text', text });
     if (contextNote) {
       const row = well.createDiv({ cls: 'aic-user-context' });
-      const chip = row.createSpan({ cls: 'aic-chip' });
+      /* THE PILL OPENS THE NOTE when we know where it is.
+         It named a note and did nothing, which is the worst of both: it looks
+         like a link, it is the only reference to that note in the
+         conversation, and clicking it taught the user that this surface does
+         not respond. Without a path it stays a plain label rather than
+         pretending. */
+      const openable = contextPath !== null && contextPath !== '';
+      const chip = openable
+        ? row.createEl('button', { cls: 'aic-chip is-link', type: 'button' })
+        : row.createSpan({ cls: 'aic-chip' });
       const glyph = chip.createSpan({ cls: 'aic-chip-icon' });
       setIcon(glyph, 'eye');
       chip.createSpan({ text: contextNote });
+      if (openable) {
+        chip.setAttr('aria-label', `Open ${contextNote}`);
+        setTooltip(chip, `Open ${contextNote}`);
+        chip.addEventListener('click', () => this.callbacks.renderHost.openFile(contextPath));
+      }
     }
   }
 
@@ -241,11 +333,47 @@ export class StreamRenderer {
     return el;
   }
 
+  /* True while a reply is being withheld until it is whole.
+   *
+   * Only in structured mode, and the reason is what the two modes stream. An
+   * ordinary reply streams as the prose it will end up being, so watching it
+   * arrive is the feature. A structured reply streams as its SOURCE - kickers,
+   * rules, row markup - which is assembled into a card at the end, so watching
+   * it arrive means watching the scaffolding get built and then swapped for the
+   * building. Holding costs the ordinary case nothing because the ordinary case
+   * never holds. */
+  private holding(): boolean {
+    return this.callbacks.structured();
+  }
+
   private appendDelta(blockId: string, text: string): void {
-    const el = this.ensureBlock(blockId, 'aic-assistant');
     const next = (this.blockText.get(blockId) ?? '') + text;
     this.blockText.set(blockId, next);
+    if (this.holding()) {
+      // Accumulate only. Nothing reaches the column until the block finalizes,
+      // and the working indicator is what says the turn is alive meanwhile.
+      this.heldBlockId = blockId;
+      this.showWorking('writing');
+      return;
+    }
+    const el = this.ensureBlock(blockId, 'aic-assistant');
     el.setText(next);
+  }
+
+  /* THE ESCAPE HATCH, and it is the reason holding is safe.
+   *
+   * A turn that ends without a `text-final` - interrupted, errored, or a
+   * provider that simply stopped - would otherwise leave every withheld
+   * character in a Map with no element to put it in, and the user would see a
+   * turn that produced nothing. Whatever was held is rendered on the way out,
+   * as the text it is. Silence is never the failure mode of a feature whose
+   * whole job is to stay quiet for a while. */
+  private flushHeld(): void {
+    for (const [blockId, text] of this.blockText) {
+      if (this.blocks.has(blockId)) continue;
+      if (!text.trim()) continue;
+      void this.finalizeMarkdown(blockId, text);
+    }
   }
 
   private async finalizeMarkdown(blockId: string, text: string): Promise<void> {
@@ -283,22 +411,144 @@ export class StreamRenderer {
     await MarkdownRenderer.render(this.app, source, el, this.sourcePath, this.owner);
   }
 
-  private showThinking(): void {
-    if (this.thinkingEl) return;
+  /* ------------------------------------------------- the working indicator */
+
+  /**
+   * Show it, or relabel the one already up.
+   *
+   * The label is a FACT about what is happening and not a mood: "thinking"
+   * while reasoning tokens are arriving, "writing" while a reply is being held
+   * back. It is always the last thing in the column, because it is the only
+   * element that describes the present.
+   */
+  private showWorking(label: string): void {
     this.clearEmptyState();
-    const el = this.column.createDiv({ cls: 'aic-thinking' });
-    el.createSpan({ text: 'thinking' });
-    const dots = el.createSpan({ cls: 'aic-thinking-dots' });
-    for (let i = 0; i < 3; i += 1) dots.createSpan({ cls: 'aic-thinking-dot', text: '.' });
-    this.thinkingEl = el;
+    if (!this.working) {
+      const el = this.column.createDiv({ cls: 'aic-thinking' });
+      const head = el.createDiv({ cls: 'aic-thinking-head' });
+      const labelEl = head.createSpan({ cls: 'aic-thinking-label' });
+      const dots = head.createSpan({ cls: 'aic-thinking-dots' });
+      for (let i = 0; i < 3; i += 1) dots.createSpan({ cls: 'aic-thinking-dot', text: '.' });
+      const body = el.createDiv({ cls: 'aic-thinking-body' });
+      const toggle = (): void => {
+        if (!this.readableText().trim()) return;
+        this.thinkingOpen = !this.thinkingOpen;
+        this.paintWorking();
+      };
+      head.addEventListener('click', toggle);
+      head.addEventListener('keydown', (ev: KeyboardEvent) => {
+        if (ev.key !== 'Enter' && ev.key !== ' ') return;
+        ev.preventDefault();
+        toggle();
+      });
+      this.working = { el, head, labelEl, body, label };
+    }
+    this.working.label = label;
+    /* Always the LAST child. A tool call that lands while the indicator is up
+       would otherwise append below it, leaving "thinking..." floating above
+       work that has visibly moved on.
+
+       Guarded, because this runs on every delta: reparenting an element that is
+       already last is a layout invalidation per token for no change on screen. */
+    if (this.column.lastElementChild !== this.working.el) {
+      this.column.appendChild(this.working.el);
+    }
+    this.paintWorking();
   }
 
-  private hideThinking(): void {
-    this.thinkingEl?.remove();
-    this.thinkingEl = null;
+  private hideWorking(): void {
+    this.working?.el.remove();
+    this.working = null;
   }
 
-  private appendThinkingRecord(text: string): void {
+  /* WHAT THE BOX CAN ACTUALLY SHOW, and it is not always the reasoning.
+   *
+   * Measured against the real CLI on 2026-08-31, on claude-opus-5 at high
+   * effort: a thinking block starts, two `thinking_delta` frames arrive, and
+   * both carry `thinking: ""`. The finished block is `{thinking: "", signature:
+   * "CAISqAIK..."}` - the reasoning is ENCRYPTED by the provider and the plugin
+   * is never sent the words. A disclosure wired only to that text would be a
+   * control that opens onto nothing, every time, on the default model.
+   *
+   * So the box falls back to the thing that IS available and is arguably the
+   * better answer to "what is it working on": the live draft. In structured
+   * mode the reply is being withheld, and the text being withheld is sitting
+   * right here in `blockText`. Opening the box gives back exactly what the
+   * hold took away, on demand instead of by force.
+   *
+   * Reasoning first when there is any, because when a model DOES expose it, it
+   * is the more informative of the two. */
+  private readableText(): string {
+    if (this.thinkingText.trim()) return this.thinkingText;
+    if (this.heldBlockId === null) return '';
+    return this.blockText.get(this.heldBlockId) ?? '';
+  }
+
+  /** Repaint label, disclosure state and body. Cheap enough for every delta. */
+  private paintWorking(): void {
+    const w = this.working;
+    if (!w) return;
+    // Also on the per-delta path, so it only writes when the word changed.
+    if (w.labelEl.getText() !== w.label) w.labelEl.setText(w.label);
+    const text = this.readableText();
+    const readable = text.trim().length > 0;
+    /* THE CONTROL EXISTS ONLY WHEN THERE IS SOMETHING TO OPEN. A row that
+       announces itself as a button and reveals nothing is the same empty
+       promise as an expand affordance on a row that is not cut - and this
+       plugin already refuses that one, by measurement, for tool rows. */
+    w.el.toggleClass('is-readable', readable);
+    if (readable) {
+      w.head.setAttr('role', 'button');
+      w.head.setAttr('tabindex', '0');
+      w.head.setAttr('aria-expanded', this.thinkingOpen ? 'true' : 'false');
+      w.head.setAttr(
+        'aria-label',
+        this.thinkingOpen ? 'Hide what the team is working on' : 'Show what the team is working on',
+      );
+    } else {
+      w.head.removeAttribute('role');
+      w.head.removeAttribute('tabindex');
+      w.head.removeAttribute('aria-expanded');
+      w.head.removeAttribute('aria-label');
+    }
+    const open = readable && this.thinkingOpen;
+    w.el.toggleClass('is-open', open);
+    if (open) {
+      w.body.setText(text);
+      /* The newest reasoning is the part worth reading, and it is at the
+         bottom. An open box that stayed scrolled to the top would show the
+         oldest paragraph for the whole turn. */
+      w.body.scrollTop = w.body.scrollHeight;
+    } else {
+      w.body.empty();
+    }
+  }
+
+  private appendThinking(text: string): void {
+    if (!text) return;
+    this.thinkingText += text;
+    this.showWorking(this.working?.label ?? 'thinking');
+  }
+
+  /** The provider's own finished block, which supersedes the deltas it sent. */
+  private setThinking(text: string): void {
+    if (text.trim().length >= this.thinkingText.trim().length) this.thinkingText = text;
+    if (this.working) this.paintWorking();
+  }
+
+  /**
+   * Move this turn's reasoning out of the live box and into the transcript.
+   *
+   * The record is the same collapsed fold it always was, so a finished
+   * conversation reads the same as before; what changed is that the text was
+   * also readable WHILE it was being produced. Idempotent by clearing the
+   * buffer, because both `text-final` and `turn-end` call it on a normal turn.
+   */
+  private commitThinking(): void {
+    const text = this.thinkingText;
+    this.thinkingText = '';
+    this.heldBlockId = null;
+    this.thinkingOpen = false;
     if (!text.trim()) return;
     const details = this.column.createEl('details', { cls: 'aic-fold' });
     const summary = details.createEl('summary', { cls: 'aic-fold-summary' });
@@ -575,18 +825,22 @@ export class StreamRenderer {
    */
   sealReplay(): void {
     this.group = null;
-    this.thinkingEl = null;
+    this.hideWorking();
+    this.thinkingText = '';
     const seam = this.column.createDiv({ cls: 'aic-seam' });
     seam.createSpan({ cls: 'aic-kicker', text: 'RESUMED' });
   }
 
   destroy(): void {
+    this.lightbox.close();
     this.resize?.disconnect();
     this.resize = null;
     this.blocks.clear();
     this.blockText.clear();
     this.tools.clear();
     this.group = null;
-    this.thinkingEl = null;
+    this.working = null;
+    this.thinkingText = '';
+    this.heldBlockId = null;
   }
 }

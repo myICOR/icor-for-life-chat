@@ -19,6 +19,7 @@ import {
   isOurManifest, looksLikeOurArchive, shortId,
 } from './naming';
 import type { ArchiveManifest } from './naming';
+import { withoutImageBytes } from './redact';
 
 export interface ArchiveInput {
   title: string;
@@ -49,7 +50,7 @@ function renderConversation(input: ArchiveInput, folder: string): string {
     '---',
     `title: ${JSON.stringify(input.title)}`,
     `date: ${iso(input.startedAt).slice(0, 10)}`,
-    'source: icor-for-life-chat',
+    'source: icor-chat',
     `session_ids: [${input.sessionIds.map((id) => `"${id}"`).join(', ')}]`,
     '---',
     '',
@@ -163,7 +164,7 @@ export class ArchiveWriter {
     await adapter.write(`${folder}/conversation.md`, renderConversation(input, folder));
     await adapter.write(
       `${folder}/transcript.json`,
-      JSON.stringify({ events: input.events }, null, 2),
+      JSON.stringify({ events: withoutImageBytes(input.events) }, null, 2),
     );
 
     const manifest: ArchiveManifest = {

@@ -26,6 +26,14 @@ export interface ModelChoice {
   supportedEffortLevels: EffortName[] | null;
 }
 
+/** One image the user attached to a turn. The renderer rebuilds a data URL. */
+export interface TurnImage {
+  name: string;
+  mediaType: string;
+  /** Raw base64, no `data:` prefix. The same payload the SDK's image block took. */
+  data: string;
+}
+
 /** Where a run of events belongs: the main thread, or one subagent's transcript. */
 export type StreamId = string | null;
 
@@ -57,7 +65,25 @@ export type ChatEventBody =
       slashCommands: string[];
       contextWindow: number | null;
     }
-  | { kind: 'user-turn'; text: string; contextNote: string | null }
+  /* The turn as the user sent it, PICTURES INCLUDED.
+   *
+   * The images used to stop at the composer: they were handed to the session
+   * and never to the renderer, so a pasted screenshot previewed while it was
+   * being composed and then vanished the moment it was sent. The conversation
+   * showed the question and not the thing the question was about, which reads
+   * as a message that failed to send. They travel on the event because the
+   * event is what the stream renders. */
+  | {
+      kind: 'user-turn';
+      text: string;
+      contextNote: string | null;
+      /* Where that note IS, so the pill can open it. The event carried only the
+       * basename, which is enough to print a label and not enough to do
+       * anything with it - so the one reference to that note in the whole
+       * conversation was a dead end. Null when there was no context. */
+      contextPath: string | null;
+      images: TurnImage[];
+    }
   | { kind: 'text-open'; blockId: string }
   | { kind: 'text-delta'; blockId: string; text: string }
   | { kind: 'text-final'; blockId: string; text: string }

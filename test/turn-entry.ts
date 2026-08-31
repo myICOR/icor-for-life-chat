@@ -26,8 +26,42 @@ declare global {
       rawNodes: number;
       structuredNodes: number;
       texts: string[];
+      /* The state of the column at the moment the LAST text delta had arrived
+         and the final event had not. This is the whole of the hold-back
+         contract: before the fix, the raw source of the card was on screen
+         here, section by section, and was then swapped for the rendered card. */
+      mid: {
+        rawNodes: number;
+        structuredNodes: number;
+        columnText: string;
+        working: boolean;
+        workingLabel: string;
+        workingReadable: boolean;
+        workingOpen: boolean;
+        workingBody: string;
+      };
+      /** After clicking the indicator: the reasoning must actually open. */
+      opened: { workingOpen: boolean; workingBody: string };
+      /** The user's own turn, with the pictures it was sent with. */
+      user: { images: number; srcPrefix: string; alt: string; text: string };
     };
   }
+}
+
+/** What the column looks like right now, for the mid-stream census. */
+function snapshot(column: HTMLElement): Window['aicTurn'] extends undefined ? never : NonNullable<Window['aicTurn']>['mid'] {
+  const working = column.querySelector('.aic-thinking');
+  const body = column.querySelector('.aic-thinking-body');
+  return {
+    rawNodes: column.querySelectorAll(':scope > .aic-assistant').length,
+    structuredNodes: column.querySelectorAll(':scope > .aic-structured').length,
+    columnText: (column.textContent ?? '').trim(),
+    working: !!working,
+    workingLabel: (column.querySelector('.aic-thinking-label')?.textContent ?? '').trim(),
+    workingReadable: !!working?.classList.contains('is-readable'),
+    workingOpen: !!working?.classList.contains('is-open'),
+    workingBody: (body?.textContent ?? '').trim(),
+  };
 }
 
 async function mount(): Promise<void> {
@@ -37,11 +71,14 @@ async function mount(): Promise<void> {
     composer: { streaming: false, mode: 'default', model: 'opus', effort: 'high' },
     callbacks: {
       onSubmit: () => {}, onStop: () => {}, onModeChange: () => {},
-      onModelChange: () => {}, onEffortChange: () => {}, onAttach: () => {},
+      onModelChange: () => {}, onEffortChange: () => {},
     },
     badge: { navigate: () => {} },
   });
 
+  /* Every path the context pill asked to open. The pill named a note and did
+     nothing before this: a dead end that looks like a link. */
+  const opened: string[] = [];
   const stream = new StreamRenderer(
     {} as App,
     new Component() as never,
@@ -53,31 +90,138 @@ async function mount(): Promise<void> {
       // point of the product: the census runs in the mode users are actually in.
       structured: () => true,
       renderHost: {
-        home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
+        home: '/', insertCode: () => {}, openFile: (path: string) => { opened.push(path); }, revealFile: () => {},
         openUrl: () => {}, copy: () => {}, decisionState: () => null,
       },
       onDecisions: () => {},
     },
   );
-  stream.appendUserWell('Give me a structured reply about yourself.', null);
+  /* THE USER'S OWN TURN, with a picture on it. A 1x1 PNG is enough: the census
+     is that an <img> exists carrying the bytes that were sent, not that the
+     bytes are interesting. */
+  const PNG_1X1 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  stream.appendUserWell(
+    'Give me a structured reply about yourself.',
+    '2026-08-31',
+    [{ name: 'pasted.png', mediaType: 'image/png', data: PNG_1X1 }],
+    '00 Daily Scratchpad/2026/08/2026-08-31.md',
+  );
 
   const normalizer = new Normalizer();
+  /* The census is taken at the LAST moment before the final event, which is the
+     only moment the hold-back is observable: after it, held and unheld look
+     identical because both have rendered the card. */
+  const events = [];
   for (const frame of RECORDED as unknown[]) {
     for (const event of normalizer.normalize(frame)) {
-      if (event.stream === null) stream.apply(event);
+      if (event.stream === null) events.push(event);
     }
   }
+  const lastFinal = events.findLastIndex((e) => e.kind === 'text-final' && e.text.trim());
+  let mid = snapshot(pane.column);
+  events.forEach((event, i) => {
+    if (i === lastFinal) mid = snapshot(pane.column);
+    stream.apply(event);
+  });
   // finalizeMarkdown is async; let its microtasks settle before the census.
   await new Promise((r) => setTimeout(r, 0));
   await new Promise((r) => setTimeout(r, 0));
 
   const raw = Array.from(pane.column.querySelectorAll(':scope > .aic-assistant'));
   const structured = Array.from(pane.column.querySelectorAll(':scope > .aic-structured'));
+
+  /* THE DISCLOSURE ACTUALLY OPENS. Re-shown deliberately: the indicator is
+     removed when the turn ends, so this drives it the way a user does mid-turn -
+     reasoning has arrived, the head is clicked, the box shows it. Asserting the
+     class without clicking would be a gate whose green is reachable without the
+     control working. */
+  stream.apply({ kind: 'thinking-open', blockId: 'probe', stream: null });
+  stream.apply({ kind: 'thinking-delta', blockId: 'probe', text: 'weighing the two options', stream: null });
+  const head = pane.column.querySelector('.aic-thinking-head') as HTMLElement | null;
+  head?.click();
+  const openedEl = pane.column.querySelector('.aic-thinking');
+  const thinkingOpened = {
+    workingOpen: !!openedEl?.classList.contains('is-open'),
+    workingBody: (pane.column.querySelector('.aic-thinking-body')?.textContent ?? '').trim(),
+  };
+
+  const well = pane.column.querySelector('.aic-user');
+  const img = well?.querySelector('.aic-user-image-img') as HTMLImageElement | null;
+  const imageBtn = well?.querySelector('.aic-user-image') as HTMLElement | null;
+  const pill = well?.querySelector('.aic-user-context .aic-chip') as HTMLElement | null;
+
+  /* THE PILL OPENS ITS NOTE, driven by a real click. */
+  pill?.click();
+
+  /* THE IMAGE OPENS FULL SIZE, and the backdrop closes it again. Both driven,
+     because an assertion on the class alone would pass on an overlay that is
+     mounted and inert. */
+  imageBtn?.click();
+  const box = document.querySelector('.aic-lightbox');
+  const lightbox = {
+    openedAfterClick: !!box,
+    src: (box?.querySelector('.aic-lightbox-img') as HTMLImageElement | null)?.getAttribute('src')?.slice(0, 22) ?? '',
+    closedOnBackdrop: false,
+    onBody: box?.parentElement === document.body,
+    insidePane: !!(box && pane.root.contains(box)),
+    position: box ? getComputedStyle(box).position : '',
+  };
+  (box as HTMLElement | null)?.click();
+  lightbox.closedOnBackdrop = !document.querySelector('.aic-lightbox');
+
+  /* THE CONVERSATION IS SELECTABLE. Obsidian's chrome is not, and a custom
+     view inherits that: the whole transcript behaved like a picture of one. */
+  /* A SECOND, ISOLATED RENDERER for the redacted-reasoning case. Isolated
+     because the recorded turn may or may not carry reasoning text, and a gate
+     that only passes when the recording happens to be empty is a gate that
+     will go green for the wrong reason one day. Here there is provably none. */
+  const redactedHost = document.body.createDiv({ cls: 'aic-root' });
+  const redactedCol = redactedHost.createDiv({ cls: 'aic-column' });
+  const redactedStream = new StreamRenderer({} as App, new Component() as never, redactedCol, '', {
+    onApproval: () => {}, structured: () => true,
+    renderHost: {
+      home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
+      openUrl: () => {}, copy: () => {}, decisionState: () => null,
+    },
+    onDecisions: () => {},
+  });
+  // Exactly what the provider sends: a thinking block that carries no words.
+  redactedStream.apply({ kind: 'thinking-open', blockId: 'r0', stream: null });
+  redactedStream.apply({ kind: 'thinking-delta', blockId: 'r0', text: '', stream: null });
+  redactedStream.apply({ kind: 'text-open', blockId: 'r1', stream: null });
+  redactedStream.apply({ kind: 'text-delta', blockId: 'r1', text: 'FELIX · the draft so far', stream: null });
+  (redactedCol.querySelector('.aic-thinking-head') as HTMLElement | null)?.click();
+  const redacted = {
+    readable: !!redactedCol.querySelector('.aic-thinking')?.classList.contains('is-readable'),
+    body: (redactedCol.querySelector('.aic-thinking-body')?.textContent ?? '').trim(),
+  };
+
+  const streamEl = pane.root.querySelector('.aic-stream') as HTMLElement;
+  const toolRow = pane.column.querySelector('.aic-tool') ?? streamEl.createEl('button');
+  const select = {
+    stream: getComputedStyle(streamEl).userSelect,
+    toolRow: getComputedStyle(toolRow as HTMLElement).userSelect,
+  };
   window.aicTurn = {
     messageNodes: raw.length + structured.length,
     rawNodes: raw.length,
     structuredNodes: structured.length,
     texts: [...raw, ...structured].map((el) => (el.textContent ?? '').slice(0, 80)),
+    mid,
+    opened: thinkingOpened,
+    user: {
+      images: well?.querySelectorAll('.aic-user-image-img').length ?? 0,
+      srcPrefix: (img?.getAttribute('src') ?? '').slice(0, 22),
+      alt: img?.getAttribute('alt') ?? '',
+      text: (well?.querySelector('.aic-user-text')?.textContent ?? '').trim(),
+      imageTag: imageBtn?.tagName ?? '',
+      pillTag: pill?.tagName ?? '',
+      pillOpened: opened.join(','),
+    },
+    lightbox,
+    select,
+    redacted,
   };
 }
 

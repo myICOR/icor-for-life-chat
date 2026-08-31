@@ -329,3 +329,52 @@ test('the route: reveal beats resume-into beats create-right', () => {
     { kind: 'create-right' },
   );
 });
+
+/* ------------------------------------------------------ the launch permissions */
+
+/* "Clicking Bypass does not bypass", as a unit.
+ *
+ * The behavioural half of this cannot live here - it is a live CLI, a real tool
+ * call, and a file that either appears on disk or does not. That was driven
+ * against the real CLI in all four combinations of (launch mode, flag) on
+ * 2026-08-31, and the CLI's own refusal was read verbatim before the fix was
+ * written. What CAN live here is the invariant that came out of it, which is
+ * the thing a future edit would quietly undo: the flag is armed regardless of
+ * the launch mode, and arming it never widens the mode. */
+
+import { launchPermissions } from './build/pure.mjs';
+
+test('the launch flag is armed in EVERY mode, not only in the one that needs it', () => {
+  for (const mode of ['default', 'plan', 'acceptEdits', 'bypassPermissions']) {
+    assert.equal(launchPermissions(mode).allowDangerouslySkipPermissions, true,
+      `${mode}: the session cannot enter Bypass later without the launch flag, and the ` +
+      `composer's picker acts on a session that is ALREADY RUNNING. Arming the flag only ` +
+      `when the launch mode is already bypass arms it exactly when it is not needed.`);
+  }
+});
+
+test('arming the flag never widens the mode the session starts in', () => {
+  // The flag is the CLI's consent to let the mode reach bypass; the mode is
+  // what actually decides whether a tool runs unprompted. If this ever starts
+  // returning bypass for an ask-mode launch, the plugin has begun granting a
+  // permission the user did not grant.
+  for (const mode of ['default', 'plan', 'acceptEdits', 'bypassPermissions']) {
+    assert.equal(launchPermissions(mode).permissionMode, mode,
+      `${mode}: the launcher substituted a different mode`);
+  }
+  assert.equal(launchPermissions('default').permissionMode, 'default');
+});
+
+test('only an explicit Bypass counts as skipping permissions', () => {
+  // The flag being universal must not leak into how the rest of the plugin
+  // decides whether the user is in the dangerous mode.
+  assert.equal(skipPermissions('bypassPermissions'), true);
+  for (const mode of ['default', 'plan', 'acceptEdits']) {
+    assert.equal(skipPermissions(mode), false, `${mode} reported itself as skipping permissions`);
+  }
+});
+
+test('Ask is still what ships out of the box', () => {
+  assert.equal(DEFAULT_SETTINGS.defaultPermissionMode, 'default',
+    'offering Bypass in settings must not change what a fresh install starts in');
+});

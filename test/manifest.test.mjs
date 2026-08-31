@@ -14,7 +14,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { readdirSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { INK_PLUGIN_NAME, PLUGIN_ID } from './build/pure.mjs';
@@ -110,14 +110,8 @@ function moduleSince(name) {
   return i === -1 ? null : sinceAbove(i);
 }
 
-/* A filesystem walk, not `git ls-files`, for two reasons that both bit: a
- * staged release tree has no .git and the suite must pass from it, and a
- * NEW file is invisible to git until committed - so the git-based sweep could
- * miss exactly the file that was being added. */
-const srcFiles = readdirSync(resolve(repo, 'src'), { recursive: true, encoding: 'utf8' })
-  .filter((f) => f.endsWith('.ts'))
-  .map((f) => resolve(repo, 'src', f));
-const srcText = srcFiles.map((f) => readFileSync(f, 'utf8')).join('\n');
+const srcFiles = execSync('git ls-files src', { cwd: repo, encoding: 'utf8' }).trim().split('\n');
+const srcText = srcFiles.map((f) => readFileSync(resolve(repo, f), 'utf8')).join('\n');
 
 test('every Obsidian API in use exists at the declared minAppVersion', () => {
   const floor = manifest.minAppVersion;

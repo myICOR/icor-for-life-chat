@@ -57,10 +57,39 @@ export class ChatSettingsTab extends PluginSettingTab {
         }),
       );
 
-    new Setting(containerEl).setName('Model').addDropdown((d) =>
+    /* THE MODEL LIST IS THE PROVIDER'S, never this file's.
+     *
+       It was a hand-typed `{haiku, sonnet, opus}` object, which is the invented
+       catalogue the composer's own header rules out, and it failed the way an
+       invented list fails: Fable shipped and the picker could not offer it. The
+       options now come from the SDK's `supportedModels()`, cached on the plugin
+       the first time a session answers. Before any session has run there is
+       nothing true to list, and the picker says exactly that rather than
+       offering three names it made up. */
+    const catalog = this.plugin.modelCatalog;
+    const modelOptions: Record<string, string> = { '': 'CLI default' };
+    for (const row of catalog) {
+      // 'default' is the CLI default under the provider's own name for it, and
+      // this picker already carries that choice as the empty string. Two rows
+      // meaning one thing is a picker that can disagree with itself.
+      if (row.value === 'default') continue;
+      modelOptions[row.value] = row.displayName;
+    }
+    /* A model the user already picked, on a build whose catalogue has not
+       arrived yet. Without this the dropdown would silently snap to 'CLI
+       default' and the next save would write that back - a settings tab that
+       loses the setting by being opened. */
+    const stored = this.plugin.settings.model;
+    if (stored && !(stored in modelOptions)) modelOptions[stored] = stored;
+
+    const model = new Setting(containerEl).setName('Model');
+    if (catalog.length === 0) {
+      model.setDesc('The full list arrives once a conversation has run: the models come from Claude Code itself, never from a list kept here.');
+    }
+    model.addDropdown((d) =>
       d
-        .addOptions({ '': 'CLI default', haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus' })
-        .setValue(this.plugin.settings.model)
+        .addOptions(modelOptions)
+        .setValue(stored)
         .onChange(async (v) => {
           this.plugin.settings.model = v;
           await this.plugin.saveSettings();
@@ -69,7 +98,12 @@ export class ChatSettingsTab extends PluginSettingTab {
 
     new Setting(containerEl).setName('Reasoning effort').addDropdown((d) =>
       d
-        .addOptions({ low: 'Low', medium: 'Medium', high: 'High' })
+        /* Four rungs, matching the composer exactly. It listed three, so a user
+           who picked Extra in the composer - which saves to this same setting -
+           came back to a dropdown with no such option, and it displayed the
+           value below it. A picker that cannot show its own stored value is a
+           picker that quietly rewrites it. */
+        .addOptions({ low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra' })
         .setValue(this.plugin.settings.effort)
         .onChange(async (v) => {
           this.plugin.settings.effort = v as EffortName;
@@ -77,21 +111,27 @@ export class ChatSettingsTab extends PluginSettingTab {
         }),
     );
 
+    /* BYPASS IS OFFERED HERE, and it is still not the out-of-the-box default.
+     *
+       It was withheld from this list entirely, and the description said so as
+       if withholding it were the safety. It was not: the mode picker in every
+       composer offers Bypass, so the only thing this omission achieved was
+       forcing a user who works in Bypass to re-pick it in every new tab, while
+       `loadSettings` silently rewrote the stored value back to Ask on the next
+       reload. Ask remains the shipped default and the recommendation; choosing
+       otherwise is the user's to make, once, and have it stick. */
     new Setting(containerEl)
       .setName('Default permission mode')
-      .setDesc('New conversations start here. Bypass is never the default.')
+      .setDesc('New conversations start here. Ask is the safe one; Bypass runs every tool without asking.')
       .addDropdown((d) =>
         d
           .addOptions({
             plan: 'Plan',
             default: 'Ask (recommended)',
             acceptEdits: 'Auto-accept edits',
+            bypassPermissions: 'Bypass - no prompts at all',
           })
-          .setValue(
-            this.plugin.settings.defaultPermissionMode === 'bypassPermissions'
-              ? 'default'
-              : this.plugin.settings.defaultPermissionMode,
-          )
+          .setValue(this.plugin.settings.defaultPermissionMode)
           .onChange(async (v) => {
             this.plugin.settings.defaultPermissionMode = v as PermissionModeName;
             await this.plugin.saveSettings();

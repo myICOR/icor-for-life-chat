@@ -14,6 +14,15 @@ import { basenameOf, iconForPath, isReadableInObsidian, parentOf, splitUrl } fro
 import { displayPath } from '../model/format';
 import { railRuns } from './rails';
 
+/* One glyph per band, and they are chosen to be told apart at a glance rather
+ * than to be clever: a question mark for the question, a target for the answer
+ * it lands on, an info mark for the reasoning behind it. */
+const BAND_ICONS: Record<'asked' | 'answer' | 'why', string> = {
+  asked: 'help-circle',
+  answer: 'target',
+  why: 'info',
+};
+
 export interface RenderHost {
   home: string;
   /** Insert `code ` into the composer and focus it. */
@@ -121,8 +130,24 @@ class Renderer {
       case 'asked':
       case 'answer':
       case 'why': {
+        /* THE THREE BANDS ARE BANNERS NOW, each with its own ground and its own
+           glyph beside the word.
+           They were three kickers over three runs of text, which meant the two
+           blocks that answer "does this need me at all" looked exactly like
+           every other label in the card and were read at the same speed as the
+           rows. They are the first thing on the card and the only two the user
+           may read; they are allowed to look like it. The glyph is redundant
+           with the word ON PURPOSE - it is what makes the block findable while
+           scrolling, when the word itself is too small to read. */
         const wrap = card.createDiv({ cls: `aic-band aic-band-${block.kind}` });
-        wrap.createDiv({ cls: 'aic-kicker aic-kicker-wide', text: block.kind.toUpperCase() });
+        const head = wrap.createDiv({ cls: 'aic-band-head' });
+        const glyph = head.createSpan({ cls: 'aic-band-icon' });
+        setIcon(glyph, BAND_ICONS[block.kind]);
+        // `aria-hidden` because the kicker beside it already says the word: an
+        // icon that announces "help circle" next to the text "ASKED" is the
+        // same thing said twice.
+        glyph.setAttr('aria-hidden', 'true');
+        head.createSpan({ cls: 'aic-kicker aic-kicker-wide', text: block.kind.toUpperCase() });
         wrap.createDiv({ cls: `aic-${block.kind}-text`, text: block.text });
         break;
       }

@@ -9,6 +9,7 @@
 import { query, AbortError } from '@anthropic-ai/claude-agent-sdk';
 import type { Options, Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { Normalizer, toolTarget } from './normalize';
+import { launchPermissions } from './launch';
 import { ApprovalBroker, toPermissionAnswer } from './permissions';
 import type { ApprovalChoice, PendingApproval } from './permissions';
 import type { ChatEvent, EffortName, ModelChoice, PermissionModeName } from '../model/types';
@@ -47,6 +48,8 @@ export interface SessionHooks {
   onApprovalRequest: (request: PendingApproval) => void;
   onApprovalSettled: (toolUseId: string, choice: ApprovalChoice) => void;
   onStderr?: (line: string) => void;
+  /** The provider refused a mid-session mode switch, in its own words. */
+  onModeRefused?: (mode: PermissionModeName, message: string) => void;
 }
 
 /** A push queue the SDK can consume as the prompt stream. */
@@ -216,11 +219,31 @@ export class ChatSession {
     }
   }
 
-  async setPermissionMode(mode: PermissionModeName): Promise<void> {
+  /* Switch the running session's mode, and REPORT a refusal rather than eat it.
+   *
+   * This used to be a bare try/empty-catch, and the empty catch was the whole
+   * bug behind "Bypass does not bypass". The CLI refuses the switch outright
+   * with `Cannot set permission mode to bypassPermissions because the session
+   * was not launched with --dangerously-skip-permissions`, the catch swallowed
+   * it, and the composer went on showing BYPASS over a session still running in
+   * ask mode - a control that lies, which is worse than a control that is
+   * missing. Measured against the real CLI on 2026-08-31: switching into bypass
+   * from a session launched without the flag throws every time; the same switch
+   * on a session launched WITH it succeeds and the tool then actually runs.
+   *
+   * Resolves true when the mode is live, false when the provider refused. The
+   * caller owns what the user is told; this function owns only the truth. */
+  async setPermissionMode(mode: PermissionModeName): Promise<boolean> {
+    if (!this.handle) return false;
     try {
-      await this.handle?.setPermissionMode(mode);
-    } catch {
-      // Older CLIs without the control channel keep the launch mode.
+      await this.handle.setPermissionMode(mode);
+      return true;
+    } catch (error) {
+      this.hooks.onModeRefused?.(
+        mode,
+        error instanceof Error ? error.message : String(error),
+      );
+      return false;
     }
   }
 
@@ -281,7 +304,6 @@ export class ChatSession {
       cwd: config.cwd,
       env: config.env,
       pathToClaudeCodeExecutable: config.cliPath,
-      permissionMode: config.permissionMode,
       includePartialMessages: true,
       forwardSubagentText: true,
       // No system prompt of our own. The CLI preset plus the vault's own
@@ -307,11 +329,11 @@ export class ChatSession {
     if (config.effort) options.effort = config.effort;
     if (config.resumeSessionId) options.resume = config.resumeSessionId;
     if (this.hooks.onStderr) options.stderr = this.hooks.onStderr;
-    // The one dangerous flag, and it is never set implicitly: only an explicit
-    // Bypass selection reaches it.
-    if (config.permissionMode === 'bypassPermissions') {
-      options.allowDangerouslySkipPermissions = true;
-    }
+    // The launch permissions are decided in one pure place; see launch.ts for
+    // why the flag is armed regardless of the mode, and what it does not do.
+    const guards = launchPermissions(config.permissionMode);
+    options.permissionMode = guards.permissionMode;
+    options.allowDangerouslySkipPermissions = guards.allowDangerouslySkipPermissions;
     return options;
   }
 }

@@ -1,4 +1,4 @@
-# ICOR for Life - Chat
+# ICOR for Life AI Chat
 
 Your AI team, inside the vault. Open a conversation next to your notes, ask a
 question, and get an answer from a model that is already reading the room: it
@@ -8,7 +8,7 @@ its mouth.
 
 The plugin is a window, not a second brain. Behaviour, identity and context
 rules live in your vault's `CLAUDE.md`, `AGENTS.md` and `.claude/`, which the
-Claude Code CLI reads natively from the working directory. ICOR for Life - Chat sends no
+Claude Code CLI reads natively from the working directory. ICOR for Life AI Chat sends no
 system prompt of its own. There is exactly one exception and it is visible in
 settings: **Structured replies**, which is ON out of the box, appends a fixed
 format instruction so the answer comes back as ICOR cards, which the plugin
@@ -57,7 +57,7 @@ this repo and it gets fixed fast.
 
 ### The Claude Code command line tool
 
-**ICOR for Life - Chat needs the Claude Code command line tool, which is a separate
+**ICOR for Life AI Chat needs the Claude Code command line tool, which is a separate
 install from Anthropic. The Claude desktop app is not the same thing, and
 neither is claude.ai in a browser.** Having either of those gives this plugin
 nothing to talk to.
@@ -156,7 +156,7 @@ time to time; the linked page is always the authority.
 
 ## Which Claude account does this use?
 
-ICOR for Life - Chat has no login of its own. It never sees, stores or
+ICOR for Life AI Chat has no login of its own. It never sees, stores or
 transmits a credential of any kind. It runs the Claude Code CLI
 already installed on your machine, and that CLI uses whatever
 authentication you set up yourself, directly with Anthropic.
@@ -260,7 +260,7 @@ hidden node leaves the thing that produced it alive.
 
 ## ICOR for Life Obsidian Edition
 
-ICOR for Life - Chat is the AI surface of the **ICOR for Life Obsidian Edition**: ICOR
+ICOR for Life AI Chat is the AI surface of the **ICOR for Life Obsidian Edition**: ICOR
 (Input, Control, Output, Refine), the productivity methodology by Paperless
 Movement / myICOR, implemented as a ready-to-use Obsidian vault. Best to be used
 in combination with:

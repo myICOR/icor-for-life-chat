@@ -49,6 +49,14 @@ const DOC: StructuredDoc = {
           ],
         },
         { kind: 'insight', text: 'A specificity fix not counted against the competing selector is a guess.' },
+        /* A FILES block, and it is here to keep a probe honest rather than to
+           decorate the fixture. `.aic-icon-btn` used to reach the DOM through
+           the composer's attach button, which was removed because it could not
+           attach anything - and the hover sweep then had no node to measure,
+           even though the class still ships on the file row's copy and open
+           controls and on the mention toolbar. The probe now points at markup
+           the product actually renders. */
+        { kind: 'files', paths: ['/Users/t/vault/04 Inner World/INDEX.md'] },
       ],
     },
     {
@@ -153,7 +161,7 @@ async function mount(): Promise<void> {
     composer: { streaming: false, mode: 'default', model: 'opus', effort: 'medium' },
     callbacks: {
       onSubmit: () => {}, onStop: () => {}, onModeChange: () => {},
-      onModelChange: () => {}, onEffortChange: () => {}, onAttach: () => {},
+      onModelChange: () => {}, onEffortChange: () => {},
     },
     badge: { navigate: () => {} },
   });
@@ -302,7 +310,7 @@ async function mountStates(root: HTMLElement): Promise<void> {
      `is-active` + `data-tone` pair comes from `paint()` rather than from here. */
   const noop = {
     onSubmit: () => {}, onStop: () => {}, onModeChange: () => {},
-    onModelChange: () => {}, onEffortChange: () => {}, onAttach: () => {},
+    onModelChange: () => {}, onEffortChange: () => {},
   };
   for (const mode of ['plan', 'default', 'acceptEdits', 'bypassPermissions'] as const) {
     const host = probe.createDiv({ cls: `aic-mode-probe is-${mode}` });
