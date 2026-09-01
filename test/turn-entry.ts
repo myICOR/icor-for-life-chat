@@ -197,6 +197,41 @@ async function mount(): Promise<void> {
     body: (redactedCol.querySelector('.aic-thinking-body')?.textContent ?? '').trim(),
   };
 
+  /* THE DECISION DOOR, driven like a user drives it. One long body (cut by
+     the three-line clamp) and one short (fits). The affordance is measured on
+     a frame, so the census waits a frame before reading. */
+  const decHost = document.body.createDiv({ cls: 'aic-root aic-decision-probe' });
+  decHost.setCssStyles({ width: '420px' });
+  const decCol = decHost.createDiv({ cls: 'aic-column' });
+  const decStream = new StreamRenderer({} as App, new Component() as never, decCol, '', {
+    onApproval: () => {}, structured: () => true,
+    renderHost: {
+      home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
+      openUrl: () => {}, copy: () => {}, decisionState: () => null,
+    },
+    onDecisions: () => {},
+  });
+  const LONG = Array.from({ length: 12 }, (_, i) => `sentence ${i} of a body the clamp will certainly cut at this width`).join(' ');
+  decStream.apply({ kind: 'text-open', blockId: 'd1', stream: null });
+  decStream.apply({
+    kind: 'text-final', blockId: 'd1', stream: null,
+    text: ['DECISION m3x7p · Four more invoices carry the same stale tag', LONG, '', 'DECISION q9r2s · short one', 'fits on one line'].join('\n'),
+  });
+  await new Promise((r) => window.requestAnimationFrame(() => r(undefined)));
+  await new Promise((r) => window.requestAnimationFrame(() => r(undefined)));
+  const bodies = Array.from(decCol.querySelectorAll('.aic-decision-body')) as HTMLElement[];
+  const longBody = bodies[0] ?? null;
+  const shortBody = bodies[1] ?? null;
+  const clampedHeight = longBody?.clientHeight ?? 0;
+  longBody?.click();
+  const decisions = {
+    longExpandable: !!longBody?.classList.contains('is-expandable'),
+    longOpenAfterClick: !!longBody?.classList.contains('is-expanded'),
+    longFullHeight: (longBody?.clientHeight ?? 0) > clampedHeight,
+    shortExpandable: !!shortBody?.classList.contains('is-expandable'),
+    shortRole: shortBody?.getAttribute('role') ?? '',
+  };
+
   const streamEl = pane.root.querySelector('.aic-stream') as HTMLElement;
   const toolRow = pane.column.querySelector('.aic-tool') ?? streamEl.createEl('button');
   const select = {
@@ -222,6 +257,7 @@ async function mount(): Promise<void> {
     lightbox,
     select,
     redacted,
+    decisions,
   };
 }
 

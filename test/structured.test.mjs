@@ -139,13 +139,35 @@ test('the three decision variants are distinguished', () => {
   assert.deepEqual(decisionsOf(doc).map((d) => d.variant), ['decision', 'blocked', 'cleared']);
 });
 
-test('a decision body is bounded to three lines', () => {
+test('a decision body keeps every line the model wrote', () => {
+  /* This asserted `body === 'one two three'`: the parser stopped at three
+     lines, which was the format's EDITORIAL bound pressed into the parser -
+     and the parser is the wrong enforcer. By the time text reaches it, the
+     text has been written; the cap made lines four onward cease to exist, and
+     the user saw a decision ending mid-sentence with nothing to unfold. The
+     bound is the renderer's now: a measured three-line clamp with a door,
+     gated in the browser suite. Here, the record must be whole. */
   const doc = parseStructured([
     'DECISION a1b2c · title',
-    'one', 'two', 'three', 'four',
+    'one', 'two', 'three', 'four', 'five',
   ].join('\n'));
   const body = decisionsOf(doc)[0].body;
-  assert.equal(body, 'one two three');
+  assert.equal(body, 'one two three four five');
+});
+
+test('a decision body still ends at a blank line, a header, or the next decision', () => {
+  // Keeping everything must not mean eating what follows.
+  const doc = parseStructured([
+    'DECISION a1b2c · first',
+    'its body',
+    '',
+    'DECISION b2c3d · second',
+    'other body',
+  ].join('\n'));
+  const all = decisionsOf(doc);
+  assert.equal(all.length, 2);
+  assert.equal(all[0].body, 'its body');
+  assert.equal(all[1].body, 'other body');
 });
 
 /* ------------------------------------------------------------- lifecycle */

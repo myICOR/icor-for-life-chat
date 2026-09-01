@@ -324,7 +324,7 @@ class Renderer {
     head.createSpan({ cls: 'aic-decision-title', text: decision.title });
     // Hidden by the stylesheet when the block wears `is-resolved` (the class
     // `paint` below toggles), never by an inline style: one driver.
-    el.createDiv({ cls: 'aic-decision-body', text: decision.body });
+    wireDecisionBody(el.createDiv({ cls: 'aic-decision-body', text: decision.body }));
 
     const paint = (): void => {
       const state = this.host.decisionState(decision.code);
@@ -365,6 +365,66 @@ export function renderStructured(
 }
 
 /** Repaint every decision block under `root` after the transcript changed. */
+/* THE DECISION BODY OPENS, when there is something under the fold.
+ *
+ * The resting state is a three-line clamp - the editorial bound the format has
+ * always had - but the parser no longer discards what the clamp hides, so the
+ * clamp needs a door. Same discipline as the tool rows: the affordance is
+ * MEASURED, never assumed. A body that fits gets no tab stop, no pointer and
+ * no promise; a body that is actually cut becomes a control. Measured on the
+ * next frame because a node measured before layout answers zero, and answered
+ * again on every pane resize by `remeasureDecisionBodies`.
+ */
+function wireDecisionBody(body: HTMLElement): void {
+  const toggle = (): void => {
+    if (!body.hasClass('is-expandable')) return;
+    body.toggleClass('is-expanded', !body.hasClass('is-expanded'));
+    paintDecisionBody(body);
+  };
+  body.addEventListener('click', toggle);
+  body.addEventListener('keydown', (ev: KeyboardEvent) => {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    ev.preventDefault();
+    toggle();
+  });
+  window.requestAnimationFrame(() => measureDecisionBody(body));
+}
+
+function measureDecisionBody(body: HTMLElement): void {
+  // A resolved decision hides its body; a hidden node measures zero and must
+  // keep whatever answer it had rather than being declared "fits".
+  if (body.clientHeight === 0) return;
+  const wasExpanded = body.hasClass('is-expanded');
+  if (wasExpanded) body.removeClass('is-expanded');
+  const cut = body.scrollHeight > body.clientHeight + 1;
+  if (wasExpanded) body.addClass('is-expanded');
+  body.toggleClass('is-expandable', cut);
+  if (!cut) body.removeClass('is-expanded');
+  paintDecisionBody(body);
+}
+
+function paintDecisionBody(body: HTMLElement): void {
+  if (!body.hasClass('is-expandable')) {
+    body.removeAttribute('role');
+    body.removeAttribute('tabindex');
+    body.removeAttribute('aria-expanded');
+    body.removeAttribute('aria-label');
+    return;
+  }
+  const open = body.hasClass('is-expanded');
+  body.setAttr('role', 'button');
+  body.setAttr('tabindex', '0');
+  body.setAttr('aria-expanded', open ? 'true' : 'false');
+  body.setAttr('aria-label', open ? 'Collapse the decision text' : 'Show the full decision text');
+}
+
+/** Re-measure every decision body under `root`. The cut is a function of width. */
+export function remeasureDecisionBodies(root: HTMLElement): void {
+  for (const body of Array.from(root.querySelectorAll('.aic-decision-body'))) {
+    if (body.instanceOf(HTMLElement)) measureDecisionBody(body);
+  }
+}
+
 export function repaintDecisions(root: HTMLElement): void {
   for (const el of Array.from(root.querySelectorAll('.aic-decision'))) {
     const repaint = (el as HTMLElement & { repaint?: () => void }).repaint;

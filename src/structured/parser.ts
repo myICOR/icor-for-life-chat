@@ -206,13 +206,21 @@ export function parseStructured(text: string): StructuredDoc {
       if (decision) {
         flushProse();
         c.i += 1;
+        /* THE WHOLE BODY, however long the model wrote it. This loop used to
+           stop at three lines, which was GL-068's editorial bound pressed into
+           the parser - and the parser is the wrong enforcer: by the time text
+           reaches here it has already been written, so the cap did not make
+           the reply shorter, it made lines four onward CEASE TO EXIST. The
+           user saw a decision that ended mid-sentence with no way to unfold
+           it, which on a decision - the one block that asks them to act - is
+           the worst place in the format to lose words. The bound is the
+           renderer's now: a measured three-line clamp that opens on click. */
         const body: string[] = [];
         while (c.i < c.lines.length) {
           const next = (peek(c) ?? '').trim();
           if (!next || parseDecisionOpen(next) || parseHeader(next, nextNonEmpty(c, 1))) break;
           body.push(stripGlyphs(next));
           c.i += 1;
-          if (body.length >= 3) break;
         }
         segments.push({
           kind: 'decision',

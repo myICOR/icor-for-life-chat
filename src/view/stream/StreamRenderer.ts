@@ -14,7 +14,7 @@ import type { ChatEvent, ToolStatus, TurnImage } from '../../model/types';
 import { dot, kicker, shortAge, shortDuration } from '../dom';
 import type { ApprovalChoice } from '../../sdk/permissions';
 import { parseStructured, decisionsOf } from '../../structured/parser';
-import { renderStructured } from '../../structured/render';
+import { remeasureDecisionBodies, renderStructured } from '../../structured/render';
 import type { RenderHost } from '../../structured/render';
 import type { DecisionBlock } from '../../structured/model';
 import { Lightbox } from './Lightbox';
@@ -111,7 +111,12 @@ export class StreamRenderer {
        truncated with no way to open them, and widening it leaves rows carrying
        a tab stop that reveals nothing. */
     if (typeof ResizeObserver !== 'undefined') {
-      this.resize = new ResizeObserver(() => this.remeasureTools());
+      this.resize = new ResizeObserver(() => {
+        this.remeasureTools();
+        // The decision bodies' clamp is width-bound for the same reason the
+        // tool rows' cut is, and it answers the same resize.
+        remeasureDecisionBodies(this.column);
+      });
       this.resize.observe(this.column);
     }
   }

@@ -298,3 +298,39 @@ test('the lightbox can still read its own design tokens off the body', async () 
 function CSS_TEXT() {
   return readFileSync(resolve(here, '..', 'styles.css'), 'utf8');
 }
+
+
+/* --------------------------------------------- the decision body's door */
+
+test('a decision cut by the clamp opens to its full text', async () => {
+  const chrome = await Chrome.launch();
+  try {
+    await chrome.open(pathToFileURL(resolve(here, 'dom/turn-fixture.html')).href);
+    const c = await waitForCensus(chrome);
+    /* The user's report, verbatim shape: "more text explaining what the
+       decision is all about, but no way to unfold". Two cuts stacked - the
+       parser discarded past three lines, the clamp hid the rest. The parser
+       keeps everything now (gated headless); this is the door. */
+    assert.equal(c.decisions.longExpandable, true,
+      'a clamped decision body offers no way in');
+    assert.equal(c.decisions.longOpenAfterClick, true, 'clicking did not open it');
+    assert.equal(c.decisions.longFullHeight, true,
+      'it "opened" without getting taller, so the text is still unreachable');
+  } finally {
+    await chrome.close();
+  }
+});
+
+test('a decision that fits carries no affordance', async () => {
+  const chrome = await Chrome.launch();
+  try {
+    await chrome.open(pathToFileURL(resolve(here, 'dom/turn-fixture.html')).href);
+    const c = await waitForCensus(chrome);
+    // The tool rows' rule, applied here: an expand affordance on an element
+    // with nothing to reveal is an empty promise.
+    assert.equal(c.decisions.shortExpandable, false, 'a body that fits pretends to open');
+    assert.equal(c.decisions.shortRole, '', 'a non-control kept a button role');
+  } finally {
+    await chrome.close();
+  }
+});

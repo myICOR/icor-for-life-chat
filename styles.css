@@ -1620,12 +1620,28 @@
   color: var(--aic-dim);
   margin-top: 8px;
   max-width: 60ch;
-  /* 11.8 caps the body at three lines. Ellipsis, never fade (5.1.2) - the same
-     recipe 11.3 already uses on ASKED. */
+  /* Three lines AT REST - the format's editorial bound - and no longer a
+     wall: the parser keeps the whole body now, and when the clamp actually
+     cuts it (measured, `is-expandable`) this element becomes the control that
+     opens it. ASKED lost its clamp outright because a question restates known
+     context; a decision is the block that asks the user to ACT, so it keeps a
+     compact rest state and earns a door instead. */
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  border-radius: 2px;
+}
+.aic-decision-body.is-expandable { cursor: pointer; }
+.aic-decision-body.is-expandable:hover { color: var(--aic-paper); }
+.aic-decision-body.is-expandable:focus-visible {
+  outline: 2px solid var(--aic-marker);
+  outline-offset: 2px;
+}
+.aic-decision-body.is-expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
 }
 
 .aic-root.aic-root .aic-code-chip {
