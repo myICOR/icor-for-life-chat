@@ -85,10 +85,12 @@ export class SubagentView extends ItemView {
     const transcript = this.plugin.subagents.get(this.agentId);
 
     const header = root.createDiv({ cls: 'aic-sub-header' });
+    /* NO BACK BUTTON, and its removal is the fix (Tom, 2026-09-01). The tab
+       IS the wayfinding - the header comment above has said so from the start -
+       and the chevron's "reveal the chat" behaved as "open another chat" from
+       a workspace where the reveal resolved to a fresh leaf. A control that is
+       redundant when it works and wrong when it does not has no case left. */
     const kickerRow = header.createDiv({ cls: 'aic-sub-kicker' });
-    const back = kickerRow.createEl('button', { cls: 'aic-sub-back', type: 'button', text: '‹' });
-    back.setAttr('aria-label', 'Back to the conversation');
-    back.addEventListener('click', () => this.plugin.revealChat());
     kickerRow.createSpan({ cls: 'aic-kicker aic-kicker-wide', text: 'SUBAGENT' });
     kickerRow.createSpan({ cls: 'aic-middot', text: '·' });
     kickerRow.createSpan({ cls: 'aic-kicker aic-sub-type', text: transcript?.agentType ?? 'AGENT' });
@@ -127,12 +129,23 @@ export class SubagentView extends ItemView {
     }
 
     for (const event of transcript.events) this.stream.apply(event);
+    /* A stored log has no turn-end, so a finished run must be settled by the
+       replayer or held structured text stays held forever - the blank pane
+       Tom reported. A RUNNING one is left live: its settle arrives with its
+       close signal below. */
+    if (transcript.status !== 'running') this.stream.settleReplay();
+    if (this.stream.isEmpty && !transcript.task) {
+      // Honest emptiness beats a blank pane: some runs forward no text at all.
+      this.stream.note('This run forwarded no transcript. Its result went to the main conversation.');
+    }
     this.paintStatus(transcript.status);
     this.paintMeta(transcript);
 
     this.unsubscribe?.();
     this.unsubscribe = this.plugin.subagents.subscribe(this.agentId, (event, current) => {
       if (event) this.stream?.apply(event);
+      // The close signal is the null emission; the log itself never ends.
+      if (!event && current.status !== 'running') this.stream?.settleReplay();
       this.paintStatus(current.status);
       this.paintMeta(current);
     });

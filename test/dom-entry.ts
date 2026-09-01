@@ -266,13 +266,11 @@ async function mount(): Promise<void> {
   const probe = column.createDiv({ cls: 'aic-probe' });
   for (const tone of ['marker', 'warning', 'destructive', 'success', 'faint'] as const) dot(probe, tone);
 
-  /* The subagent header's back chevron. It is a plugin-drawn <button> with
-     `all: unset`, so it belongs to the control layer this fixture measures, and it is the
-     one control that lives outside the chat pane's own markup. */
+  /* The subagent header, back-chevron-less since 2026-09-01: the tab is the
+     wayfinding, and the chevron's reveal opened a second chat from some
+     workspaces. The kicker row stays measured. */
   const subHeader = column.createDiv({ cls: 'aic-sub-header' });
   const subKicker = subHeader.createDiv({ cls: 'aic-sub-kicker' });
-  const back = subKicker.createEl('button', { cls: 'aic-sub-back', type: 'button', text: '\u2039' });
-  back.setAttr('aria-label', 'Back to the conversation');
   subKicker.createSpan({ cls: 'aic-kicker aic-sub-type', text: 'AGENT' });
 
   /* Rung 2, painted by the shipped `renderChipTray` rather than hand-typed:

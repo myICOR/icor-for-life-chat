@@ -334,3 +334,27 @@ test('a decision that fits carries no affordance', async () => {
     await chrome.close();
   }
 });
+
+
+/* ------------------------------------- the subagent transcript, replayed */
+
+test('a replayed log with no ending still renders once settled', async () => {
+  const chrome = await Chrome.launch();
+  try {
+    await chrome.open(pathToFileURL(resolve(here, 'dom/turn-fixture.html')).href);
+    const c = await waitForCensus(chrome);
+    /* Tom opened a finished subagent onto a blank pane. The stored log ends
+       with nothing - the lifecycle close is a bus signal, not an event - so
+       under held-back replies the deltas waited forever. The hold is correct
+       WHILE something can still arrive; a replayer that knows the run is over
+       settles it, and the words appear. */
+    assert.equal(c.subagentReplay.beforeSettle, 0,
+      'the hold leaked: text rendered before anything said the run was over');
+    assert.equal(c.subagentReplay.afterSettle, 1,
+      `settling rendered ${c.subagentReplay.afterSettle} blocks, so the replay is still blank`);
+    assert.ok(c.subagentReplay.text.includes('four carry the stale tag'),
+      `the settled block lost the words (got ${JSON.stringify(c.subagentReplay.text)})`);
+  } finally {
+    await chrome.close();
+  }
+});

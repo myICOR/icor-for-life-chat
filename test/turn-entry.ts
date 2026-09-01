@@ -232,6 +232,33 @@ async function mount(): Promise<void> {
     shortRole: shortBody?.getAttribute('role') ?? '',
   };
 
+  /* THE SUBAGENT REPLAY SHAPE. A stored log ends with nothing: the lifecycle
+     close is a bus signal, not an event in the log. Under held-back structured
+     replies that meant every delta waited forever for a final that never comes,
+     and a finished subagent opened onto a blank pane. `settleReplay` is the
+     renderer's answer, and this drives it with exactly that shape. */
+  const subHost = document.body.createDiv({ cls: 'aic-root aic-subreplay-probe' });
+  const subCol = subHost.createDiv({ cls: 'aic-column' });
+  const subStream = new StreamRenderer({} as App, new Component() as never, subCol, '', {
+    onApproval: () => {}, structured: () => true,
+    renderHost: {
+      home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
+      openUrl: () => {}, copy: () => {}, decisionState: () => null,
+    },
+    onDecisions: () => {},
+  });
+  subStream.apply({ kind: 'text-open', blockId: 's1', stream: null });
+  subStream.apply({ kind: 'text-delta', blockId: 's1', text: 'Counted 281 notes; ', stream: null });
+  subStream.apply({ kind: 'text-delta', blockId: 's1', text: 'four carry the stale tag.', stream: null });
+  const beforeSettle = subCol.querySelectorAll(':scope > .aic-assistant, :scope > .aic-structured').length;
+  subStream.settleReplay();
+  await new Promise((r) => setTimeout(r, 0));
+  const subagentReplay = {
+    beforeSettle,
+    afterSettle: subCol.querySelectorAll(':scope > .aic-assistant, :scope > .aic-structured').length,
+    text: (subCol.textContent ?? '').trim().slice(0, 80),
+  };
+
   const streamEl = pane.root.querySelector('.aic-stream') as HTMLElement;
   const toolRow = pane.column.querySelector('.aic-tool') ?? streamEl.createEl('button');
   const select = {
@@ -258,6 +285,7 @@ async function mount(): Promise<void> {
     select,
     redacted,
     decisions,
+    subagentReplay,
   };
 }
 

@@ -207,8 +207,7 @@
 .aic-root.aic-root.aic-root .aic-text-btn,
 .aic-root.aic-root.aic-root .aic-icon-btn,
 .aic-root.aic-root.aic-root .aic-agent-chip,
-.aic-root.aic-root.aic-root .aic-thumb-x,
-.aic-root.aic-root.aic-root .aic-sub-back {
+.aic-root.aic-root.aic-root .aic-thumb-x {
   box-shadow: none;
   background-image: none;
   font-family: inherit;
@@ -229,7 +228,6 @@
    entries here are (0,4,0) and already beat the host's :hover twin at (0,2,1);
    specificity compares class counts before element counts. */
 .aic-root.aic-root.aic-root .aic-icon-btn,
-.aic-root.aic-root.aic-root .aic-sub-back,
 .aic-root.aic-root.aic-root .aic-approve-deny {
   border: none;
   background-color: transparent;
@@ -1870,31 +1868,6 @@
   flex: 0 0 auto;
 }
 .aic-sub-kicker { display: flex; align-items: center; gap: 8px; }
-.aic-root.aic-root .aic-sub-back {
-  /* The explicit control reset - see the annotated copy at its first use. */
-  appearance: none;
-  background: none;
-  border: none;
-  box-shadow: none;
-  outline: none;
-  padding: 0;
-  margin: 0;
-  opacity: 1;
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  text-align: inherit;
-  cursor: pointer;
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--aic-faint);
-  font-size: 18px;
-  line-height: 1;
-}
-.aic-root.aic-root .aic-sub-back:hover { color: var(--aic-paper); }
 .aic-sub-type { color: var(--aic-dim); }
 .aic-sub-status { display: inline-flex; align-items: center; gap: 6px; } /* dot-to-word pairing, see .aic-card-status */
 .aic-sub-title {

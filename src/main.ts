@@ -234,14 +234,6 @@ export default class IcorChatPlugin extends Plugin {
     await this.app.workspace.revealLeaf(leaf);
   }
 
-  revealChat(): void {
-    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CHAT);
-    const first = leaves[0];
-    // Fire-and-forget on purpose: this caller only brings an existing tab
-    // forward and reads nothing from the view afterwards, so there is nothing
-    // to sequence behind the reveal.
-    if (first) void this.app.workspace.revealLeaf(first);
-  }
 
   /** The affordances a structured block needs, shared by both view types. */
   renderHostFor(view: ItemView): RenderHost {

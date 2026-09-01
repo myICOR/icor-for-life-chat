@@ -271,7 +271,6 @@ ${HELPERS}
     segActive: '.aic-seg-btn.is-active',
     textBtn: '.aic-text-btn',
     iconBtn: '.aic-icon-btn',
-    subBack: '.aic-sub-back',
     textarea: 'textarea.aic-input',
     insight: '.aic-insight',
     decision: '.aic-decision',

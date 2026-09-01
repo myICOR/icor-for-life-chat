@@ -817,6 +817,23 @@ export class StreamRenderer {
     if (this.group) this.paintGroup(this.group);
   }
 
+  /* CLOSE OUT A REPLAYED TRANSCRIPT.
+   *
+   * The subagent view replays a stored event log, and a stored log has no
+   * turn-end: the bus records what was forwarded and the lifecycle arrives as
+   * a separate close signal, not as an event in the log. Under held-back
+   * structured replies that combination rendered NOTHING - every delta was
+   * accumulated waiting for a final or a turn-end that would never come, and
+   * the user opened a finished subagent onto a blank pane. This is the same
+   * escape hatch the live stream runs at turn-end, callable by a replayer
+   * that knows the run is over. */
+  settleReplay(): void {
+    this.hideWorking();
+    this.commitThinking();
+    this.flushHeld();
+    this.settleRunningRows();
+  }
+
   /** A quiet line of plugin-voice narration. Never styled as the team talking. */
   note(text: string): void {
     this.clearEmptyState();
