@@ -213,7 +213,7 @@ setting that changes what the team is told.
 ## Install
 
 Copy `main.js`, `manifest.json` and `styles.css` into
-`.obsidian/plugins/icor-for-life-ai-chat/` and enable the plugin.
+`.obsidian/plugins/icor-for-life-chat/` and enable the plugin.
 
 ## Development
 

@@ -198,7 +198,7 @@
  * banned here. The repeated root class is the whole idiom; the control class
  * itself is never doubled, so the meaningful half of the selector stays clean.
  *
- * The plugin ALSO declares `data-ink-plugin="icor-for-life-ai-chat"` on every root it
+ * The plugin ALSO declares `data-ink-plugin="icor-for-life-chat"` on every root it
  * owns, which is how INKLINE stands its own control
  * skins down at zero specificity. The attribute does not retire this raise and
  * never will: the plugin ships into vaults running other themes, and a control
