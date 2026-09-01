@@ -1,257 +1,173 @@
 /* Plumbing only. Nothing here changes what the team says or how it thinks:
  * the vault's own CLAUDE.md governs behaviour, and the plugin never injects a
- * prompt of its own beyond the one opt-in structured-replies constant. */
+ * prompt of its own beyond the one opt-in structured-replies constant.
+ *
+ * TWO RENDER PATHS, ONE TABLE. Obsidian 1.13 renders this tab from
+ * `getSettingDefinitions()` and indexes it for settings search - the directory
+ * review flagged that this tab did neither, so its settings were invisible to
+ * search for every user on 1.13. Older Obsidian calls `display()`. The floor is
+ * 1.7.2, so both stay, and both are driven from `settingDefinitions()` in
+ * definitions.ts so they cannot disagree. `display()` is deprecated on 1.13 and
+ * is never called there once definitions are returned; it is the fallback and
+ * nothing else, which is exactly the case the deprecation notice carves out. */
 
 import { PluginSettingTab, Setting } from 'obsidian';
 import type { App } from 'obsidian';
 import { INK_PLUGIN_ATTR, INK_PLUGIN_NAME } from '../constants';
 import type IcorChatPlugin from '../main';
-import type { EffortName, PermissionModeName } from '../model/types';
-import type { VaultMode } from '../model/settings';
-import { FACT_SETTING_KEYS, MEASURED_NOTE, NARROW_NOTE } from '../model/settings';
-import { DROP_GROUPS, FACT_NAMES, FACT_TOOLTIPS, RENDER_ORDER } from '../model/facts';
-import type { FactId } from '../model/facts';
+import { controlKeys, isNote, settingDefinitions, validateRetention } from './definitions';
+import type { ControlSpec, DefinitionInput, GroupDefinition, ItemDefinition } from './definitions';
 
-const DROPPABLE = new Set<FactId>(DROP_GROUPS.flat());
+/* The 1.13 shapes, derived from the class rather than imported by name.
+   `SettingDefinitionItem` and friends are `@since 1.13.0`, and the manifest
+   gate convicts a named import newer than the floor - correctly, since the
+   floor is a promise to 1.7.2 users. A type derived from a method that already
+   exists on the parent class is the same shape without the false promise. */
+type Definitions = ReturnType<PluginSettingTab['getSettingDefinitions']>;
+type Definition = Definitions[number];
+/* A group, and what a group may hold: narrower than the top-level union (a
+   group cannot nest a page), so the item mapper is typed to it directly rather
+   than widened and cast back down. */
+type Group = Extract<Definition, { type: 'group' | 'list' }>;
+type GroupItem = NonNullable<Group['items']>[number];
 
-/* The declarative settings API (getSettingDefinitions) is @since 1.13.0 and
-   this plugin's honest floor is 1.7.2, so display() remains the only path.
-   The two lint exemptions for that live in eslint.config.mjs, scoped to this
-   file, because the plugin's own config forbids inline disables. */
 export class ChatSettingsTab extends PluginSettingTab {
   constructor(app: App, private readonly plugin: IcorChatPlugin) {
     super(app, plugin);
   }
+
+  private input(): DefinitionInput {
+    return {
+      settings: this.plugin.settings,
+      catalog: this.plugin.modelCatalog,
+      defaultArchiveFolder: this.plugin.defaultArchiveFolder(),
+    };
+  }
+
+  /* ------------------------------------------------ 1.13: declarative */
+
+  override getSettingDefinitions(): Definitions {
+    return settingDefinitions(this.input()).map((group) => this.toGroup(group));
+  }
+
+  private toGroup(group: GroupDefinition): Group {
+    return {
+      type: 'group' as const,
+      heading: `${group.index} · ${group.heading}`,
+      cls: 'aic-settings-group',
+      items: group.items.map((item) => this.toItem(item)),
+    };
+  }
+
+  private toItem(item: ItemDefinition): GroupItem {
+    if (isNote(item)) {
+      const text = item.desc;
+      return {
+        name: item.name,
+        desc: text,
+        render: (setting: Setting) => {
+          setting.setName('');
+          setting.settingEl.addClass('aic-settings-note');
+          setting.descEl.setText(text);
+        },
+      };
+    }
+    const c = item.control;
+    const control =
+      c.type === 'number'
+        ? { ...c, validate: validateRetention }
+        : c;
+    return { name: item.name, desc: item.desc, control };
+  }
+
+  /* The framework reads and writes through these on 1.13. `saveSettings`
+     rather than `saveData`, because saving also repaints the readout strip in
+     every open pane: a fact switched on here has to appear without another
+     message being sent, and that repaint lives in saveSettings. */
+  override getControlValue(key: string): unknown {
+    return this.record()[key];
+  }
+
+  /* Every ChatSettings value is a string, a number or a boolean, and typing the
+     record that way is what makes `String(...)` below honest: there is no
+     object here to stringify into '[object Object]'. */
+  private record(): Record<string, string | number | boolean> {
+    return this.plugin.settings as unknown as Record<string, string | number | boolean>;
+  }
+
+  override async setControlValue(key: string, value: unknown): Promise<void> {
+    Object.assign(this.plugin.settings, { [key]: value });
+    await this.plugin.saveSettings();
+    /* The archive-folder description names the layout's default, and a layout
+       change makes it stale until the tab is next opened. The 1.13 answer is
+       `this.update()`, and it is deliberately NOT called: `update` is
+       @since 1.13.0, the floor is 1.7.2, and the API lint convicts the call
+       against that floor - rightly, a floor is a promise. `getSettingDefinitions`
+       is re-run on every open, so the text catches up the next time the tab is
+       shown. A stale description for one open beats a false floor. */
+  }
+
+  /* ----------------------------------------- < 1.13: imperative fallback */
 
   override display(): void {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.addClass('aic-settings');
     containerEl.setAttr(INK_PLUGIN_ATTR, INK_PLUGIN_NAME);
-
-    this.section(containerEl, '01', 'PROVIDER');
-
-    new Setting(containerEl)
-      .setName('Claude Code location')
-      .setDesc(
-        'Leave empty to find it automatically. Obsidian launched from the Dock does not ' +
-          'inherit a login shell, so the plugin repairs PATH before looking.',
-      )
-      .addText((t) =>
-        t
-          .setPlaceholder('/usr/local/bin/claude')
-          .setValue(this.plugin.settings.cliPath)
-          .onChange(async (v) => {
-            this.plugin.settings.cliPath = v;
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName('Extra PATH entries')
-      .setDesc('One directory per line, searched after your own PATH.')
-      .addTextArea((t) =>
-        t.setValue(this.plugin.settings.extraPath).onChange(async (v) => {
-          this.plugin.settings.extraPath = v;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    /* THE MODEL LIST IS THE PROVIDER'S, never this file's.
-     *
-       It was a hand-typed `{haiku, sonnet, opus}` object, which is the invented
-       catalogue the composer's own header rules out, and it failed the way an
-       invented list fails: Fable shipped and the picker could not offer it. The
-       options now come from the SDK's `supportedModels()`, cached on the plugin
-       the first time a session answers. Before any session has run there is
-       nothing true to list, and the picker says exactly that rather than
-       offering three names it made up. */
-    const catalog = this.plugin.modelCatalog;
-    const modelOptions: Record<string, string> = { '': 'CLI default' };
-    for (const row of catalog) {
-      // 'default' is the CLI default under the provider's own name for it, and
-      // this picker already carries that choice as the empty string. Two rows
-      // meaning one thing is a picker that can disagree with itself.
-      if (row.value === 'default') continue;
-      modelOptions[row.value] = row.displayName;
+    for (const group of settingDefinitions(this.input())) {
+      const head = containerEl.createDiv({ cls: 'aic-settings-section' });
+      head.createSpan({ cls: 'aic-settings-index', text: group.index });
+      head.createSpan({ cls: 'aic-settings-name', text: group.heading.toUpperCase() });
+      for (const item of group.items) this.renderItem(containerEl, item);
     }
-    /* A model the user already picked, on a build whose catalogue has not
-       arrived yet. Without this the dropdown would silently snap to 'CLI
-       default' and the next save would write that back - a settings tab that
-       loses the setting by being opened. */
-    const stored = this.plugin.settings.model;
-    if (stored && !(stored in modelOptions)) modelOptions[stored] = stored;
+  }
 
-    const model = new Setting(containerEl).setName('Model');
-    if (catalog.length === 0) {
-      model.setDesc('The full list arrives once a conversation has run: the models come from Claude Code itself, never from a list kept here.');
+  private renderItem(parent: HTMLElement, item: ItemDefinition): void {
+    if (isNote(item)) {
+      parent.createDiv({ cls: 'aic-settings-note', text: item.desc });
+      return;
     }
-    model.addDropdown((d) =>
-      d
-        .addOptions(modelOptions)
-        .setValue(stored)
-        .onChange(async (v) => {
-          this.plugin.settings.model = v;
-          await this.plugin.saveSettings();
-        }),
-    );
+    const row = new Setting(parent).setName(item.name);
+    if (item.desc) row.setDesc(item.desc);
+    this.bind(row, item.control);
+  }
 
-    new Setting(containerEl).setName('Reasoning effort').addDropdown((d) =>
-      d
-        /* Four rungs, matching the composer exactly. It listed three, so a user
-           who picked Extra in the composer - which saves to this same setting -
-           came back to a dropdown with no such option, and it displayed the
-           value below it. A picker that cannot show its own stored value is a
-           picker that quietly rewrites it. */
-        .addOptions({ low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra' })
-        .setValue(this.plugin.settings.effort)
-        .onChange(async (v) => {
-          this.plugin.settings.effort = v as EffortName;
-          await this.plugin.saveSettings();
-        }),
-    );
-
-    /* BYPASS IS OFFERED HERE, and it is still not the out-of-the-box default.
-     *
-       It was withheld from this list entirely, and the description said so as
-       if withholding it were the safety. It was not: the mode picker in every
-       composer offers Bypass, so the only thing this omission achieved was
-       forcing a user who works in Bypass to re-pick it in every new tab, while
-       `loadSettings` silently rewrote the stored value back to Ask on the next
-       reload. Ask remains the shipped default and the recommendation; choosing
-       otherwise is the user's to make, once, and have it stick. */
-    new Setting(containerEl)
-      .setName('Default permission mode')
-      .setDesc('New conversations start here. Ask is the safe one; Bypass runs every tool without asking.')
-      .addDropdown((d) =>
-        d
-          .addOptions({
-            plan: 'Plan',
-            default: 'Ask (recommended)',
-            acceptEdits: 'Auto-accept edits',
-            bypassPermissions: 'Bypass - no prompts at all',
-          })
-          .setValue(this.plugin.settings.defaultPermissionMode)
-          .onChange(async (v) => {
-            this.plugin.settings.defaultPermissionMode = v as PermissionModeName;
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    this.section(containerEl, '02', 'CONVERSATIONS');
-
-    new Setting(containerEl)
-      .setName('Context awareness')
-      .setDesc('Send the note you have open and the text you have selected.')
-      .addToggle((t) =>
-        t.setValue(this.plugin.settings.contextAwareness).onChange(async (v) => {
-          this.plugin.settings.contextAwareness = v;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName('Structured replies')
-      .setDesc('Ask for the ICOR card format and render it natively. On by default; turn it off for plain chat.')
-      .addToggle((t) =>
-        t.setValue(this.plugin.settings.structuredReplies).onChange(async (v) => {
-          this.plugin.settings.structuredReplies = v;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    this.section(containerEl, '03', 'STATUSLINE');
-    /* ONE LINE, and it is documentation rather than an apology.
-       A readout with no measurement behind it is ABSENT, so a first-run strip
-       renders nothing and the feature can look like it was never built. The
-       cure is NOT a line in the strip saying facts appear later - that is the
-       placeholder defect wearing words, the same refusal as printing a zero.
-       It belongs here, on the surface someone opens when they want to ask. */
-    containerEl.createDiv({
-      cls: 'aic-settings-note',
-      text: MEASURED_NOTE,
-    });
-
-    /* EIGHT ROWS, in the strip's own render order, so the settings list and the
-       strip agree and the user can read one against the other. The description
-       is the readout's tooltip string VERBATIM, from the same source: two
-       copies would be two things to keep true, and this row is also the reason
-       the strip itself never needs a placeholder. An unmeasured readout is
-       absent, and a user who wonders why reads it here.
-
-       No master toggle and no reset-to-defaults. Eight toggles is eight
-       toggles; a ninth control that changes the other eight is chrome about
-       chrome. */
-    for (const id of RENDER_ORDER) {
-      const key = FACT_SETTING_KEYS[id];
-      const lines = [...FACT_TOOLTIPS[id]];
-      if (DROPPABLE.has(id)) lines.push(NARROW_NOTE);
-      new Setting(containerEl)
-        .setName(FACT_NAMES[id])
-        .setDesc(lines.join(' '))
-        .addToggle((t) =>
-          t.setValue(this.plugin.settings[key] === true).onChange(async (v) => {
-            // Narrowed through the map rather than asserted on the assignment:
-            // every key in FACT_SETTING_KEYS names a boolean field, and this is
-            // where that stays checkable.
-            Object.assign(this.plugin.settings, { [key]: v });
-            await this.plugin.saveSettings();
+  private bind(row: Setting, c: ControlSpec): void {
+    const settings = this.record();
+    const save = async (value: unknown): Promise<void> => {
+      Object.assign(this.plugin.settings, { [c.key]: value });
+      await this.plugin.saveSettings();
+      if (c.key === 'vaultMode') this.display();
+    };
+    switch (c.type) {
+      case 'toggle':
+        row.addToggle((t) => t.setValue(settings[c.key] === true).onChange((v) => void save(v)));
+        return;
+      case 'text':
+        row.addText((t) => {
+          if (c.placeholder) t.setPlaceholder(c.placeholder);
+          t.setValue(String(settings[c.key] ?? '')).onChange((v) => void save(v));
+        });
+        return;
+      case 'textarea':
+        row.addTextArea((t) => t.setValue(String(settings[c.key] ?? '')).onChange((v) => void save(v)));
+        return;
+      case 'dropdown':
+        row.addDropdown((d) => d.addOptions(c.options).setValue(String(settings[c.key] ?? '')).onChange((v) => void save(v)));
+        return;
+      case 'number':
+        row.addText((t) =>
+          t.setValue(String(settings[c.key] ?? 0)).onChange((v) => {
+            const n = Number.parseInt(v, 10);
+            void save(validateRetention(n) === undefined ? n : 0);
           }),
         );
+        return;
+      default:
+        return;
     }
-
-    this.section(containerEl, '04', 'SESSION ARCHIVE');
-
-    new Setting(containerEl)
-      .setName('Archive sessions into the vault')
-      .addToggle((t) =>
-        t.setValue(this.plugin.settings.archiveEnabled).onChange(async (v) => {
-          this.plugin.settings.archiveEnabled = v;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName('Archive folder')
-      .setDesc(`Empty uses ${this.plugin.defaultArchiveFolder()}.`)
-      .addText((t) =>
-        t.setValue(this.plugin.settings.archiveFolder).onChange(async (v) => {
-          this.plugin.settings.archiveFolder = v;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName('Keep archives for')
-      .setDesc('Number of days. Zero keeps everything.')
-      .addText((t) =>
-        t.setValue(String(this.plugin.settings.archiveRetentionDays)).onChange(async (v) => {
-          const n = Number.parseInt(v, 10);
-          this.plugin.settings.archiveRetentionDays = Number.isFinite(n) && n >= 0 ? n : 0;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    this.section(containerEl, '05', 'ADVANCED');
-
-    new Setting(containerEl)
-      .setName('Vault layout')
-      .setDesc('Where the AI Sessions folder lives.')
-      .addDropdown((d) =>
-        d
-          .addOptions({ auto: 'Detect', scaffold: 'ICOR for Life', standalone: 'Standalone' })
-          .setValue(this.plugin.settings.vaultMode)
-          .onChange(async (v) => {
-            this.plugin.settings.vaultMode = v as VaultMode;
-            await this.plugin.saveSettings();
-            this.display();
-          }),
-      );
-  }
-
-  private section(parent: HTMLElement, index: string, name: string): void {
-    const head = parent.createDiv({ cls: 'aic-settings-section' });
-    head.createSpan({ cls: 'aic-settings-index', text: index });
-    head.createSpan({ cls: 'aic-settings-name', text: name });
   }
 }
+
+/** The keys the table persists, exported for the coverage gate. */
+export { controlKeys };

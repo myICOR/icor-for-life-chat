@@ -6,7 +6,10 @@
  * reference to it. Without this the bundle throws on first import.
  */
 import esbuild from 'esbuild';
-import builtins from 'builtin-modules';
+// Node's own list, so the build carries no dependency for what the runtime
+// already knows. The directory scanner flagged the package as replaceable and
+// it was right: `builtinModules` is the same list, maintained by Node itself.
+import { builtinModules as builtins } from 'node:module';
 import process from 'node:process';
 
 const production = process.argv[2] === 'production';

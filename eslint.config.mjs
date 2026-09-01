@@ -42,16 +42,18 @@ export default defineConfig([
     },
   },
   {
-    /* THE ONE FILE-SCOPED EXEMPTION, with its reason. The declarative settings
-       API the two rules push toward is @since Obsidian 1.13.0; this plugin's
-       honest minAppVersion is 1.7.2, the highest version any used API actually
-       requires. Adopting the new API would raise the floor for a settings
-       search affordance. Inline disables are (rightly) forbidden by the
-       recommended config, so the exemption lives here, scoped and dated
-       2026-08-30; revisit when the floor moves past 1.13.0. */
+    /* THE ONE FILE-SCOPED EXEMPTION, with its reason.
+       The settings tab now implements the 1.13 declarative API, which is what
+       the directory review asked for and what Obsidian 1.13 renders and
+       indexes for settings search. `display()` is kept ON PURPOSE as the
+       fallback for Obsidian < 1.13 - the floor is 1.7.2 - which is exactly the
+       case its deprecation notice carves out, and it is never reached on 1.13
+       once definitions are returned. Inline disables are (rightly) forbidden
+       by the recommended config, so the exemption lives here, scoped. Dated
+       2026-08-30, narrowed 2026-09-01; when the floor moves past 1.13.0,
+       display() and this block both go. */
     files: ['src/settings/SettingsTab.ts'],
     rules: {
-      'obsidianmd/settings-tab/prefer-setting-definitions': 'off',
       '@typescript-eslint/no-deprecated': 'off',
     },
   },

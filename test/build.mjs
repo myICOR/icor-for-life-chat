@@ -4,7 +4,10 @@
  * components; a hand-written copy of the markup would only ever agree with
  * itself. */
 import esbuild from 'esbuild';
-import builtins from 'builtin-modules';
+// Node's own list, so the build carries no dependency for what the runtime
+// already knows. The directory scanner flagged the package as replaceable and
+// it was right: `builtinModules` is the same list, maintained by Node itself.
+import { builtinModules as builtins } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 

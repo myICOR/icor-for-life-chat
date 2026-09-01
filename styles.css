@@ -464,10 +464,12 @@
 .aic-thinking-head { display: inline-flex; align-items: baseline; gap: 2px; }
 .aic-thinking.is-readable .aic-thinking-head {
   cursor: pointer;
-  text-decoration: underline;
-  text-decoration-style: dotted;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
+  /* A dotted rule under the word, drawn as a border rather than a decoration.
+     `text-decoration-style` and `-thickness` are the two properties the
+     directory's CSS lint marks as partially supported, and a border says the
+     same thing - "this opens" - with nothing to fall back from. */
+  border-bottom: 1px dotted currentColor;
+  padding-bottom: 1px;
 }
 .aic-thinking.is-readable .aic-thinking-head:hover { color: var(--aic-dim); }
 .aic-thinking.is-readable .aic-thinking-head:focus-visible {
@@ -653,15 +655,11 @@
   border: none;
   box-shadow: none;
   outline: none;
-  padding: 0;
   margin: 0;
   opacity: 1;
   color: inherit;
   font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
   text-align: inherit;
-  cursor: inherit;
   cursor: pointer;
   font-family: var(--aic-mono);
   font-size: 10px;
@@ -731,18 +729,24 @@
  * would have been loud. NARROWING THE TRIGGER IS THE PRECONDITION FOR
  * STRENGTHENING IT, never a softening of it.
  *
- * `:has(> textarea.aic-input:focus)` is (0,3,1) - :has() takes its most
- * specific argument, `> textarea.aic-input:focus` = (0,2,1), plus the class.
- * That clears `.aic-composer` (0,1,0) and every host rule that reaches the card.
- * `:focus` and not `:focus-visible`: a text field earns its affordance from a
- * click as much as from a tab, and the caret is already showing either way.
+ * THE TRIGGER IS A CLASS, SET BY THE COMPOSER ON THE TEXTAREA'S OWN FOCUS.
+ * It was `:has(> textarea.aic-input:focus)`, which said the same thing in
+ * pure CSS and was exactly right - and the directory's CSS lint flags `:has`
+ * for what it costs the engine (broad selector invalidation). The composer
+ * already owns the textarea's focus and blur, so it stamps `is-input-focused`
+ * on the card and this rule reads the class. The PROPERTY is unchanged and is
+ * still measured by real focus in the suite: the card steps for the textarea
+ * and for nothing else. `.aic-composer.is-input-focused` is (0,2,0), which
+ * clears `.aic-composer` (0,1,0) and every host rule that reaches the card.
+ * Focus, not focus-visible: a text field earns its affordance from a click as
+ * much as from a tab, and the caret is already showing either way.
  *
  * ONE DEVICE, at full alpha, 1px, and no second carrier: no shadow, no glow.
  * Measured against the room-split marker values, floor 3.0 (card fill / page ground /
  * its own resting border): INKLINE dark 5.98 / 6.21 / 4.10, INKLINE light
  * 4.57 / 4.19 / 3.43, stock dark 5.82 / 5.36 / 4.06, stock light 4.18 / 4.64 /
  * 3.42. Shipped before this: 1.80 / 1.87 / 1.24 in ink dark. */
-.aic-composer:has(> textarea.aic-input:focus) { border-color: var(--aic-marker); }
+.aic-composer.is-input-focused { border-color: var(--aic-marker); }
 
 .aic-badge-slot:empty,
 .aic-tray.is-empty,
@@ -776,19 +780,15 @@
 .aic-root.aic-root.aic-root .aic-thumb-x {
   /* The explicit control reset - see the annotated copy at its first use. */
   appearance: none;
-  background: none;
   border: none;
   box-shadow: none;
   outline: none;
   padding: 0;
   margin: 0;
-  opacity: 1;
-  color: inherit;
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
   text-align: inherit;
-  cursor: inherit;
   cursor: pointer;
   position: absolute;
   top: 2px;
@@ -847,13 +847,10 @@
   outline: none;
   padding: 0;
   margin: 0;
-  opacity: 1;
-  color: inherit;
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
   text-align: inherit;
-  cursor: inherit;
   cursor: pointer;
   display: inline-flex;
   color: var(--aic-faint);
@@ -930,7 +927,6 @@
   letter-spacing: inherit;
   text-transform: inherit;
   text-align: inherit;
-  cursor: inherit;
   cursor: pointer;
 }
 
@@ -1011,12 +1007,10 @@
   padding: 0;
   margin: 0;
   opacity: 1;
-  color: inherit;
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
   text-align: inherit;
-  cursor: inherit;
   cursor: pointer;
   width: 28px;
   height: 28px;
@@ -1032,19 +1026,14 @@
 .aic-root.aic-root .aic-send {
   /* The explicit control reset - see the annotated copy at its first use. */
   appearance: none;
-  background: none;
   border: none;
   box-shadow: none;
   outline: none;
-  padding: 0;
   margin: 0;
   opacity: 1;
-  color: inherit;
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
-  text-align: inherit;
-  cursor: inherit;
   cursor: pointer;
   border-radius: var(--aic-r-pill);
   /* The FILL ramp, not the MARK ramp. This control sets a background AND
@@ -1616,19 +1605,14 @@
 .aic-root.aic-root .aic-code-chip {
   /* The explicit control reset - see the annotated copy at its first use. */
   appearance: none;
-  background: none;
-  border: none;
   box-shadow: none;
   outline: none;
-  padding: 0;
   margin: 0;
   opacity: 1;
-  color: inherit;
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
   text-align: inherit;
-  cursor: inherit;
   cursor: pointer;
   font-family: var(--aic-mono);
   font-size: 12px;
@@ -1672,19 +1656,12 @@
 .aic-root.aic-root .aic-badge {
   /* The explicit control reset - see the annotated copy at its first use. */
   appearance: none;
-  background: none;
-  border: none;
   box-shadow: none;
   outline: none;
-  padding: 0;
   margin: 0;
   opacity: 1;
-  color: inherit;
   font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
   text-align: inherit;
-  cursor: inherit;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -1810,11 +1787,8 @@
 .aic-root.aic-root .aic-agent-chip {
   /* The explicit control reset - see the annotated copy at its first use. */
   appearance: none;
-  background: none;
-  border: none;
   box-shadow: none;
   outline: none;
-  padding: 0;
   margin: 0;
   opacity: 1;
   color: inherit;
@@ -1822,7 +1796,6 @@
   letter-spacing: inherit;
   text-transform: inherit;
   text-align: inherit;
-  cursor: inherit;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -1865,12 +1838,10 @@
   padding: 0;
   margin: 0;
   opacity: 1;
-  color: inherit;
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
   text-align: inherit;
-  cursor: inherit;
   cursor: pointer;
   width: 24px;
   height: 24px;

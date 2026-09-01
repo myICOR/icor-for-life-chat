@@ -26,3 +26,4 @@ export * from '../src/view/composer/mention';
 export * from '../src/view/statusbar';
 export * from '../src/archive/redact';
 export * from '../src/sdk/launch';
+export * from '../src/settings/definitions';

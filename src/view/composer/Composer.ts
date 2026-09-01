@@ -261,6 +261,16 @@ export class Composer {
       if (ev.key.startsWith('Arrow') || ev.key === 'Home' || ev.key === 'End') this.refreshSlash();
     });
     this.textarea.addEventListener('click', () => this.refreshSlash());
+    /* THE CARD'S FOCUS AFFORDANCE, driven from here. The stylesheet used to
+       derive it with `:has(> textarea:focus)`; the directory's CSS lint flags
+       `:has` for its invalidation cost, and this component already owns the
+       field's focus. The rule is unchanged - the card steps for the TEXTAREA
+       and for no other control inside it - only the carrier moved from a
+       selector to a class. `focus`/`blur`, not focusin/out: those bubble from
+       the send pill and the pickers, which is the exact lie the narrow
+       trigger exists to prevent. */
+    this.textarea.addEventListener('focus', () => this.el.addClass('is-input-focused'));
+    this.textarea.addEventListener('blur', () => this.el.removeClass('is-input-focused'));
     this.textarea.addEventListener('blur', () => {
       // A click on a row is a mousedown on the list and a blur on the field, in
       // that order, so the close has to wait for the click to land.

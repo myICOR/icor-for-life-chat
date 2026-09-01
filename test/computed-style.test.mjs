@@ -728,7 +728,8 @@ ${HELPERS}
  * the thing a user perceives is the STEP from rest.
  *
  * It also reads which element actually holds focus, because the trigger is
- * `:has(> textarea:focus)` and the whole point of narrowing it is that the card
+ * a class the composer sets on the textarea's own focus (it was `:has(> textarea:focus)`
+ * until the directory's CSS lint flagged `:has`), and the whole point of narrowing it is that the card
  * must NOT light up for the eight focusable controls inside it that are not the
  * input. That is a claim about a specific element having focus, so the probe
  * uses real `.focus()` rather than a forced pseudo-class. */
@@ -886,7 +887,7 @@ async function snapshot(chrome, room) {
   const focusRest = await chrome.evaluate(FOCUS_PROBE);
 
   /* `.aic-composer` is no longer forced here: the card's trigger replaced `:focus-within` with
-     `:has(> textarea.aic-input:focus)`, and a forced pseudo on a rule that no
+     a class stamped on real textarea focus (formerly `:has(> textarea.aic-input:focus)`), and a forced pseudo on a rule that no
      longer exists is a state nothing reads. The card is measured above, with
      real focus, where the trigger can actually be tested. */
   await chrome.forcePseudosAll([
@@ -1398,7 +1399,8 @@ test('the settings index rides the small-marker-text rung', () => {
  * for a reason that has since been retired: `.aic-composer` triggered its focus
  * treatment on `:focus-within`, so a non-focusable readout inside it lit up as
  * part of the input's focus state. That trigger is now
- * `:has(> textarea.aic-input:focus)` - a DIRECT child - and the property is
+ * `.is-input-focused`, stamped by the composer on the TEXTAREA's own focus (it was
+ * `:has(> textarea.aic-input:focus)` until the directory lint flagged `:has`) - and the property is
  * enforced by the SELECTOR instead of by the coordinates. Which means the
  * nesting was never the real guard, only a proxy for one, and the real guard is
  * the send-pill focus read above: `composerSend.border === --aic-hairline`
