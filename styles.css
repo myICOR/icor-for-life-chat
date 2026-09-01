@@ -458,10 +458,33 @@
   font-family: var(--aic-hand);
   font-size: var(--ink-text-hand-xs, 20px);
   font-weight: 500;
-  color: var(--aic-faint);
+  /* THE ACCENT, not the faint ink (Tom, 2026-09-01). This line is the only
+     thing on screen saying the turn is alive, and in the faint ink it read as
+     chrome - the eye skipped exactly the element that answers "is it stuck".
+     The marker is the room's own accent, measured against the page ground by
+     the ink sweep like every other text node, and the BODY below keeps its
+     quiet ink: the accent marks the pulse, never the paragraphs. */
+  /* THE ACCENT'S TEXT RUNG (Tom, 2026-09-01). This line is the only thing on
+     screen saying the turn is alive, and in the faint ink the eye skipped
+     exactly the element that answers "is it stuck". It rides
+     `--aic-marker-text`, not the bare marker: spent as 20px/500 text the bare
+     marker measured 4.19:1 on the INKLINE light ground against a 4.5 floor -
+     caught by the ink sweep the moment the fixture mounted this element. The
+     text rung darkens in the light rooms for exactly this use. The BODY keeps
+     its quiet ink: the accent marks the pulse, never the paragraphs. */
+  color: var(--aic-marker-text);
   padding-inline-end: var(--ink-hand-overhang, 0.25em);
 }
-.aic-thinking-head { display: inline-flex; align-items: baseline; gap: 2px; }
+.aic-thinking-head {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  /* At REST, so the focus pen changes no geometry. It sat inside
+     :focus-visible, where it was a radius the element only had while focused -
+     flagged by the geometry gate the first time a fixture mounted this
+     element. */
+  border-radius: 2px;
+}
 .aic-thinking.is-readable .aic-thinking-head {
   cursor: pointer;
   /* A dotted rule under the word, drawn as a border rather than a decoration.
@@ -471,11 +494,14 @@
   border-bottom: 1px dotted currentColor;
   padding-bottom: 1px;
 }
-.aic-thinking.is-readable .aic-thinking-head:hover { color: var(--aic-dim); }
+/* Hover steps WITHIN the accent, via the same token the send pill's hover
+   uses. The old hover went to the quiet grey ink, which on an accent base
+   reads as the control dimming under the pointer - de-emphasis at the exact
+   moment of interest. */
+.aic-thinking.is-readable .aic-thinking-head:hover { color: var(--aic-marker-up); }
 .aic-thinking.is-readable .aic-thinking-head:focus-visible {
   outline: 1px solid var(--aic-marker);
   outline-offset: 2px;
-  border-radius: 2px;
 }
 /* The dots are the "still running" signal, so they stop once the box is open:
    the text itself is the evidence then, and an animation under text being read

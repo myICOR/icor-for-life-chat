@@ -287,6 +287,8 @@ ${HELPERS}
        dot any more - a selector left aimed at the old dot class would have
        matched nothing and taken the amber measurement down with it silently.
        (No backticks in here: this map is inside a template literal.) */
+    thinkingLabel: '.aic-thinking-probe .aic-thinking-label',
+    thinkingHead: '.aic-thinking-probe .aic-thinking.is-readable .aic-thinking-head',
     bandAsked: '.aic-band-asked',
     bandAnswer: '.aic-band-answer',
     askedText: '.aic-asked-text',
@@ -838,7 +840,8 @@ async function snapshot(chrome, room) {
      skipping - which is the only reason this was caught. A driver that had
      shrugged at an empty match would have left the mode control's hover state
      unmeasured in all four rooms and every assertion still green. */
-  const HOVERED = ['.aic-send', '.aic-approve-always', '.aic-badge', '.aic-seg-btn',
+  const HOVERED = ['.aic-thinking-probe .aic-thinking-head',
+                   '.aic-send', '.aic-approve-always', '.aic-badge', '.aic-seg-btn',
                    '.aic-code-chip', '.aic-agent-chip', '.aic-icon-btn', '.aic-text-btn',
                    '.aic-chip-x', '.aic-thumb-x',
                    /* The expandable tool row. `forcePseudos` THROWS on a selector
@@ -2011,6 +2014,24 @@ test('ASKED and ANSWER are banners, and ANSWER carries the hue', () => {
        neutral, so the text keeps every point of its contrast. */
     assert.equal(s.base.el.bandAnswer.bg, s.base.el.bandAsked.bg,
       `${room}: the ANSWER banner tinted its own ground, which is where contrast goes to die`);
+  });
+});
+
+test('the working indicator speaks in the accent, and its hover stays in it', () => {
+  forEachRoom((s, room) => {
+    /* The line is the only thing on screen saying the turn is alive, and in
+       the faint ink the eye skipped exactly the element that answers "is it
+       stuck". The ratio itself is covered by the ink sweep, which measures
+       every text node this fixture mounts - this test pins WHICH ink, so a
+       future tidy-up cannot quietly hand the pulse back to the chrome voice. */
+    assert.equal(s.base.el.thinkingLabel.fg, s.base.tokens['--aic-marker-text'],
+      `${room}: the thinking label must ride the marker's TEXT rung - the bare ` +
+      `marker measured 4.19:1 as 20px text on the INKLINE light ground`);
+    /* And the hover steps WITHIN the accent. The old hover went to the quiet
+       grey, which on an accent base reads as the control dimming under the
+       pointer - de-emphasis at the exact moment of interest. */
+    assert.equal(s.hover.el.thinkingHead.fg, s.base.tokens['--aic-marker-up'],
+      `${room}: the head's hover left the accent family`);
   });
 });
 

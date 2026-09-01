@@ -193,6 +193,31 @@ async function mount(): Promise<void> {
    *
    * Real events, real state machine: a row's class comes from `paintTool`
    * here, so it cannot drift from the product the way re-typed markup can. */
+  /* THE WORKING INDICATOR, in its readable state, so the accent ink is
+     MEASURED. It carries `--aic-marker` as text now, and a text ink that no
+     fixture mounts is a text ink the contrast sweep never sees. Driven through
+     the shipped renderer with real events - a hand-typed replica would only
+     ever agree with itself. */
+  const thinkingHost = document.body.createDiv({ cls: 'aic-root aic-thinking-probe' });
+  const thinkingCol = thinkingHost.createDiv({ cls: 'aic-column' });
+  const thinkingStream = new StreamRenderer(
+    {} as App,
+    new Component() as never,
+    thinkingCol,
+    '',
+    {
+      onApproval: () => {},
+      structured: () => true,
+      renderHost: {
+        home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
+        openUrl: () => {}, copy: () => {}, decisionState: () => null,
+      },
+      onDecisions: () => {},
+    },
+  );
+  thinkingStream.apply({ kind: 'thinking-open', blockId: 'tp0', stream: null });
+  thinkingStream.apply({ kind: 'thinking-delta', blockId: 'tp0', text: 'weighing the options', stream: null });
+
   const stream2 = new StreamRenderer(
     {} as App,
     new Component() as never,
