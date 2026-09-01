@@ -180,6 +180,15 @@ export class StreamRenderer {
     switch (event.kind) {
       case 'user-turn':
         this.appendUserWell(event.text, event.contextNote, event.images, event.contextPath);
+        /* BUSY FROM THE FIRST MOMENT (Tom, 2026-09-01). The indicator used to
+           appear only when the model's output began - thinking tokens or held
+           text - which left the FIRST stretch of every turn, the seconds
+           between send and the model's first signal, with nothing on screen at
+           all. Fifteen quiet seconds read as a stalled session when they were
+           a session at work. The turn itself is the busy signal: the SDK
+           brackets it with this event and turn-end, so no polling and no new
+           provider surface is needed - only the honesty of showing it. */
+        this.showWorking('working');
         break;
       case 'text-open':
         this.closeToolGroup();
@@ -213,6 +222,8 @@ export class StreamRenderer {
         this.setThinking(event.text);
         break;
       case 'tool-call':
+        // The running tool row's pulsing dot carries the busy signal now;
+        // two pulses on screen would say "twice as busy" and mean nothing.
         this.hideWorking();
         this.upsertTool(event.toolUseId, event.name, event.target).status = 'running';
         this.paintTool(event.toolUseId);
@@ -240,6 +251,14 @@ export class StreamRenderer {
         row.rightEl.setText(shortDuration(Date.now() - row.startedAt));
         if (!event.ok && event.detail) setTooltip(row.el, event.detail);
         this.paintTool(event.toolUseId);
+        /* The OTHER quiet stretch: between a tool's result and the model's
+           next move the pane used to hold still - no dot, no text, nothing.
+           The model is reading that result right now, so say so. Only when
+           nothing else is still pulsing: while a sibling tool runs, its dot
+           is the signal. */
+        if (![...this.tools.values()].some((r) => r.status === 'running')) {
+          this.showWorking('working');
+        }
         break;
       }
       case 'compact-boundary':
@@ -363,6 +382,9 @@ export class StreamRenderer {
     }
     const el = this.ensureBlock(blockId, 'aic-assistant');
     el.setText(next);
+    // Visible streaming text is its own liveness signal; the indicator would
+    // just sit under it repeating what the caret already says.
+    this.hideWorking();
   }
 
   /* THE ESCAPE HATCH, and it is the reason holding is safe.

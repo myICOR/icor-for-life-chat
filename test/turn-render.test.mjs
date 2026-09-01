@@ -358,3 +358,27 @@ test('a replayed log with no ending still renders once settled', async () => {
     await chrome.close();
   }
 });
+
+
+/* ------------------------------------------------------- the busy ladder */
+
+test('the turn is never silently busy: every stage names itself', async () => {
+  const chrome = await Chrome.launch();
+  try {
+    await chrome.open(pathToFileURL(resolve(here, 'dom/turn-fixture.html')).href);
+    const c = await waitForCensus(chrome);
+    /* Fifteen seconds of nothing between send and the model's first signal
+       read as a stalled session. The SDK already brackets the turn - user-turn
+       to turn-end - so busy needs no new provider surface, only showing. */
+    assert.equal(c.busy.afterSend, 'working', 'the send-to-first-signal gap is silent again');
+    assert.equal(c.busy.duringTool, '', 'two pulses at once: the running tool row already says busy');
+    assert.equal(c.busy.afterResult, 'working', 'the result-to-next-move gap is silent again');
+    assert.equal(c.busy.whileThinking, 'thinking');
+    assert.equal(c.busy.whileHeld, 'writing');
+    assert.equal(c.busy.afterEnd, '', 'the indicator outlived its turn');
+    assert.equal(c.busy.plainStreamShows, '',
+      'the indicator sat under visibly streaming text, repeating what the caret says');
+  } finally {
+    await chrome.close();
+  }
+});

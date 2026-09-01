@@ -460,9 +460,38 @@ ${HELPERS}
 
       long.click();
       out.toolReCollapsed = long.getAttribute('aria-expanded');
+
+      /* THE RAIL. A running long row, opened: its status dot must stretch into
+         a left rail that brackets the block, and a collapsed running row's dot
+         must stay a 6px circle. Driven through the shipped renderer: t7 is
+         RUNNING (no result), so its gutter still holds the marker dot. */
+      window.aicStream.apply(window.aicEvent({
+        kind: 'tool-call', toolUseId: 't7', name: 'Bash',
+        target: 'cd /Users/tom/My-Life-Folder/06-AI-Team/Guidelines && python3 check-every-guideline-for-stale-notes.py --verbose --since 2026-08-01 --report wide --and-a-tail-long-enough-to-wrap-in-any-pane',
+        input: {},
+      }));
+      window.aicStream.remeasureTools();
+      const rows = Array.from(document.querySelectorAll('.aic-tool'));
+      const runningLong = rows[rows.length - 1];
+      runningLong.click();
+      const railDot = runningLong.querySelector('.aic-tool-gutter .aic-dot');
+      const shortRunning = rows.find((r) => r.querySelector('.aic-tool-name')?.textContent === 'Read' && r.querySelector('.aic-dot'));
+      const roundDot = shortRunning?.querySelector('.aic-tool-gutter .aic-dot') ?? null;
+      const geo = (el) => {
+        if (!el) return null;
+        const cs = getComputedStyle(el);
+        const box = el.getBoundingClientRect();
+        return { width: cs.width, radius: cs.borderRadius, tall: box.height > box.width * 3 };
+      };
+      out.toolRail = {
+        expanded: runningLong.classList.contains('is-expanded'),
+        rail: geo(railDot),
+        round: geo(roundDot),
+      };
     } else {
       out.toolExpanded = null;
       out.toolReCollapsed = null;
+      out.toolRail = null;
     }
   }
 
@@ -2013,6 +2042,24 @@ test('ASKED and ANSWER are banners, and ANSWER carries the hue', () => {
        neutral, so the text keeps every point of its contrast. */
     assert.equal(s.base.el.bandAnswer.bg, s.base.el.bandAsked.bg,
       `${room}: the ANSWER banner tinted its own ground, which is where contrast goes to die`);
+  });
+});
+
+test('an opened tool row turns its dot into a rail that brackets the block', () => {
+  forEachRoom((s, room) => {
+    const t = s.base.toolRail;
+    assert.ok(t && t.expanded, `${room}: the running long row did not open, so nothing here was measured`);
+    /* A 6px dot centred beside a twelve-line command floats mid-air, attached
+       to nothing. Stretched to a rail it brackets the content, the way the
+       decision blocks' rail already does. Same element, same tone, one
+       carrier changing shape. */
+    assert.equal(t.rail?.width, '2px', `${room}: the expanded row's dot is not a rail`);
+    assert.ok(t.rail?.tall, `${room}: the rail does not span the block (height <= 3x width)`);
+    assert.equal(t.rail?.radius, '1px', `${room}: the rail kept the circle's rounding`);
+    // And the collapsed running row keeps its circle - the reshape is the
+    // OPEN state's, never the status's.
+    assert.equal(t.round?.width, '6px', `${room}: the collapsed dot lost its size`);
+    assert.equal(t.round?.radius, '50%', `${room}: the collapsed dot is not a circle`);
   });
 });
 

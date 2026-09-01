@@ -232,6 +232,60 @@ async function mount(): Promise<void> {
     shortRole: shortBody?.getAttribute('role') ?? '',
   };
 
+  /* THE BUSY LADDER, walked step by step. The defect: between send and the
+     model's first signal - and again between a tool's result and the model's
+     next move - the pane held perfectly still, and fifteen still seconds read
+     as a stalled session. The label at each rung is read straight off the DOM
+     after the exact event that should set it. */
+  const busyHost = document.body.createDiv({ cls: 'aic-root aic-busy-probe' });
+  const busyCol = busyHost.createDiv({ cls: 'aic-column' });
+  const busyStream = new StreamRenderer({} as App, new Component() as never, busyCol, '', {
+    onApproval: () => {}, structured: () => true,
+    renderHost: {
+      home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
+      openUrl: () => {}, copy: () => {}, decisionState: () => null,
+    },
+    onDecisions: () => {},
+  });
+  const busyLabel = (): string =>
+    (busyCol.querySelector('.aic-thinking-label')?.textContent ?? '').trim();
+  busyStream.apply({ kind: 'user-turn', text: 'go', contextNote: null, contextPath: null, images: [], stream: null });
+  const afterSend = busyLabel();
+  busyStream.apply({ kind: 'tool-call', toolUseId: 'bt1', name: 'Bash', target: 'ls', input: {}, stream: null });
+  const duringTool = busyLabel();
+  busyStream.apply({ kind: 'tool-result', toolUseId: 'bt1', ok: true, detail: '', stream: null });
+  const afterResult = busyLabel();
+  busyStream.apply({ kind: 'thinking-open', blockId: 'bth', stream: null });
+  const whileThinking = busyLabel();
+  busyStream.apply({ kind: 'text-open', blockId: 'btx', stream: null });
+  busyStream.apply({ kind: 'text-delta', blockId: 'btx', text: 'LARRY · x · COMPLETE', stream: null });
+  const whileHeld = busyLabel();
+  busyStream.apply({
+    kind: 'turn-end', stream: null, durationMs: 1, isError: false, text: '',
+    usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, totalTokens: 2, costUsd: 0 },
+    contextWindow: null,
+  });
+  const afterEnd = busyLabel();
+  /* And the one place the indicator must NOT be: under visibly streaming
+     text, where the caret is already the signal. */
+  const plainHost = document.body.createDiv({ cls: 'aic-root' });
+  const plainCol = plainHost.createDiv({ cls: 'aic-column' });
+  const plainStream = new StreamRenderer({} as App, new Component() as never, plainCol, '', {
+    onApproval: () => {}, structured: () => false,
+    renderHost: {
+      home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
+      openUrl: () => {}, copy: () => {}, decisionState: () => null,
+    },
+    onDecisions: () => {},
+  });
+  plainStream.apply({ kind: 'user-turn', text: 'go', contextNote: null, contextPath: null, images: [], stream: null });
+  plainStream.apply({ kind: 'text-open', blockId: 'p1', stream: null });
+  plainStream.apply({ kind: 'text-delta', blockId: 'p1', text: 'visible words', stream: null });
+  const busy = {
+    afterSend, duringTool, afterResult, whileThinking, whileHeld, afterEnd,
+    plainStreamShows: (plainCol.querySelector('.aic-thinking-label')?.textContent ?? '').trim(),
+  };
+
   /* THE SUBAGENT REPLAY SHAPE. A stored log ends with nothing: the lifecycle
      close is a bus signal, not an event in the log. Under held-back structured
      replies that meant every delta waited forever for a final that never comes,
@@ -286,6 +340,7 @@ async function mount(): Promise<void> {
     redacted,
     decisions,
     subagentReplay,
+    busy,
   };
 }
 

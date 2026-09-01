@@ -639,6 +639,25 @@
    and only the middle cell grows, so the timing - often the reason the row was
    opened - stays where the eye left it. */
 .aic-tool.is-expanded { align-items: start; }
+/* THE DOT BECOMES A RAIL WHEN THE ROW OPENS (Tom, 2026-09-01). A 6px dot
+   centered beside a twelve-line command floats in the middle of the block,
+   attached to nothing - the screenshot that reported this shows it orphaned
+   mid-air beside a Python heredoc. Stretched into a 2px rail it does what the
+   decision blocks' rail already does: it BRACKETS the content it belongs to,
+   from first line to last. Same element, same tone token, same pulse while
+   running - the status has one carrier that changes shape, not a second
+   carrier. The failure glyph is exempt: an × is a verdict mark, and a verdict
+   stretched into a line stops being readable as one. */
+.aic-tool.is-expanded > .aic-tool-gutter { align-items: stretch; padding: 3px 0; }
+.aic-tool.is-expanded > .aic-tool-gutter .aic-dot {
+  width: 2px;
+  height: auto;
+  align-self: stretch;
+  border-radius: 1px;
+  /* Off the row's left edge, where a rail reads as a bracket; the dot's
+     centring inside the 16px gutter column would leave it floating at 7px. */
+  margin-left: 2px;
+}
 .aic-tool.is-expanded .aic-tool-main { align-items: baseline; flex-wrap: wrap; }
 .aic-tool-right {
   font-family: var(--aic-mono);
