@@ -1,8 +1,8 @@
 {
   "name": "icor-for-life-chat",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
-  "description": "ICOR for Life AI Chat - the ICOR AI team inside your Obsidian vault.",
+  "description": "ICOR for Life - AI Chat - the ICOR AI team inside your Obsidian vault.",
   "license": "SEE LICENSE IN LICENSE",
   "type": "module",
   "scripts": {

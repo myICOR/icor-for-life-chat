@@ -1,6 +1,6 @@
 # Security Policy
 
-ICOR for Life AI Chat runs an AI agent inside your Obsidian vault. It uses the Claude Agent
+ICOR for Life - AI Chat runs an AI agent inside your Obsidian vault. It uses the Claude Agent
 SDK, it can execute tool calls against your machine, it can run under permission
 modes up to and including one that bypasses per-call approval, and it writes
 session transcripts back into your vault as notes.

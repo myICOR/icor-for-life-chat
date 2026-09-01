@@ -1,4 +1,4 @@
-/* ICOR for Life AI Chat - the ICOR AI team inside the vault.
+/* ICOR for Life - AI Chat - the ICOR AI team inside the vault.
  *
  * The plugin is a window, not a second brain: it hosts a Claude Code session
  * whose working directory is the vault, so the vault's own CLAUDE.md, AGENTS.md
