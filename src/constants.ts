@@ -1,6 +1,6 @@
 /* Names that cross module boundaries. Nothing here computes. */
 
-export const PLUGIN_ID = 'icor-for-life-chat';
+export const PLUGIN_ID = 'icor-for-life-ai-chat';
 
 /**
  * The declaration every root this plugin owns carries. The ICOR for Life - INKLINE
@@ -15,7 +15,7 @@ export const PLUGIN_ID = 'icor-for-life-chat';
  * attribute absent.
  */
 export const INK_PLUGIN_ATTR = 'data-ink-plugin';
-export const INK_PLUGIN_NAME = 'icor-for-life-chat';
+export const INK_PLUGIN_NAME = 'icor-for-life-ai-chat';
 
 /* THE RENAME STOPPED HERE, and stopping was the decision.
  *

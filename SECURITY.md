@@ -20,7 +20,7 @@ Two channels, in order of preference:
    [Security tab](https://github.com/myICOR/icor-for-life-chat/security/advisories/new)
    of this repository and open a draft advisory. This keeps the report private
    between you and the maintainer until a fix ships.
-2. **Email** `team@myicor.com` with `SECURITY` and `icor-for-life-chat` in the subject line.
+2. **Email** `team@myicor.com` with `SECURITY` and `icor-for-life-ai-chat` in the subject line.
    This is a monitored mailbox. If you want to encrypt the report, say so in a
    first message and we will arrange a key.
 
