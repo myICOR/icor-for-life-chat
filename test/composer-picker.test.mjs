@@ -244,3 +244,27 @@ test('accepting a note at the end leaves a trailing space to keep typing in', ()
   assert.equal(out.value, 'read @AGENTS.md ');
   assert.equal(out.caret, out.value.length);
 });
+
+/* ============================================================ [[ links ==
+ *
+ * The third source. Its rules live in test/context.test.mjs; what is asserted
+ * here is that the three sources cannot both claim one caret, which is the
+ * property that keeps one picker from opening two lists. */
+
+import { wikilinkQuery } from './build/pure.mjs';
+
+test('a caret inside [[ is a link and never a mention, even with an @ in it', () => {
+  assert.equal(wikilinkQuery('see [[tom@work', 14), 'tom@work');
+  assert.equal(mentionQuery('see [[tom@work', 14), null, 'the mention rule fired inside a link');
+});
+
+test('a caret inside @ is a mention and never a link', () => {
+  assert.equal(mentionQuery('see @paco', 9), 'paco');
+  assert.equal(wikilinkQuery('see @paco', 9), null);
+});
+
+test('a slash at column zero outranks both, because its rule is the strictest', () => {
+  assert.equal(slashQuery('/ex', 3), 'ex');
+  assert.equal(wikilinkQuery('/ex', 3), null);
+  assert.equal(mentionQuery('/ex', 3), null);
+});

@@ -34,6 +34,16 @@ export interface MentionFile {
   path: string;
   /** The name a user thinks in, and what the rows are ranked on. */
   basename: string;
+  /**
+   * Obsidian's own shortest unambiguous link text for the note, supplied by
+   * the view from `metadataCache.fileToLinktext`. What a `[[` pick types, so
+   * the link the composer writes is the link Obsidian itself would write.
+   * Optional so a caller that only ever offers `@` mentions need not supply
+   * it; a missing value falls back to the basename.
+   */
+  linktext?: string;
+  /** The folder the note lives in, empty at the root. For the picker's detail. */
+  folder?: string;
 }
 
 /**
@@ -112,4 +122,60 @@ export function applyMention(
      same check for the same reason. */
   const ref = tail.startsWith(' ') ? mentionRef(path) : `${mentionRef(path)} `;
   return { value: `${value.slice(0, at)}${ref}${tail}`, caret: at + ref.length };
+}
+
+/* ============================================================ [[ links ==
+ *
+ * The second way to name a note, and the one an Obsidian user already has in
+ * their fingers. Where `@` types a CLI reference, `[[` types a WIKILINK: the
+ * message keeps the link exactly as Obsidian would write it, and the note it
+ * points at travels to the model as context - resolved by the view at send
+ * time, never by the composer. The composer only has to know when the caret is
+ * inside an unfinished link and what to type when a note is picked. */
+
+/**
+ * The text after the last unclosed `[[` before the caret, or null.
+ *
+ * Unlike a mention, a link's target may contain spaces - most note names in a
+ * vault do - so a space does not end the query. What ends it is `]]` (the
+ * link is finished) or a newline (the link was abandoned on its line).
+ */
+export function wikilinkQuery(value: string, caret: number): string | null {
+  const head = value.slice(0, Math.max(0, caret));
+  const open = head.lastIndexOf('[[');
+  if (open === -1) return null;
+  const word = head.slice(open + 2);
+  if (word.includes(']]') || word.includes('\n')) return null;
+  return word;
+}
+
+/** The composer's value and caret after accepting a note as a wikilink. */
+export function applyWikilink(
+  value: string,
+  caret: number,
+  linktext: string,
+): { value: string; caret: number } {
+  const head = value.slice(0, Math.max(0, caret));
+  const open = head.lastIndexOf('[[');
+  if (open === -1) return { value, caret };
+  const tail = value.slice(Math.max(0, caret));
+  const link = `[[${linktext}]]`;
+  const ref = tail.startsWith(' ') ? link : `${link} `;
+  return { value: `${value.slice(0, open)}${ref}${tail}`, caret: open + ref.length };
+}
+
+/**
+ * Every link target in a message, in order, duplicates kept for the caller
+ * to dedupe against whatever else it holds. `[[target|alias]]` yields the
+ * target, `[[target#heading]]` yields the target, an empty `[[]]` yields
+ * nothing. Embeds (`![[...]]`) are links too and are returned the same way.
+ */
+export function wikilinksIn(text: string): string[] {
+  const out: string[] = [];
+  for (const m of text.matchAll(/\[\[([^\]]*?)\]\]/g)) {
+    const inner = m[1] ?? '';
+    const target = inner.split('|')[0]?.split('#')[0]?.trim() ?? '';
+    if (target) out.push(target);
+  }
+  return out;
 }

@@ -10,7 +10,7 @@
 
 import { Component, MarkdownRenderer, setIcon, setTooltip } from 'obsidian';
 import type { App } from 'obsidian';
-import type { ChatEvent, ToolStatus, TurnImage } from '../../model/types';
+import type { ChatEvent, ToolStatus, TurnContext, TurnImage } from '../../model/types';
 import { dot, kicker, shortAge, shortDuration } from '../dom';
 import type { ApprovalChoice } from '../../sdk/permissions';
 import { parseStructured, decisionsOf } from '../../structured/parser';
@@ -20,6 +20,15 @@ import type { DecisionBlock } from '../../structured/model';
 import { Lightbox } from './Lightbox';
 
 const COLLAPSE_AFTER = 3;
+
+/** One glyph per context kind, the same set the composer tray uses. */
+const CONTEXT_ICON: Record<TurnContext['kind'], string> = {
+  active: 'eye',
+  note: 'file-text',
+  folder: 'folder',
+  tag: 'tag',
+  property: 'sliders-horizontal',
+};
 
 interface ToolRow {
   el: HTMLElement;
@@ -64,6 +73,8 @@ interface ToolGroup {
 export interface StreamCallbacks {
   onApproval: (toolUseId: string, choice: ApprovalChoice) => void;
   onOpenSubagent?: (agentId: string) => void;
+  /** A group chip on a sent turn was clicked: show the notes it stood for. */
+  onOpenContextGroup?: (label: string) => void;
   /** True while the opt-in structured-replies mode is on. */
   structured: () => boolean;
   renderHost: RenderHost;
@@ -179,7 +190,7 @@ export class StreamRenderer {
   apply(event: ChatEvent): void {
     switch (event.kind) {
       case 'user-turn':
-        this.appendUserWell(event.text, event.contextNote, event.images, event.contextPath);
+        this.appendUserWell(event.text, event.contextNote, event.images, event.contextPath, event.contexts ?? []);
         /* BUSY FROM THE FIRST MOMENT (Tom, 2026-09-01). The indicator used to
            appear only when the model's output began - thinking tokens or held
            text - which left the FIRST stretch of every turn, the seconds
@@ -300,11 +311,40 @@ export class StreamRenderer {
     contextNote: string | null,
     images: readonly TurnImage[] = [],
     contextPath: string | null = null,
+    contexts: readonly TurnContext[] = [],
   ): void {
     this.clearEmptyState();
     this.closeToolGroup();
     const well = this.column.createDiv({ cls: 'aic-user' });
     well.dataset.userText = text;
+    /* THE CONTEXT CHIPS, above the words, because they are what the words are
+       ABOUT: a `[[note]]` the user named, a folder or a tag they added. A
+       single note opens; a group opens the list it stood for. The old open
+       note pill below is kept for transcripts that carry only that, and it is
+       skipped when the chips already say it. */
+    if (contexts.length > 0) {
+      const strip = well.createDiv({ cls: 'aic-user-chips' });
+      for (const ctx of contexts) {
+        const openable = ctx.path !== null || ctx.count > 1 || ctx.kind !== 'note';
+        const chip = openable
+          ? strip.createEl('button', { cls: 'aic-chip is-link', type: 'button' })
+          : strip.createSpan({ cls: 'aic-chip' });
+        if (ctx.count > 1) chip.addClass('is-group');
+        const glyph = chip.createSpan({ cls: 'aic-chip-icon' });
+        setIcon(glyph, CONTEXT_ICON[ctx.kind]);
+        chip.createSpan({ text: ctx.label });
+        if (ctx.count > 1) chip.createSpan({ cls: 'aic-chip-count', text: `· ${ctx.count}` });
+        if (!openable) continue;
+        const what = ctx.path !== null ? `Open ${ctx.label}` : `Show the ${ctx.count} notes in ${ctx.label}`;
+        chip.setAttr('aria-label', what);
+        setTooltip(chip, what);
+        chip.addEventListener('click', () => {
+          if (ctx.path !== null) this.callbacks.renderHost.openFile(ctx.path);
+          else this.callbacks.onOpenContextGroup?.(ctx.label);
+        });
+      }
+      if (contexts.some((c) => c.kind === 'active')) contextNote = null;
+    }
     if (images.length > 0) {
       const strip = well.createDiv({ cls: 'aic-user-images' });
       for (const image of images) {

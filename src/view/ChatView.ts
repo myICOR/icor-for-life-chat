@@ -18,13 +18,21 @@ import { renderChipTray } from './SubagentView';
 import { ArchiveWriter } from '../archive/writer';
 import { archiveRoot, factVisibility } from '../model/settings';
 import { SDK_VERSION } from '../constants';
-import { readContext, selectionRangeLabel, withContext } from './context';
+import {
+  listFolders, listProperties, listTags, readContext, resolveFolder, resolveProperty, resolveTag,
+  resolveWikilink, selectionRangeLabel, withContext,
+} from './context';
 import type { NoteContext } from './context';
+import { baseOf, contextPickId, folderOf, previewText } from '../model/context';
+import type { ContextPick, ContextRef } from '../model/context';
+import { wikilinksIn } from './composer/mention';
+import { ContextModal, contextIcon } from './ContextModal';
+import type { TrayChip } from './composer/Composer';
 import { ChatSession } from '../sdk/session';
 import { Normalizer, userTextOf } from '../sdk/normalize';
 import { buildChildEnv, resolveCliPath, splitExtraPath } from '../sdk/cli';
 import type { PathEnvironment } from '../sdk/cli';
-import type { ChatEvent, EffortName, PermissionModeName, TurnImage } from '../model/types';
+import type { ChatEvent, EffortName, PermissionModeName, TurnContext, TurnImage } from '../model/types';
 import { applyStatusBarClearance } from './statusbar';
 import type { Attachment } from './composer/Composer';
 import type IcorChatPlugin from '../main';
@@ -39,6 +47,13 @@ export class ChatView extends ItemView {
   private statusline: Statusline | null = null;
   private context: NoteContext | null = null;
   private contextPinned = true;
+  /* WHAT THE NEXT MESSAGE CARRIES besides the open note: notes and groups
+   * picked from the `+` menu. Per message, like the images - sent once and
+   * cleared. Notes named with `[[` in the text are added at send time, so
+   * typing a link and picking a note from the menu end in the same place. */
+  private refs: ContextRef[] = [];
+  /** The last sent turn's group refs, so a chip in the transcript can open its list. */
+  private readonly sentGroups = new Map<string, ContextRef>();
   private lastMarkdownView: MarkdownView | null = null;
   private resumeSessionId: string | null = null;
   private tick: number | null = null;
@@ -109,6 +124,8 @@ export class ChatView extends ItemView {
         onModelChange: (model) => void this.changeModel(model),
         onEffortChange: (effort) => this.changeEffort(effort),
         onNotice: (message) => new Notice(message),
+        readPreview: (path) => this.readPreview(path),
+        onAddContext: (pick) => this.addPick(pick),
       },
       badge: {
         navigate: (code, mention) => this.navigateToMention(code, mention),
@@ -129,6 +146,10 @@ export class ChatView extends ItemView {
         this.session?.answerApproval(toolUseId, choice);
       },
       structured: () => this.plugin.settings.structuredReplies,
+      onOpenContextGroup: (label) => {
+        const ref = this.sentGroups.get(label);
+        if (ref) new ContextModal(this.app, ref).open();
+      },
       renderHost: {
         home: this.plugin.homeDir,
         insertCode: (code) => this.composer?.insert(`${code} `),
@@ -167,6 +188,12 @@ export class ChatView extends ItemView {
     this.refreshContext();
     this.trackStatusBar();
     this.loadMentionFiles();
+    this.composer?.setContextSources({
+      notes: () => this.mentionFiles(),
+      folders: () => listFolders(this.app),
+      tags: () => listTags(this.app),
+      properties: () => listProperties(this.app),
+    });
     /* The vault changes under an open chat: a note created while the pane is
        up must be mentionable without reopening it. Rename and delete matter for
        the same reason, and a stale path in the list is a mention that resolves
@@ -240,6 +267,7 @@ export class ChatView extends ItemView {
     this.clearanceObserver?.disconnect();
     this.clearanceObserver = null;
     this.statusline?.dispose();
+    this.composer?.dispose();
     this.badge?.destroy();
     this.session?.dispose();
     this.session = null;
@@ -251,9 +279,127 @@ export class ChatView extends ItemView {
    * handed to the CLI to read, and offering a PNG would be offering a mention
    * that cannot be read back as text. */
   private loadMentionFiles(): void {
-    this.composer?.setMentionFiles(
-      this.app.vault.getMarkdownFiles().map((f) => ({ path: f.path, basename: f.basename })),
-    );
+    this.composer?.setMentionFiles(this.mentionFiles());
+  }
+
+  /* Each note with the link text Obsidian itself would write for it, so a
+     `[[` pick types the shortest unambiguous form and not a full path where a
+     name would do. Read from the cache; this runs on every vault change. */
+  private mentionFiles(): Array<{ path: string; basename: string; linktext: string; folder: string }> {
+    return this.app.vault.getMarkdownFiles().map((f) => ({
+      path: f.path,
+      basename: f.basename,
+      linktext: this.app.metadataCache.fileToLinktext(f, ''),
+      folder: folderOf(f.path),
+    }));
+  }
+
+  /** The opening of a note for the picker's glance. Cached read, frontmatter off. */
+  private async readPreview(path: string): Promise<string> {
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (!(file instanceof TFile)) return '';
+    return previewText(await this.app.vault.cachedRead(file));
+  }
+
+  /* ------------------------------------------------------ context refs */
+
+  /** A `+` menu pick, resolved into the notes it stands for. */
+  private addPick(pick: ContextPick): void {
+    if (pick.kind === 'active') {
+      const ctx = readContext(this.app, this.lastMarkdownView);
+      if (!ctx) {
+        new Notice('No note is open.');
+        return;
+      }
+      /* The open note is already the tray's first chip while it is pinned;
+         re-pinning it is the whole answer when it was dismissed. When it is
+         pinned, the pick is a no-op that says so rather than a second chip. */
+      if (this.contextPinned && this.plugin.settings.contextAwareness) {
+        new Notice(`${ctx.basename} is already in context.`);
+        return;
+      }
+      this.contextPinned = true;
+      this.refreshContext();
+      return;
+    }
+    const ref = this.resolvePick(pick);
+    if (!ref) return;
+    if (this.refs.some((r) => r.id === ref.id)) {
+      new Notice(`${ref.label} is already in context.`);
+      return;
+    }
+    if (ref.paths.length === 0) {
+      new Notice(`${ref.label} holds no notes.`);
+      return;
+    }
+    this.refs.push(ref);
+    this.refreshContext();
+  }
+
+  /** The ref for a pick, paths resolved NOW. Null only for a pick that resolves to nothing. */
+  private resolvePick(pick: ContextPick): ContextRef | null {
+    const id = contextPickId(pick);
+    switch (pick.kind) {
+      case 'active':
+        return null;
+      case 'note':
+        return { kind: 'note', id, label: baseOf(pick.path), detail: folderOf(pick.path), paths: [pick.path] };
+      case 'folder':
+        return { kind: 'folder', id, label: baseOf(pick.path), detail: pick.path, paths: resolveFolder(this.app, pick.path) };
+      case 'tag':
+        return { kind: 'tag', id, label: id, detail: '', paths: resolveTag(this.app, pick.tag) };
+      case 'property':
+        return { kind: 'property', id, label: id, detail: pick.key, paths: resolveProperty(this.app, pick.key, pick.value) };
+    }
+  }
+
+  /** A group re-resolved at send time: a note created since the pick is in. */
+  private refreshRef(ref: ContextRef): ContextRef {
+    switch (ref.kind) {
+      case 'folder':
+        return { ...ref, paths: resolveFolder(this.app, ref.id) };
+      case 'tag':
+        return { ...ref, paths: resolveTag(this.app, ref.id) };
+      case 'property': {
+        const colon = ref.id.indexOf(': ');
+        if (colon === -1) return ref;
+        return { ...ref, paths: resolveProperty(this.app, ref.id.slice(0, colon), ref.id.slice(colon + 2)) };
+      }
+      default:
+        return ref;
+    }
+  }
+
+  /** The notes a message names with `[[...]]`, as refs, deduped against the list. */
+  private linkedRefs(text: string): ContextRef[] {
+    const out: ContextRef[] = [];
+    const seen = new Set(this.refs.map((r) => r.id));
+    for (const target of wikilinksIn(text)) {
+      const file = resolveWikilink(this.app, target, '');
+      if (!file || seen.has(file.path)) continue;
+      seen.add(file.path);
+      out.push({ kind: 'note', id: file.path, label: file.basename, detail: folderOf(file.path), paths: [file.path] });
+    }
+    return out;
+  }
+
+  private removeRef(id: string): void {
+    this.refs = this.refs.filter((r) => r.id !== id);
+    this.refreshContext();
+  }
+
+  private chipFor(ref: ContextRef): TrayChip {
+    const group = ref.kind !== 'note';
+    return {
+      icon: contextIcon(ref.kind),
+      label: ref.label,
+      ...(group ? { count: ref.paths.length } : {}),
+      onOpen: () => {
+        if (group) new ContextModal(this.app, ref).open();
+        else void this.openPath(ref.id);
+      },
+      onDismiss: () => this.removeRef(ref.id),
+    };
   }
 
   /** Recent conversations for THIS vault only. Never machine-wide. */
@@ -347,15 +493,16 @@ export class ChatView extends ItemView {
   /* -------------------------------------------------------------- context */
 
   private refreshContext(): void {
+    const refChips = this.refs.map((ref) => this.chipFor(ref));
     if (!this.plugin.settings.contextAwareness || !this.contextPinned) {
-      this.composer?.renderTray([]);
+      this.composer?.renderTray(refChips);
       this.context = null;
       return;
     }
     const next = readContext(this.app, this.lastMarkdownView);
     this.context = next;
     if (!next) {
-      this.composer?.renderTray([]);
+      this.composer?.renderTray(refChips);
       return;
     }
     const range = selectionRangeLabel(next);
@@ -369,6 +516,7 @@ export class ChatView extends ItemView {
           this.refreshContext();
         },
       },
+      ...refChips,
     ]);
   }
 
@@ -537,16 +685,34 @@ export class ChatView extends ItemView {
       mediaType: a.mediaType,
       data: a.data,
     }));
+    /* THE MESSAGE'S CONTEXT, assembled once. Groups are re-resolved so the
+       count the chip shows is the count the model gets; links in the text
+       become note refs; the open note stays first because it always was. */
+    const refs = [...this.refs.map((r) => this.refreshRef(r)), ...this.linkedRefs(text)];
+    this.refs = [];
+    const contexts: TurnContext[] = [];
+    if (ctx) contexts.push({ kind: 'active', label: ctx.basename, count: 1, path: ctx.path });
+    for (const ref of refs) {
+      if (ref.kind !== 'note') this.sentGroups.set(ref.label, ref);
+      contexts.push({
+        kind: ref.kind,
+        label: ref.label,
+        count: ref.paths.length,
+        path: ref.kind === 'note' ? ref.id : null,
+      });
+    }
     this.store.apply({
       kind: 'user-turn',
       text,
       contextNote: ctx ? ctx.basename : null,
       contextPath: ctx ? ctx.path : null,
       images,
+      contexts,
       stream: null,
     });
     this.refreshDecisions();
-    session.send(withContext(text, ctx), images);
+    this.refreshContext();
+    session.send(withContext(text, ctx, refs), images);
     this.scrollToBottom();
   }
 
