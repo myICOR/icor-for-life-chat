@@ -26,6 +26,8 @@ export interface SubagentTranscript {
   sessionId: string | null;
   tokens: number;
   toolCalls: number;
+  /** Finished text blocks this agent produced. Half of its activity share. */
+  textBlocks: number;
 }
 
 type Listener = (event: ChatEvent | null, transcript: SubagentTranscript) => void;
@@ -52,6 +54,7 @@ export class SubagentBus {
       events: [],
       tokens: 0,
       toolCalls: 0,
+      textBlocks: 0,
     };
     this.transcripts.set(input.agentId, transcript);
     return transcript;
@@ -62,6 +65,7 @@ export class SubagentBus {
     if (!transcript) return;
     transcript.events.push(event);
     if (event.kind === 'tool-call') transcript.toolCalls += 1;
+    if (event.kind === 'text-final' && event.text.trim()) transcript.textBlocks += 1;
     if (event.kind === 'turn-end') transcript.tokens = event.usage.totalTokens;
     this.emit(agentId, event, transcript);
   }

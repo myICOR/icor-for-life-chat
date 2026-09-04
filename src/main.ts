@@ -11,8 +11,11 @@
 import { FileSystemAdapter, Menu, Notice, Plugin, TFile, setIcon } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 import { homedir } from 'node:os';
-import { INK_PLUGIN_ATTR, INK_PLUGIN_NAME, VIEW_TYPE_CHAT, VIEW_TYPE_SUBAGENT } from './constants';
+import { INK_PLUGIN_ATTR, INK_PLUGIN_NAME, VIEW_TYPE_CHAT, VIEW_TYPE_INSIGHTS, VIEW_TYPE_SUBAGENT } from './constants';
 import { SubagentView } from './view/SubagentView';
+import { InsightsView } from './view/InsightsView';
+import { detectTeam } from './team/detect';
+import type { TeamRoster } from './team/detect';
 import { SubagentBus } from './state/subagents';
 import { installRendererCompat } from './sdk/renderer-compat';
 import type { RenderHost } from './structured/render';
@@ -69,11 +72,18 @@ export default class IcorChatPlugin extends Plugin {
 
     this.registerView(VIEW_TYPE_CHAT, (leaf) => new ChatView(leaf, this));
     this.registerView(VIEW_TYPE_SUBAGENT, (leaf) => new SubagentView(leaf, this));
+    this.registerView(VIEW_TYPE_INSIGHTS, (leaf) => new InsightsView(leaf, this));
 
     this.addCommand({
       id: 'open-chat',
       name: 'New conversation with the AI team',
       callback: () => void this.openChat(),
+    });
+
+    this.addCommand({
+      id: 'open-insights',
+      name: 'Open AI team insights',
+      callback: () => void this.openInsights(),
     });
 
     /* Resuming from the archive. The conversation note carries every session id
@@ -218,6 +228,25 @@ export default class IcorChatPlugin extends Plugin {
       dom.setAttr(INK_PLUGIN_ATTR, INK_PLUGIN_NAME);
     }
     menu.showAtPosition(at);
+  }
+
+  /** The AI team as the vault has it right now, or null in a bare vault. */
+  teamRoster(): TeamRoster | null {
+    return detectTeam(this.app);
+  }
+
+  /* THE INSIGHTS TAB: one per vault, in the main area. It is a page to read,
+   * so it does not ride the right sidebar the chat lives in, and a second
+   * click reveals the one that is open rather than minting another. */
+  async openInsights(): Promise<void> {
+    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_INSIGHTS)[0];
+    if (existing) {
+      await this.app.workspace.revealLeaf(existing);
+      return;
+    }
+    const leaf = this.app.workspace.getLeaf('tab');
+    await leaf.setViewState({ type: VIEW_TYPE_INSIGHTS, active: true });
+    await this.app.workspace.revealLeaf(leaf);
   }
 
   /** Open a subagent's transcript in its own tab. */

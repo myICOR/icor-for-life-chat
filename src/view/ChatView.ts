@@ -38,6 +38,13 @@ import type { FollowUpState } from '../model/followups';
 import { applyStatusBarClearance } from './statusbar';
 import type { Attachment } from './composer/Composer';
 import type IcorChatPlugin from '../main';
+import { avatarUrl, detectTeam, isTeamPath } from '../team/detect';
+import type { TeamRoster } from '../team/detect';
+import { agentShares } from '../team/usage';
+import type { AgentShare } from '../team/usage';
+import { renderTeamStrip } from './TeamStrip';
+import { setupSummary, setupTeam } from '../team/setup';
+import type { EmptyTeamBlock } from './stream/StreamRenderer';
 
 export class ChatView extends ItemView {
   private readonly store = new ChatStore();
@@ -91,6 +98,16 @@ export class ChatView extends ItemView {
   private followUps: FollowUpState = NO_FOLLOW_UPS;
   /** Repaints the status-bar clearance when the window or the bar changes size. */
   private clearanceObserver: ResizeObserver | null = null;
+  /* THE TEAM, as this vault has it. Null in a bare vault. Re-detected when
+   * anything under `06 AI Team/` changes, so a one-click setup or a hire shows
+   * up in the strip and the empty state without reopening the tab. */
+  private roster: TeamRoster | null = null;
+  private teamStripEl: HTMLElement | null = null;
+  /** The main thread's own activity, counted from this tab's event stream. */
+  private mainToolCalls = 0;
+  private mainTextBlocks = 0;
+  /** True once a turn has ended: the strip has nothing honest to say before. */
+  private turnEnded = false;
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: IcorChatPlugin) {
     super(leaf);
@@ -142,6 +159,7 @@ export class ChatView extends ItemView {
     this.scroller = pane.scroller;
     this.column = pane.column;
     this.chipTray = pane.chipTray;
+    this.teamStripEl = pane.teamStrip;
     this.composer = pane.composer;
     this.badge = pane.badge;
     this.statusline = pane.statusline;
@@ -166,8 +184,10 @@ export class ChatView extends ItemView {
       },
       onDecisions: (decisions, blockId) => this.recordDecisions(decisions, blockId),
     });
-    this.stream.renderEmptyState();
+    this.roster = detectTeam(this.app);
+    this.stream.renderEmptyState(this.emptyTeamBlock());
     void this.fillResumeRows();
+    this.addAction('bar-chart-3', 'Open AI team insights', () => void this.plugin.openInsights());
     /* The trigger shows the ACTUAL model from pane open. With no plugin
        override, the name comes from the CLI's own settings cascade - the same
        files the session will read - so the face and the behaviour cannot
@@ -206,7 +226,80 @@ export class ChatView extends ItemView {
     this.registerEvent(this.app.vault.on('create', () => this.loadMentionFiles()));
     this.registerEvent(this.app.vault.on('delete', () => this.loadMentionFiles()));
     this.registerEvent(this.app.vault.on('rename', () => this.loadMentionFiles()));
+    this.registerEvent(this.app.vault.on('create', (f) => this.onTeamChange(f.path)));
+    this.registerEvent(this.app.vault.on('delete', (f) => this.onTeamChange(f.path)));
+    this.registerEvent(this.app.vault.on('rename', (f, old) => { this.onTeamChange(f.path); this.onTeamChange(old); }));
     this.focusComposer();
+  }
+
+  /* ------------------------------------------------------------- the team */
+
+  private onTeamChange(path: string): void {
+    if (!isTeamPath(path)) return;
+    this.roster = detectTeam(this.app);
+    this.stream?.renderEmptyTeam(this.emptyTeamBlock());
+    this.paintTeamStrip();
+  }
+
+  private emptyTeamBlock(): EmptyTeamBlock {
+    return {
+      detected: this.roster
+        ? { count: this.roster.agents.length, onInsights: () => void this.plugin.openInsights() }
+        : null,
+      onSetup: () => this.runSetup(),
+    };
+  }
+
+  private async runSetup(): Promise<void> {
+    try {
+      const report = await setupTeam(this.app);
+      new Notice(setupSummary(report));
+    } catch (error) {
+      new Notice(`Could not set up the team: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    // Whatever happened, the block is redrawn from the vault as it is now.
+    this.roster = detectTeam(this.app);
+    this.stream?.renderEmptyTeam(this.emptyTeamBlock());
+  }
+
+  /** The strip, from what this tab has measured. Absent until a turn has ended. */
+  private paintTeamStrip(): void {
+    const el = this.teamStripEl;
+    if (!el) return;
+    const roster = this.roster;
+    if (!roster || !this.turnEnded || !this.plugin.settings.factTeamStrip) {
+      renderTeamStrip(el, [], null, () => '', () => undefined);
+      return;
+    }
+    const now = Date.now();
+    const shares = agentShares({
+      main: { toolCalls: this.mainToolCalls, textBlocks: this.mainTextBlocks },
+      subagents: this.plugin.subagents.all()
+        .filter((t) => t.sessionId === null || t.sessionId === this.store.state.sessionId)
+        .map((t) => ({
+          agentType: t.agentType,
+          toolCalls: t.toolCalls,
+          textBlocks: t.textBlocks,
+          durationMs: (t.endedAt ?? now) - t.startedAt,
+          status: t.status,
+        })),
+      roster: roster.agents.map((a) => ({ name: a.name, slug: a.slug })),
+    });
+    renderTeamStrip(el, shares, roster.agents, (path) => avatarUrl(this.app, path), (share) => this.openParticipant(share));
+  }
+
+  /** A roster agent opens its bio; anyone else opens their newest transcript. */
+  private openParticipant(share: AgentShare): void {
+    const agent = this.roster?.agents.find((a) => a.slug === share.slug);
+    if (agent?.bioPath) {
+      void this.openPath(agent.bioPath);
+      return;
+    }
+    const newest = this.plugin.subagents.all()
+      .filter((t) => t.agentType.toLowerCase() === share.slug)
+      .sort((a, b) => b.startedAt - a.startedAt)[0];
+    if (newest) void this.plugin.openSubagent(newest.agentId);
+    else if (agent) void this.openPath(agent.folder);
   }
 
   /* OBSIDIAN'S STATUS BAR IS MEASURED, never assumed away.
@@ -778,6 +871,10 @@ export class ChatView extends ItemView {
   private onEvent(event: ChatEvent): void {
     this.events.push(event);
     this.routeSubagent(event);
+    if (event.stream === null && event.kind === 'tool-call') this.mainToolCalls += 1;
+    if (event.stream === null && event.kind === 'text-final' && event.text.trim()) this.mainTextBlocks += 1;
+    if (event.kind === 'turn-end') this.turnEnded = true;
+    if (event.kind === 'turn-end' || event.kind === 'subagent-end' || event.kind === 'aborted') this.paintTeamStrip();
     // The assistant's own words enter the transcript BEFORE the block renders,
     // so the decision recorded from that block lands on the same index.
     if (event.kind === 'text-final' && event.stream === null && event.text.trim()) {
