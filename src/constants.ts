@@ -37,6 +37,8 @@ export const INK_PLUGIN_NAME = 'icor-for-life-chat';
  * find-and-replace. */
 export const VIEW_TYPE_CHAT = 'icor-chat-view';
 export const VIEW_TYPE_SUBAGENT = 'icor-chat-subagent-view';
+/** The AI team insights tab. New in 0.6.0, so it carries the current prefix. */
+export const VIEW_TYPE_INSIGHTS = 'icor-chat-insights-view';
 
 /** The SDK version this build is compiled and tested against. Pre-1.0: pinned exactly. */
 export const SDK_VERSION = '0.3.226';

@@ -65,6 +65,13 @@ export interface Pane {
   dock: HTMLElement;
   /** Rung 2. Empty until a subagent opens; `renderChipTray` owns `is-empty`. */
   chipTray: HTMLElement;
+  /**
+   * The team strip, between rung 2 and rung 3. Zero height until a turn has
+   * ended in a vault with a team; `renderTeamStrip` owns `is-empty`. Not a
+   * numbered rung: the census is a property of the four it names, and this
+   * is a bare sibling between two of them.
+   */
+  teamStrip: HTMLElement;
   /** Rung 3. */
   composer: Composer;
   badge: DecisionBadge;
@@ -83,6 +90,7 @@ export function buildPane(root: HTMLElement, opts: PaneOptions): Pane {
 
   const dock = root.createDiv({ cls: 'aic-dock' });
   const chipTray = dock.createDiv({ cls: 'aic-chips is-empty' });
+  const teamStrip = dock.createDiv({ cls: 'aic-team is-empty' });
   const composer = new Composer(dock, opts.composer, opts.callbacks);
   const badge = new DecisionBadge(composer.badgeContainer, dock, opts.badge);
 
@@ -105,5 +113,5 @@ export function buildPane(root: HTMLElement, opts: PaneOptions): Pane {
   const facts = composer.factsEl;
   const statusline = opts.facts ? new Statusline(facts, opts.facts) : new Statusline(facts);
 
-  return { root, scroller, column, dock, chipTray, composer, badge, statusline, facts };
+  return { root, scroller, column, dock, chipTray, teamStrip, composer, badge, statusline, facts };
 }

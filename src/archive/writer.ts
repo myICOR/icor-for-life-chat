@@ -20,6 +20,7 @@ import {
 } from './naming';
 import type { ArchiveManifest } from './naming';
 import { withoutImageBytes } from './redact';
+import { agentRecords } from './agents';
 
 export interface ArchiveInput {
   title: string;
@@ -194,6 +195,7 @@ export class ArchiveWriter {
         subagents: input.subagents.length,
         tokens: input.tokens,
       },
+      ...agentRecords(input.events, input.subagents),
     };
     await adapter.write(`${folder}/${MANIFEST_FILE}`, JSON.stringify(manifest, null, 2));
     return folder;
