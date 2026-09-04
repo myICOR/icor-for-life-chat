@@ -45,3 +45,4 @@ export * from '../src/provider/codex/modes';
 export { modelChoicesOf } from '../src/provider/codex/session';
 export { defaultModelFromConfig, signedInFrom } from '../src/provider/codex/index';
 export * from '../src/archive/handover';
+export * from '../src/view/handoff';

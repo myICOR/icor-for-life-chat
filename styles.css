@@ -3248,4 +3248,9 @@
 
 /* ==== REGION T1: terminal hand-off ==== */
 
+/* The header action lives in Obsidian's own view header, outside .aic-root,
+   so it reads the host's faint ink rather than a plugin token. Off means
+   "not available here", stated on the label; the glyph only steps back. */
+.view-action.aic-handoff-off { color: var(--text-faint); cursor: not-allowed; }
+
 /* ==== END REGION T1 ==== */

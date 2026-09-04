@@ -31,6 +31,10 @@ this repo and it gets fixed fast.
 - **A conversation per tab.** Open as many as you want; each one is its own
   session and its own process. The robot in the ribbon starts one, and offers
   your recent conversations to pick up instead.
+- **Continue in the terminal.** The terminal icon in the pane header hands a
+  Claude Code conversation to ICOR for Life - Terminal in the same pane, and
+  the terminal's `Back to chat` brings it back with its history. One view
+  holds a session at a time, so the two never write the same session file.
 - **Context awareness.** The composer shows a chip for the note you have open
   and the range you have selected, so what the team receives is what you can
   see. Dismiss the chip and nothing is attached.
