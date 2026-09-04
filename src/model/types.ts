@@ -34,6 +34,15 @@ export interface TurnImage {
   data: string;
 }
 
+/** One context chip on a sent turn. The label is what the chip says. */
+export interface TurnContext {
+  kind: 'active' | 'note' | 'folder' | 'tag' | 'property';
+  label: string;
+  count: number;
+  /** For a single note, so the chip opens it. Null for a group. */
+  path: string | null;
+}
+
 /** Where a run of events belongs: the main thread, or one subagent's transcript. */
 export type StreamId = string | null;
 
@@ -83,6 +92,12 @@ export type ChatEventBody =
        * conversation was a dead end. Null when there was no context. */
       contextPath: string | null;
       images: TurnImage[];
+      /* Everything ELSE the message carried: notes named with `[[`, notes and
+         groups picked from the `+` menu. One chip each above the words. A
+         single note keeps its path so its chip can open it; a group keeps a
+         count so the chip can say how much it stands for. Optional because a
+         0.5.x transcript never wrote it, and a replay must not lose the turn. */
+      contexts?: TurnContext[];
     }
   | { kind: 'text-open'; blockId: string }
   | { kind: 'text-delta'; blockId: string; text: string }

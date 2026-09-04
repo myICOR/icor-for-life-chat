@@ -296,7 +296,27 @@ async function mount(): Promise<void> {
   /* Rung 4, mounted by `buildPane`: the pane's last child, outside the composer
      card and outside its :focus-within scope. */
   pane.statusline.render(STATE, Date.UTC(2026, 7, 30, 0, 6));
-  composer.renderTray([{ icon: 'file-text', label: 'note.md', detail: '2 SEL', onDismiss: () => {} }]);
+  composer.renderTray([
+    { icon: 'file-text', label: 'note.md', detail: '2 SEL', onDismiss: () => {} },
+    /* A GROUP chip, through the shipped tray: a button that stands for many
+       notes and opens their list. It is the one chip shape the sweep had never
+       met, and it carries its own count element. */
+    { icon: 'tag', label: '#gamedev', count: 14, onOpen: () => {}, onDismiss: () => {} },
+  ]);
+  /* THE + MENU, OPENED, so its rows, its back control and its field are real
+     focusables under .aic-root the pen sweep has to reach. Sources are the
+     fixture's own three-line lists; the menu is driven to a submenu through
+     its own click path so the back control is built by shipped code. */
+  composer.setContextSources({
+    notes: () => [{ path: '04 Inner World/a.md', basename: 'a', linktext: 'a', folder: '04 Inner World' }],
+    folders: () => [{ path: '04 Inner World', count: 3 }],
+    tags: () => [{ tag: '#gamedev', count: 14 }],
+    properties: () => [{ key: 'age', values: [{ value: '4', count: 2 }] }],
+  });
+  (composer.el.querySelector('.aic-add') as HTMLButtonElement).click();
+  const tagsRow = Array.from(composer.el.querySelectorAll('.aic-ctx-row'))
+    .find((r) => r.textContent?.includes('Tags')) as HTMLElement;
+  tagsRow.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
 
   /* The frame that decides the enabled-send case: a composer with TEXT IN IT.
      The enabled send
