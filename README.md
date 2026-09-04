@@ -38,8 +38,23 @@ this repo and it gets fixed fast.
   Enter: the message is queued and answered as the next turn, never an
   interruption. The well shows QUEUED until its turn begins. Stop is its own
   button, a click, and it only exists while a turn is running.
-- **Readable work.** Tool calls collapse into quiet hairline rows whose left
-  gutter answers "does this need me". Approvals never hide behind a chevron.
+- **The vault is context.** Type `[[` or `@` to mention any note, with a live
+  preview of the highlighted note above the list. The `+` button adds the
+  active note, any note, a folder, a tag or a property value; a folder, tag or
+  property becomes one group chip with a count, and clicking it lists every
+  note in the group.
+- **Pinned prompts.** The first prompt of a conversation stays pinned above
+  the stream, folded to one line and unfolding on click. Pin any of your own
+  messages from its corner; pins stack and survive a reopen.
+- **Readable work.** Tool rows say what was done, never the shell command:
+  `Read 04 Inner World/...`, `Edited ...`, `Ran <what it was for>`. A row with
+  something to show opens onto the raw command and the result body. Approvals
+  never hide behind a chevron.
+- **The team shows its face.** In an ICOR for Life vault the strip above the
+  composer shows every agent that worked this session, with its avatar and its
+  share of the activity. The Insights tab charts tokens over time, sessions per
+  day, the most used agents and tools, and lists every archived session. A
+  vault without a team gets a one-click setup of the eight starter agents.
 - **Structured replies.** Cards, verdict rows, decision blocks with click-to-
   insert codes, file rows that open in Obsidian or reveal in Finder.
 - **Subagents.** When the team spawns a subagent you get a live chip, and its
