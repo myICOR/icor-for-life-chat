@@ -1705,6 +1705,33 @@
   -webkit-line-clamp: unset;
   overflow: visible;
 }
+/* THE DOOR IS VISIBLE. Two members reported the clipped body with "no option
+   to expand" (2026-09-03, 2026-09-04): the pointer and a hover colour were
+   the only affordance, and neither is on screen. This is a real button under
+   the body, present only while the body is measured as cut, reading
+   `Show more` and `Show less`. */
+.aic-root.aic-root .aic-decision-more {
+  appearance: none;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 2px 6px 2px 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--aic-marker-text);
+  cursor: pointer;
+}
+.aic-root.aic-root .aic-decision-more.is-shown { display: inline-flex; }
+.aic-root.aic-root .aic-decision-more .svg-icon { width: 12px; height: 12px; }
+.aic-decision-more .svg-icon { transition: transform 140ms var(--aic-ease); }
+.aic-root.aic-root .aic-decision-more.is-open .svg-icon { transform: rotate(180deg); }
+.aic-root.aic-root .aic-decision-more:hover { color: var(--aic-marker); }
 
 .aic-root.aic-root .aic-code-chip {
   /* The explicit control reset - see the annotated copy at its first use. */
@@ -2988,7 +3015,11 @@
 .aic-structured:hover .aic-actions,
 .aic-user:hover .aic-actions,
 .aic-actions:focus-within { opacity: 1; }
-.aic-root.aic-root .aic-action {
+/* `.aic-reply-btn`, never `.aic-action`: that name is the COMPOSER's action
+   row, and a button rule under it turned the row into a 26px centred box
+   that clipped the + and the mode chip off the left edge (seen live,
+   2026-09-04). One class, one element kind. */
+.aic-root.aic-root .aic-reply-btn {
   width: 26px;
   height: 26px;
   display: inline-flex;
@@ -2997,9 +3028,9 @@
   border-radius: var(--aic-r-control);
   color: var(--aic-dim);
 }
-.aic-root.aic-root .aic-action:hover,
-.aic-root.aic-root .aic-action:focus-visible { background: var(--aic-wash); color: var(--aic-paper); }
-.aic-root.aic-root .aic-action .svg-icon { width: 14px; height: 14px; }
+.aic-root.aic-root .aic-reply-btn:hover,
+.aic-root.aic-root .aic-reply-btn:focus-visible { background: var(--aic-wash); color: var(--aic-paper); }
+.aic-root.aic-root .aic-reply-btn .svg-icon { width: 14px; height: 14px; }
 
 /* G2.2 THE ACTIVITY SENTENCE on a collapsed group: body voice, the quiet ink,
    the count in the mono voice beside it. It replaces the `12 TOOL CALLS`
@@ -3053,6 +3084,12 @@
   appearance: none;
   display: block;
   width: 100%;
+  /* The host gives every button a fixed height and line-height; a two-line
+     row inherited both and its insight line spilled under the next row. */
+  height: auto;
+  min-height: 0;
+  line-height: 1.4;
+  white-space: normal;
   margin: 0;
   padding: 12px 4px;
   background: transparent;
@@ -3116,6 +3153,9 @@
 .aic-root.aic-root .aic-memory-tasks {
   appearance: none;
   display: block;
+  height: auto;
+  min-height: 0;
+  white-space: normal;
   margin: 12px 0 0;
   padding: 0 4px;
   background: transparent;

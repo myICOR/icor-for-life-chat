@@ -656,7 +656,7 @@ export class StreamRenderer {
     const primary = actions.filter((a) => a.section === 'primary');
     const more = actions.filter((a) => a.section === 'more');
     for (const action of primary) {
-      const btn = bar.createEl('button', { cls: 'aic-icon-btn aic-action', type: 'button' });
+      const btn = bar.createEl('button', { cls: 'aic-icon-btn aic-reply-btn', type: 'button' });
       setIcon(btn, action.icon);
       btn.setAttr('aria-label', action.label);
       setTooltip(btn, action.label);

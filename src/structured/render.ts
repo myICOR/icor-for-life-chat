@@ -387,8 +387,22 @@ function wireDecisionBody(body: HTMLElement): void {
     ev.preventDefault();
     toggle();
   });
+  /* THE VISIBLE DOOR. Two members reported the clipped body as a dead end
+     (community bug reports, 2026-09-03 and 2026-09-04): the pointer and the
+     hover colour were the only affordance and neither is on screen. A real
+     button follows the body, shown only while the body is measured as cut. */
+  const more = body.parentElement?.createEl('button', { cls: 'aic-decision-more', type: 'button' });
+  if (more) {
+    setIcon(more.createSpan({ cls: 'aic-decision-more-icon' }), 'chevron-down');
+    more.createSpan({ cls: 'aic-decision-more-label', text: 'Show more' });
+    more.addEventListener('click', toggle);
+    doors.set(body, more);
+  }
   window.requestAnimationFrame(() => measureDecisionBody(body));
 }
+
+/** The door under each decision body, looked up by the body it opens. */
+const doors = new WeakMap<HTMLElement, HTMLElement>();
 
 function measureDecisionBody(body: HTMLElement): void {
   // A resolved decision hides its body; a hidden node measures zero and must
@@ -409,6 +423,7 @@ function paintDecisionBody(body: HTMLElement): void {
     body.removeAttribute('tabindex');
     body.removeAttribute('aria-expanded');
     body.removeAttribute('aria-label');
+    paintDoor(body, false, false);
     return;
   }
   const open = body.hasClass('is-expanded');
@@ -416,6 +431,18 @@ function paintDecisionBody(body: HTMLElement): void {
   body.setAttr('tabindex', '0');
   body.setAttr('aria-expanded', open ? 'true' : 'false');
   body.setAttr('aria-label', open ? 'Collapse the decision text' : 'Show the full decision text');
+  paintDoor(body, true, open);
+}
+
+function paintDoor(body: HTMLElement, shown: boolean, open: boolean): void {
+  const door = doors.get(body);
+  if (!door) return;
+  door.toggleClass('is-shown', shown);
+  door.toggleClass('is-open', open);
+  door.setAttr('aria-expanded', open ? 'true' : 'false');
+  door.setAttr('aria-label', open ? 'Collapse the decision text' : 'Show the full decision text');
+  const label = door.querySelector('.aic-decision-more-label');
+  if (label) label.setText(open ? 'Show less' : 'Show more');
 }
 
 /** Re-measure every decision body under `root`. The cut is a function of width. */
