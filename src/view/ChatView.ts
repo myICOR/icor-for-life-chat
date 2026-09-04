@@ -36,7 +36,7 @@ import { Normalizer, userTextOf } from '../sdk/normalize';
 import { buildChildEnv, resolveCliPath, splitExtraPath } from '../sdk/cli';
 import type { PathEnvironment } from '../sdk/cli';
 import type { ChatEvent, EffortName, PermissionModeName, TurnContext, TurnImage } from '../model/types';
-import { NO_FOLLOW_UPS, followUpSent, queuedTurnBegan, turnAborted, turnEnded } from '../model/followups';
+import { NO_FOLLOW_UPS, followUpSent, selfStartedTurn, turnAborted, turnEnded } from '../model/followups';
 import type { FollowUpState } from '../model/followups';
 import { applyStatusBarClearance } from './statusbar';
 import type { Attachment } from './composer/Composer';
@@ -964,16 +964,25 @@ export class ChatView extends ItemView {
     }
     if (event.stream === null) this.stream?.apply(event);
     if (event.kind === 'user-turn') this.composer?.setStreaming(true);
-    /* THE TURN BOUNDARY IS NOT ALWAYS IDLE. With a follow-up pending the CLI
-       is about to start the next turn, and a composer that read Send for that
-       gap would let Enter mint a third message the user believed was a second. */
-    if (event.kind === 'turn-end') this.composer?.setStreaming(this.settleTurn());
+    /* A TURN END IS IDLE, whatever was queued. The CLI either answered the
+       follow-up inside this turn (measured under a tool loop) or is about to
+       open a turn for it (measured under plain text); the plugin cannot tell
+       which at this moment, and a composer held on Stop for a second result
+       that never comes is the defect seen live on 2026-09-04. If a queued turn
+       does follow, its first signal below re-arms the busy state. */
+    if (event.kind === 'turn-end') {
+      this.settleTurn();
+      this.composer?.setStreaming(false);
+    }
     if (event.kind === 'aborted' || event.kind === 'error') {
       this.followUps = turnAborted();
       this.composer?.setStreaming(false);
     }
-    if (event.kind === 'session' || event.kind === 'thinking-open' || event.kind === 'text-open' || event.kind === 'tool-call') {
-      this.queuedTurnBegins();
+    if (
+      event.stream === null &&
+      (event.kind === 'thinking-open' || event.kind === 'text-open' || event.kind === 'tool-call')
+    ) {
+      this.turnSignal();
     }
     if (event.kind === 'session') {
       // The provider's own command list. The composer's placeholder has always
@@ -990,10 +999,7 @@ export class ChatView extends ItemView {
     }
     if (event.kind === 'user-turn') this.startTicking();
     if (event.kind === 'aborted' || event.kind === 'error') this.stopTicking();
-    // A turn end with a follow-up pending keeps the clock: the session is still at work.
-    if (event.kind === 'turn-end' && this.followUps.pending === 0 && !this.followUps.awaitingNext) {
-      this.stopTicking();
-    }
+    if (event.kind === 'turn-end') this.stopTicking();
     if (event.kind === 'session' && event.sessionId && !this.sessionIds.includes(event.sessionId)) {
       this.sessionIds.push(event.sessionId);
     }
@@ -1008,18 +1014,22 @@ export class ChatView extends ItemView {
 
   /* ----------------------------------------------------------- follow-ups */
 
-  /** A turn ended. True when a queued follow-up keeps the session busy. */
-  private settleTurn(): boolean {
+  /** A turn ended: idle, and every QUEUED mark comes off. */
+  private settleTurn(): void {
     const next = turnEnded(this.followUps);
     this.followUps = next.state;
-    return next.stillBusy;
+    if (next.clearMarks) this.stream?.clearQueued();
   }
 
-  /** The first signal of a turn: if it answers a queued message, the mark comes off. */
-  private queuedTurnBegins(): void {
-    const next = queuedTurnBegan(this.followUps);
-    this.followUps = next.state;
-    if (next.clearOne) this.stream?.clearQueued();
+  /**
+   * The first signal of work while the composer reads idle: the CLI opened a
+   * turn of its own, for a message it had queued. The composer goes busy and
+   * the clock starts, exactly as if a user turn had begun.
+   */
+  private turnSignal(): void {
+    if (!this.composer || !selfStartedTurn(this.composer.isStreaming)) return;
+    this.composer.setStreaming(true);
+    this.startTicking();
   }
 
   /* --------------------------------------------------------- subagents */

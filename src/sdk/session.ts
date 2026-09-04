@@ -23,9 +23,17 @@
  * frame. The queued turn announces itself with a fresh `system/init`. The
  * composer therefore says "Queue" while a turn runs, Enter never stops
  * anything, and the view keeps the composer busy across the turn boundary
- * while a follow-up is pending (model/followups.ts). Before this the send pill
- * BECAME the Stop control mid-turn, so Enter on a follow-up interrupted the
- * work the follow-up was about. */
+ * Before this the send pill BECAME the Stop control mid-turn, so Enter on a
+ * follow-up interrupted the work the follow-up was about.
+ *
+ * SECOND MEASUREMENT, same day, in the live vault (opus, a turn running Bash
+ * and Glob calls, the follow-up pushed while a tool was running): the running
+ * turn ANSWERED the follow-up itself and exactly ONE result arrived. So the
+ * CLI hands a queued message to the model at its next call when there is one,
+ * and only opens a separate turn when the running turn had no further model
+ * call to give it to. The plugin cannot tell the two apart at a turn boundary,
+ * which is why model/followups.ts treats every turn end as idle and re-arms on
+ * the first signal of a turn the CLI starts on its own. */
 
 import { query, AbortError } from '@anthropic-ai/claude-agent-sdk';
 import type { Options, Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';

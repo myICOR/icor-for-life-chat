@@ -1051,7 +1051,7 @@ export class StreamRenderer {
    * sent, but the CLI will not read it until the running turn ends. Without a
    * mark the well reads as a message the team is answering right now, which is
    * exactly the misreading the old Stop-on-Enter behaviour came from. The mark
-   * is a kicker in the well's corner and it leaves when the queued turn begins. */
+   * is a kicker in the well's corner and it leaves when the running turn ends. */
   markLastWellQueued(): void {
     // The column's own query answers in the column's own realm, so no
     // cross-window check is needed here; the cast names what querySelector
@@ -1064,12 +1064,12 @@ export class StreamRenderer {
     mark.setAttr('aria-label', 'Queued for the next turn');
   }
 
-  /** The oldest queued well is being answered now: its mark comes off. */
+  /** The turn ended: every queued well has been read or is about to be. All marks come off. */
   clearQueued(): void {
-    const first = this.column.querySelector<HTMLElement>('.aic-user.is-queued');
-    if (!first) return;
-    first.removeClass('is-queued');
-    first.querySelector('.aic-user-queued')?.remove();
+    for (const well of Array.from(this.column.querySelectorAll<HTMLElement>('.aic-user.is-queued'))) {
+      well.removeClass('is-queued');
+      well.querySelector('.aic-user-queued')?.remove();
+    }
   }
 
   /** A quiet line of plugin-voice narration. Never styled as the team talking. */

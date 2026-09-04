@@ -1,50 +1,53 @@
 /* FOLLOW-UP BOOKKEEPING, with no DOM under it.
  *
- * Measured against the real CLI on 2026-09-04 (tools/followup-entry.ts, the
- * finding is written up at the top of sdk/session.ts): a user message pushed
- * into the streaming input while a turn is running is QUEUED by the CLI and
- * answered as its own turn after the running one ends, in the same session.
- * It is never merged into the running turn and it never interrupts it.
+ * Measured twice against the real CLI on 2026-09-04 (both findings are written
+ * up at the top of sdk/session.ts), and the two measurements disagree, which
+ * is the fact that shapes this file:
  *
- * That measurement fixes the shape of the state below. The view has to know
- * three things: how many follow-ups the CLI is still holding, whether the next
- * turn boundary means "idle" or "the queued turn is about to start", and when
- * a well that said QUEUED should stop saying it. All three are one counter
- * and a flag, and both are pure so they can be asserted without a session. */
+ *   - Pushed during a plain text turn (haiku, counting): the CLI QUEUES the
+ *     message and answers it as its own turn after the running one, with a
+ *     fresh `system/init` and its own `result`.
+ *   - Pushed during a tool loop (opus, Bash and Glob calls): the CLI hands the
+ *     message to the model at its next call, the running turn ANSWERS it, and
+ *     exactly one `result` arrives.
+ *
+ * So the plugin cannot know, when a turn ends, whether a follow-up was already
+ * answered inside it or is about to get a turn of its own. A counter that
+ * waited for a second `result` kept the composer on Stop forever in the merged
+ * case (seen live, 2026-09-04 12:42). The honest rule is therefore the simple
+ * one: a turn end is idle, every QUEUED mark comes off, and if the CLI then
+ * opens a turn of its own for a queued message, its first signal re-arms the
+ * busy state. The composer never lies about a turn that is over, and never
+ * reads Send while a turn is visibly running. */
 
 export interface FollowUpState {
-  /** Messages the CLI is holding for later turns. */
+  /** Messages sent while a turn was running and not yet closed by a turn end. */
   pending: number;
-  /** True between a turn's end and the first signal of the queued turn that follows it. */
-  awaitingNext: boolean;
 }
 
-export const NO_FOLLOW_UPS: FollowUpState = { pending: 0, awaitingNext: false };
+export const NO_FOLLOW_UPS: FollowUpState = { pending: 0 };
 
-/** A message was sent while a turn was running: the CLI will queue it. */
+/** A message was sent while a turn was running. The well wears QUEUED. */
 export function followUpSent(state: FollowUpState): FollowUpState {
-  return { ...state, pending: state.pending + 1 };
+  return { pending: state.pending + 1 };
 }
 
 /**
- * A turn ended. Whether the composer stays busy is the whole answer here: with
- * a follow-up pending the session is not idle, it is between two turns, and a
- * composer that flipped to Send for that half-second would let Enter start a
- * THIRD message the user believed was a second.
+ * A turn ended. It is idle, whatever was queued: either the turn answered the
+ * follow-up, or the CLI is about to open a turn for it and that turn will say
+ * so itself. `clearMarks` is true when there were marks to take off.
  */
-export function turnEnded(state: FollowUpState): { state: FollowUpState; stillBusy: boolean } {
-  if (state.pending <= 0) return { state: NO_FOLLOW_UPS, stillBusy: false };
-  return { state: { pending: state.pending - 1, awaitingNext: true }, stillBusy: true };
+export function turnEnded(state: FollowUpState): { state: FollowUpState; clearMarks: boolean } {
+  return { state: NO_FOLLOW_UPS, clearMarks: state.pending > 0 };
 }
 
 /**
- * The queued turn has begun (the CLI re-announces the session, then thinks or
- * writes). The oldest QUEUED mark is released. Returns whether a mark should
- * clear, so the renderer is only touched when there is something to touch.
+ * The first signal of a turn (the session announcing itself, thinking, text,
+ * or a tool call) while the composer reads idle: the CLI opened a turn on its
+ * own, for a queued message. True means "arm the busy state now".
  */
-export function queuedTurnBegan(state: FollowUpState): { state: FollowUpState; clearOne: boolean } {
-  if (!state.awaitingNext) return { state, clearOne: false };
-  return { state: { ...state, awaitingNext: false }, clearOne: true };
+export function selfStartedTurn(composerStreaming: boolean): boolean {
+  return !composerStreaming;
 }
 
 /** An interrupt or an error settles everything; the CLI's queue is not ours to trust after that. */

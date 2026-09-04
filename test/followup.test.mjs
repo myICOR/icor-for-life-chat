@@ -1,49 +1,43 @@
 /* Follow-ups: a message sent mid-turn is queued, never a stop.
  *
  * The CLI's behaviour was measured on 2026-09-04 (the finding is at the top of
- * src/sdk/session.ts): a second user message pushed while a turn runs is
- * answered as its own turn after the running one, in the same session. These
- * tests hold the bookkeeping that behaviour dictates, and the one contract the
- * old composer broke: submitting while streaming does not interrupt. */
+ * src/sdk/session.ts, twice): a second user message pushed while a turn runs
+ * is answered either inside the running turn or as its own turn after it,
+ * and the plugin cannot tell which at the boundary. These tests hold the
+ * bookkeeping that dictates, and the one contract the old composer broke:
+ * submitting while streaming does not interrupt. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  NO_FOLLOW_UPS, followUpSent, turnEnded, queuedTurnBegan, turnAborted,
+  NO_FOLLOW_UPS, followUpSent, turnEnded, selfStartedTurn, turnAborted,
   ChatStore,
 } from './build/pure.mjs';
 
-test('a mid-turn send counts one pending follow-up; the turn end keeps the session busy', () => {
-  let s = followUpSent(NO_FOLLOW_UPS);
+test('a mid-turn send counts one pending follow-up; the turn end is idle and clears the marks', () => {
+  const s = followUpSent(NO_FOLLOW_UPS);
   assert.equal(s.pending, 1);
   const end = turnEnded(s);
-  assert.equal(end.stillBusy, true, 'the composer flipped to Send with a follow-up still queued');
-  assert.deepEqual(end.state, { pending: 0, awaitingNext: true });
-});
-
-test('a turn end with nothing pending is idle', () => {
-  const end = turnEnded(NO_FOLLOW_UPS);
-  assert.equal(end.stillBusy, false);
+  assert.equal(end.clearMarks, true, 'the QUEUED mark survived the turn that read it');
   assert.deepEqual(end.state, NO_FOLLOW_UPS);
 });
 
-test('the queued mark clears exactly once, on the first signal of the queued turn', () => {
-  const s = turnEnded(followUpSent(NO_FOLLOW_UPS)).state;
-  const first = queuedTurnBegan(s);
-  assert.equal(first.clearOne, true);
-  const second = queuedTurnBegan(first.state);
-  assert.equal(second.clearOne, false, 'a second signal in the same turn cleared a second mark');
+test('a turn end with nothing pending is idle and touches no mark', () => {
+  const end = turnEnded(NO_FOLLOW_UPS);
+  assert.equal(end.clearMarks, false);
+  assert.deepEqual(end.state, NO_FOLLOW_UPS);
 });
 
-test('two follow-ups drain one turn boundary at a time', () => {
-  let s = followUpSent(followUpSent(NO_FOLLOW_UPS));
-  let end = turnEnded(s);
-  assert.equal(end.stillBusy, true);
-  s = queuedTurnBegan(end.state).state;
-  end = turnEnded(s);
-  assert.equal(end.stillBusy, true, 'the second follow-up was forgotten at the first boundary');
-  s = queuedTurnBegan(end.state).state;
-  end = turnEnded(s);
-  assert.equal(end.stillBusy, false);
+test('a turn the CLI starts on its own re-arms the busy state, and a signal mid-turn does not', () => {
+  assert.equal(selfStartedTurn(false), true, 'a self-started turn left the composer on Send');
+  assert.equal(selfStartedTurn(true), false, 'a signal inside a running turn re-armed a state already armed');
+});
+
+test('two follow-ups both clear at the one turn end that read them', () => {
+  const s = followUpSent(followUpSent(NO_FOLLOW_UPS));
+  assert.equal(s.pending, 2);
+  const end = turnEnded(s);
+  assert.equal(end.clearMarks, true);
+  assert.deepEqual(end.state, NO_FOLLOW_UPS);
 });
 
 test('an interrupt or an error forgets the queue', () => {

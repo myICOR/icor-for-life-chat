@@ -460,6 +460,11 @@ export class Composer {
     this.paint();
   }
 
+  /** What the pill is showing right now. The view reads it to spot a self-started turn. */
+  get isStreaming(): boolean {
+    return this.state.streaming;
+  }
+
   /**
    * The model the settings cascade says WILL be used, resolved before any
    * session exists. It fills the trigger on a fresh pane and is outranked by
