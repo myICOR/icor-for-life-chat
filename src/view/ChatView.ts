@@ -48,6 +48,8 @@ import type { AgentShare } from '../team/usage';
 import { renderTeamStrip } from './TeamStrip';
 import { setupSummary, setupTeam } from '../team/setup';
 import type { EmptyTeamBlock } from './stream/StreamRenderer';
+import { REMEMBER_PREFIX, newestOpenTask, recentSessionLogs } from '../team/memory';
+import { openTaskCount } from '../team/load';
 
 /** The newest slice of a stored conversation painted on resume. */
 const REPLAY_CAP = 400;
@@ -221,7 +223,7 @@ export class ChatView extends ItemView {
     this.roster = detectTeam(this.app);
     this.stream.renderEmptyState(this.emptyTeamBlock());
     this.renderPins();
-    void this.fillResumeRows();
+    void this.fillResumeRows().then(() => this.fillMemory());
     this.addAction('bar-chart-3', 'Open AI team insights', () => void this.plugin.openInsights());
     /* The trigger shows the ACTUAL model from pane open. With no plugin
        override, the name comes from the CLI's own settings cascade - the same
@@ -265,6 +267,41 @@ export class ChatView extends ItemView {
     this.registerEvent(this.app.vault.on('delete', (f) => this.onTeamChange(f.path)));
     this.registerEvent(this.app.vault.on('rename', (f, old) => { this.onTeamChange(f.path); this.onTeamChange(old); }));
     this.focusComposer();
+  }
+
+  /* ----------------------------------------------------------- the memory */
+
+  /**
+   * The last sessions and the task count, under the resume rows. Read only
+   * when a team is detected: the logs live in its knowledge folder, and a
+   * bare vault has nothing to read back. Awaited after the resume rows so the
+   * block lands below them whichever read is slower.
+   */
+  private async fillMemory(): Promise<void> {
+    if (!this.roster || !this.stream || !this.stream.isEmpty) return;
+    const [logs, tasks] = await Promise.all([recentSessionLogs(this.app, 3), openTaskCount(this.app)]);
+    if (!this.stream || !this.stream.isEmpty) return;
+    this.stream.renderEmptyMemory({
+      logs,
+      tasks,
+      onOpenLog: (path) => void this.openPath(path),
+      onOpenTasks: () => {
+        const task = newestOpenTask(this.app);
+        if (task) void this.openPath(task.path);
+      },
+    });
+  }
+
+  /**
+   * Send the vault's own capture phrase as a turn in this conversation. The
+   * team files it (AGENTS.md's ambient-capture contract) and answers with the
+   * receipt; the plugin writes nothing itself. Public because the reply
+   * action and the command reach it from outside the view.
+   */
+  remember(text: string): void {
+    const body = text.trim();
+    if (!body) return;
+    void this.submit(`${REMEMBER_PREFIX}${body}`);
   }
 
   /* ------------------------------------------------------------- the team */
