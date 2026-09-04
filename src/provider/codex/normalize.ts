@@ -1,9 +1,11 @@
 /* The one translator between the Codex App Server's frames and the plugin's
  * own ChatEvent union. A Codex upgrade touches this file and nothing else.
  *
- * MEASURED 2026-09-04 against codex-cli 0.143.0 with `tools/codex-probe.mjs`
- * (recording in test/fixtures/codex-recorded-turn.json) and the server's own
- * schema (`codex app-server generate-json-schema`). What was seen:
+ * MEASURED 2026-09-04 with `tools/codex-probe.mjs` against codex-cli 0.143.0
+ * signed out (the failure path, kept in test/fixtures/codex-recorded-signed-
+ * out.json) and against codex-cli 0.153.2 signed in (the full turn in
+ * test/fixtures/codex-recorded-turn.json), plus the server's own schema
+ * (`codex app-server generate-json-schema`). What was seen:
  *
  *   client -> server, requests that exist and answered:
  *     initialize {clientInfo, capabilities}     -> {userAgent, codexHome, platformOs}
@@ -41,9 +43,17 @@
  *     turn/completed {threadId, turn:{id, status:'completed'|'failed'|'interrupted',
  *                     error:{message}|null, durationMs}}
  *     mcpServer/startupStatus/updated, remoteControl/status/changed (ignored)
- *   and per the schema for a turn with model output (not reachable on this
- *   machine on 2026-09-04: the ChatGPT refresh token was revoked, every turn
- *   failed 401 before the model was reached; `codex login` is Tom's to run):
+ *   and on the signed-in turn (0.153.2), confirming the schema and adding
+ *   three facts the schema does not carry: a `reasoning` item arrives with
+ *   empty summary and content on this plan; a silent command completes with
+ *   `aggregatedOutput: null` and `exitCode: 0`; `thread/tokenUsage/updated`
+ *   counts cached tokens INSIDE inputTokens; the rate-limit window is 30 days
+ *   (43200 minutes), which the plugin's vocabulary names `unknown` rather
+ *   than inventing a name; `turn/interrupt` on a running turn answers `{}`
+ *   and the turn completes as `interrupted`; the approval request carries
+ *   `reason` ("Do you want to allow writing probe.txt in the current
+ *   directory?"), `commandActions: [{type: 'unknown', command}]` and an
+ *   `availableDecisions` list:
  *     item/started {item:{type:'agentMessage'|'reasoning'|'commandExecution'|
  *                  'fileChange'|'mcpToolCall'|'dynamicToolCall'|'plan', id}}
  *     item/agentMessage/delta {itemId, delta}
@@ -213,10 +223,16 @@ function usageFrom(tokenUsage: Record<string, unknown> | null): TurnUsage {
   const cached = num(total.cachedInputTokens);
   const output = num(total.outputTokens);
   return {
-    inputTokens: input,
+    /* Measured on codex-cli 0.153.2 (the signed-in recording: inputTokens
+       30033 of which cachedInputTokens 27392): Codex counts the cached tokens
+       INSIDE inputTokens, the Anthropic API counts them beside it. The
+       plugin's vocabulary is the Anthropic split and the statusline adds the
+       two, so the cached part is taken out here once or the context readout
+       would count it twice. */
+    inputTokens: Math.max(0, input - cached),
     outputTokens: output,
     cacheReadTokens: cached,
-    totalTokens: num(total.totalTokens) || input + cached + output,
+    totalTokens: num(total.totalTokens) || input + output,
     // The App Server publishes no cost. Zero is not a measurement; the
     // statusline never prints a cost for this provider.
     costUsd: 0,
