@@ -84,6 +84,8 @@ export interface StreamCallbacks {
   onOpenSubagent?: (agentId: string) => void;
   /** A group chip on a sent turn was clicked: show the notes it stood for. */
   onOpenContextGroup?: (label: string) => void;
+  /** The pin control on a user well was clicked. `key` is the well's transcript index. */
+  onTogglePin?: (key: string, text: string) => void;
   /** True while the opt-in structured-replies mode is on. */
   structured: () => boolean;
   renderHost: RenderHost;
@@ -108,6 +110,8 @@ export class StreamRenderer {
   private readonly blocks = new Map<string, HTMLElement>();
   private readonly blockText = new Map<string, string>();
   private readonly tools = new Map<string, ToolRow>();
+  /** User wells by transcript key, so a pin can repaint or scroll to its well. */
+  private readonly wells = new Map<string, { el: HTMLElement; pin: HTMLElement }>();
   private group: ToolGroup | null = null;
   private emptyEl: HTMLElement | null = null;
   /* THE WORKING INDICATOR, one per renderer, reused for the whole turn.
@@ -249,7 +253,9 @@ export class StreamRenderer {
   apply(event: ChatEvent): void {
     switch (event.kind) {
       case 'user-turn':
-        this.appendUserWell(event.text, event.contextNote, event.images, event.contextPath, event.contexts ?? []);
+        this.appendUserWell(
+          event.text, event.contextNote, event.images, event.contextPath, event.contexts ?? [], event.key ?? null,
+        );
         if (event.queued) this.markLastWellQueued();
         /* BUSY FROM THE FIRST MOMENT (Tom, 2026-09-01). The indicator used to
            appear only when the model's output began - thinking tokens or held
@@ -380,11 +386,26 @@ export class StreamRenderer {
     images: readonly TurnImage[] = [],
     contextPath: string | null = null,
     contexts: readonly TurnContext[] = [],
+    key: string | null = null,
   ): void {
     this.clearEmptyState();
     this.closeToolGroup();
     const well = this.column.createDiv({ cls: 'aic-user' });
     well.dataset.userText = text;
+    /* THE PIN CONTROL, only on a well that has a key. The key is the
+       transcript index the view assigned, and it is what ties this well to
+       its row in the pin tray; a well without one (a stored transcript from
+       an older build) has nothing to pin against and gets no control, rather
+       than a button that does nothing. */
+    if (key !== null && text) {
+      well.dataset.wellKey = key;
+      const pin = well.createEl('button', { cls: 'aic-user-pin', type: 'button' });
+      setIcon(pin, 'pin');
+      pin.setAttr('aria-label', 'Pin this prompt');
+      setTooltip(pin, 'Pin this prompt');
+      pin.addEventListener('click', () => this.callbacks.onTogglePin?.(key, text));
+      this.wells.set(key, { el: well, pin });
+    }
     /* THE CONTEXT CHIPS, above the words, because they are what the words are
        ABOUT: a `[[note]]` the user named, a folder or a tag they added. A
        single note opens; a group opens the list it stood for. The old open
@@ -1067,7 +1088,32 @@ export class StreamRenderer {
     seam.createSpan({ cls: 'aic-kicker', text: 'RESUMED' });
   }
 
+  /* ------------------------------------------------------------ pins */
+
+  /** Repaint one well's pinned state. A key the column never saw is a no-op. */
+  setPinned(key: string, pinned: boolean): void {
+    const well = this.wells.get(key);
+    if (!well) return;
+    well.el.toggleClass('is-pinned', pinned);
+    /* The button is held, not queried: a realm check on a found node is the
+       kind of thing a popout window gets wrong, and the well already knows
+       which button it built. */
+    const label = pinned ? 'Unpin this prompt' : 'Pin this prompt';
+    well.pin.setAttr('aria-label', label);
+    setTooltip(well.pin, label);
+  }
+
+  /** Bring a user well into view, with the same flash the decision badge uses. */
+  scrollToWell(key: string): void {
+    const well = this.wells.get(key)?.el;
+    if (!well) return;
+    well.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    well.addClass('is-flash');
+    window.setTimeout(() => well.removeClass('is-flash'), 600);
+  }
+
   destroy(): void {
+    this.wells.clear();
     this.lightbox.close();
     this.resize?.disconnect();
     this.resize = null;

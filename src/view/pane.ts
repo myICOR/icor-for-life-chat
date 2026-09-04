@@ -58,6 +58,8 @@ export interface PaneOptions {
 
 export interface Pane {
   root: HTMLElement;
+  /** Rung 0. The pin tray above the stream; `renderPinTray` owns `is-empty`. */
+  pins: HTMLElement;
   /** Rung 1. The scroll box; `.aic-column` is the width-capped child. */
   scroller: HTMLElement;
   column: HTMLElement;
@@ -84,6 +86,12 @@ export function buildPane(root: HTMLElement, opts: PaneOptions): Pane {
   root.empty();
   root.addClass('aic-root');
   root.setAttr(INK_PLUGIN_ATTR, INK_PLUGIN_NAME);
+
+  /* RUNG 0, the pin tray, the root's FIRST child. It sits above the scroller
+     rather than inside it because its whole job is to stay put while the
+     stream moves: the prompt the conversation is about, always in sight.
+     Empty until something is pinned, and zero height while empty. */
+  const pins = root.createDiv({ cls: 'aic-pins is-empty' });
 
   const scroller = root.createDiv({ cls: 'aic-stream' });
   const column = scroller.createDiv({ cls: 'aic-column' });
@@ -113,5 +121,5 @@ export function buildPane(root: HTMLElement, opts: PaneOptions): Pane {
   const facts = composer.factsEl;
   const statusline = opts.facts ? new Statusline(facts, opts.facts) : new Statusline(facts);
 
-  return { root, scroller, column, dock, chipTray, teamStrip, composer, badge, statusline, facts };
+  return { root, pins, scroller, column, dock, chipTray, teamStrip, composer, badge, statusline, facts };
 }

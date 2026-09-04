@@ -22,6 +22,7 @@ import { renderInsights } from '../src/view/InsightsRender';
 import { aggregate } from '../src/team/insights';
 import type { SessionRecord } from '../src/team/insights';
 import { agentShares } from '../src/team/usage';
+import { renderPinTray } from '../src/view/PinTray';
 import type { SubagentTranscript } from '../src/state/subagents';
 import { renderStructured } from '../src/structured/render';
 import { dot } from '../src/view/dom';
@@ -284,6 +285,23 @@ async function mount(): Promise<void> {
   const subHeader = column.createDiv({ cls: 'aic-sub-header' });
   const subKicker = subHeader.createDiv({ cls: 'aic-sub-kicker' });
   subKicker.createSpan({ cls: 'aic-kicker aic-sub-type', text: 'AGENT' });
+
+  /* RUNG 0, painted by the shipped `renderPinTray`: two pins stacked, the
+     second one OPEN so its body, its ordinal and both icon buttons are real
+     nodes the text and focus sweeps have to reach. Plus a pinned user well
+     through the shipped renderer, so the well's pin control is measured in
+     its at-rest visible state and not only on hover. */
+  renderPinTray(pane.pins, [
+    { key: '0', text: 'Sweep the control rules above the theme.', index: 0, auto: true },
+    {
+      key: '4',
+      text: 'Then list every control the host theme still wins on.\nOne row per property, with the measured ratio.',
+      index: 4,
+      auto: false,
+    },
+  ], { open: new Set(['4']), onToggleOpen: () => {}, onUnpin: () => {}, onJump: () => {} });
+  stream2.appendUserWell('Sweep the control rules above the theme.', null, [], null, [], '0');
+  stream2.setPinned('0', true);
 
   /* Rung 2, painted by the shipped `renderChipTray` rather than hand-typed:
      the chip's markup, its status dot and its `is-empty` toggle all come from

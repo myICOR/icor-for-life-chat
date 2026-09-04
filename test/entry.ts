@@ -9,6 +9,7 @@ export * from '../src/model/settings';
 export * from '../src/model/contextText';
 export * from '../src/model/context';
 export * from '../src/model/followups';
+export * from '../src/model/pins';
 export { STRUCTURED_REPLY_PROMPT, INK_PLUGIN_NAME, PLUGIN_ID } from '../src/constants';
 export * from '../src/model/facts';
 export * from '../src/model/format';
