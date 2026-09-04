@@ -298,7 +298,7 @@ export default class IcorChatPlugin extends Plugin {
       new Notice(missingProviderMessage(provider));
       return;
     }
-    await offerInstall(this.app, runtime);
+    await offerInstall(this.app, runtime, this.vaultPath);
   }
 
   private detectEnvironment(provider: ProviderId): DetectEnvironment {

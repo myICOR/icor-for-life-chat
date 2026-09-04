@@ -169,7 +169,7 @@ export class ChatSettingsTab extends PluginSettingTab {
     const provider = availableProviders().find((p) => p.id === action.provider);
     if (!provider) return;
     if (action.run === 'install') {
-      await offerInstall(this.app, provider);
+      await offerInstall(this.app, provider, this.plugin.vaultPath);
       return;
     }
     if (action.run === 'page') {
