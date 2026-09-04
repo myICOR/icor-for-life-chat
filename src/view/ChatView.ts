@@ -647,6 +647,7 @@ export class ChatView extends ItemView {
             toolUseId: request.toolUseId,
             name: request.toolName,
             target: request.target,
+            purpose: request.purpose,
             stream: null,
           }),
         onApprovalSettled: (toolUseId, choice) =>
