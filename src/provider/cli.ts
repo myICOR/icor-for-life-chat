@@ -83,6 +83,59 @@ export function augmentPath(env: PathEnvironment): string {
   return out.join(sep);
 }
 
+/**
+ * Executable file names for ANY tool, in the order a resolver prefers them.
+ * `cliFileNames` below is the Claude special case; a second provider names
+ * its own binary and gets the same PATH repair and the same Windows rule.
+ */
+export function executableNames(platform: Platform, base: string): string[] {
+  return platform === 'win32' ? [`${base}.exe`, `${base}.cmd`, `${base}.bat`] : [base];
+}
+
+/** Every path a tool named `base` could live at, in search order. */
+export function candidatePathsFor(env: PathEnvironment, base: string): string[] {
+  const sep = pathSeparator(env.platform);
+  const dirs = augmentPath(env).split(sep).filter(Boolean);
+  const names = executableNames(env.platform, base);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const dir of dirs) {
+    for (const name of names) {
+      const full = joinFor(env.platform, dir, name);
+      if (seen.has(full)) continue;
+      seen.add(full);
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+/**
+ * Resolve a tool named `base`, preferring an explicit setting. Throws a
+ * message a user can act on, naming the tool and where to install it.
+ */
+export function resolveExecutable(
+  base: string,
+  configured: string,
+  env: PathEnvironment,
+  probe: FileProbe = isExecutableFile,
+  installHint = '',
+): string {
+  const explicit = configured.trim();
+  if (explicit) {
+    if (!probe(explicit)) throw new Error(`The ${base} path in settings does not point at a file: ${explicit}`);
+    return explicit;
+  }
+  const candidates = candidatePathsFor(env, base);
+  for (const candidate of candidates) {
+    if (probe(candidate)) return candidate;
+  }
+  throw new Error(
+    `${base} was not found. ICOR for Life - AI Chat looked in ${candidates.length} locations on PATH.` +
+      (installHint ? ` ${installHint}` : ''),
+  );
+}
+
 /** Executable file names, in the order a resolver should prefer them. */
 export function cliFileNames(platform: Platform): string[] {
   // On Windows the .cmd shim cannot be spawned without a shell, and the SDK
@@ -106,6 +159,17 @@ export function candidatePaths(env: PathEnvironment): string[] {
     }
   }
   return out;
+}
+
+export type FileProbe = (path: string) => boolean;
+
+function isExecutableFile(path: string): boolean {
+  try {
+    if (!existsSync(path)) return false;
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
 }
 
 export type CliKind = 'native' | 'node-script' | 'windows-shim';
@@ -142,17 +206,6 @@ export class CliNotFoundError extends Error {
  * at /opt/homebrew/bin. The verdict must depend only on what the test
  * constructs, so the test constructs the filesystem too.
  */
-export type FileProbe = (path: string) => boolean;
-
-function isExecutableFile(path: string): boolean {
-  try {
-    if (!existsSync(path)) return false;
-    return statSync(path).isFile();
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Resolve the executable, preferring an explicit setting. Returns the first
  * path that exists; throws a message a user can act on when none does.

@@ -3,16 +3,18 @@
  * hygiene gate's rule ("the view imports nothing from provider/claude")
  * checkable by grep rather than by review.
  *
- * `codex` and `acp` are declared and null: the ids exist so a manifest or a
- * setting can already name them, and a null answers "not in this build"
- * rather than "unknown provider", which are different failures. */
+ * Codex joined on 2026-09-04 through OpenAI's App Server (provider/codex). */
 
 import { claudeProvider } from './claude';
+import { codexProvider } from './codex';
 import type { Provider, ProviderId } from './types';
 
+/* `acp` is declared and null: the id exists so a manifest or a setting can
+ * already name it, and a null answers "not in this build" rather than
+ * "unknown provider", which are different failures. */
 export const providers: Record<ProviderId, Provider | null> = {
   claude: claudeProvider,
-  codex: null,
+  codex: codexProvider,
   acp: null,
 };
 

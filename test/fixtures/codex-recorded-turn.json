@@ -1,0 +1,1196 @@
+{
+  "recordedAt": "2026-09-04T12:32:41.771Z",
+  "codexVersion": null,
+  "cwd": "/private/tmp/claude-501/-Users-tom-My-Life-Folder---TR/bbd7d13c-ef05-494f-883d-d6b9898a7a1b/scratchpad/codex-probe/cwd",
+  "frames": [
+    {
+      "dir": "client",
+      "at": 1788525158446,
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+          "clientInfo": {
+            "name": "icor-for-life-chat-probe",
+            "title": "ICOR probe",
+            "version": "0.0.0"
+          },
+          "capabilities": {
+            "experimentalApi": false
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525158731,
+      "frame": {
+        "id": 1,
+        "result": {
+          "userAgent": "icor-for-life-chat-probe/0.143.0 (Mac OS 26.5.2; arm64) vscode/1.132.0 (icor-for-life-chat-probe; 0.0.0)",
+          "codexHome": "/Users/tom/.codex",
+          "platformFamily": "unix",
+          "platformOs": "macos"
+        }
+      }
+    },
+    {
+      "dir": "client",
+      "at": 1788525158731,
+      "frame": {
+        "jsonrpc": "2.0",
+        "method": "initialized",
+        "params": {}
+      }
+    },
+    {
+      "dir": "client",
+      "at": 1788525158731,
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "thread/start",
+        "params": {
+          "cwd": "/private/tmp/claude-501/-Users-tom-My-Life-Folder---TR/bbd7d13c-ef05-494f-883d-d6b9898a7a1b/scratchpad/codex-probe/cwd",
+          "approvalPolicy": "on-request",
+          "sandbox": "read-only"
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525158731,
+      "frame": {
+        "method": "remoteControl/status/changed",
+        "params": {
+          "status": "disabled",
+          "serverName": "Toms-MacBook-Pro.fritz.box",
+          "installationId": "7fa8f655-587e-41d5-9bb0-a5c72fae848d",
+          "environmentId": null
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525159246,
+      "frame": {
+        "id": 2,
+        "result": {
+          "thread": {
+            "id": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+            "extra": null,
+            "sessionId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+            "forkedFromId": null,
+            "parentThreadId": null,
+            "preview": "",
+            "ephemeral": false,
+            "historyMode": "legacy",
+            "modelProvider": "openai",
+            "createdAt": 1788525159,
+            "updatedAt": 1788525159,
+            "recencyAt": 1788525159,
+            "status": {
+              "type": "idle"
+            },
+            "path": "/Users/tom/.codex/sessions/2026/09/04/rollout-2026-09-04T14-32-39-01a06c68-2310-7c70-9787-f9f2e6a9140a.jsonl",
+            "cwd": "/private/tmp/claude-501/-Users-tom-My-Life-Folder---TR/bbd7d13c-ef05-494f-883d-d6b9898a7a1b/scratchpad/codex-probe/cwd",
+            "cliVersion": "0.143.0",
+            "source": "vscode",
+            "threadSource": null,
+            "agentNickname": null,
+            "agentRole": null,
+            "gitInfo": null,
+            "name": null,
+            "turns": []
+          },
+          "model": "gpt-5.5",
+          "modelProvider": "openai",
+          "serviceTier": null,
+          "cwd": "/private/tmp/claude-501/-Users-tom-My-Life-Folder---TR/bbd7d13c-ef05-494f-883d-d6b9898a7a1b/scratchpad/codex-probe/cwd",
+          "runtimeWorkspaceRoots": [
+            "/private/tmp/claude-501/-Users-tom-My-Life-Folder---TR/bbd7d13c-ef05-494f-883d-d6b9898a7a1b/scratchpad/codex-probe/cwd"
+          ],
+          "instructionSources": [],
+          "approvalPolicy": "on-request",
+          "approvalsReviewer": "user",
+          "sandbox": {
+            "type": "readOnly",
+            "networkAccess": false
+          },
+          "activePermissionProfile": null,
+          "reasoningEffort": "xhigh",
+          "multiAgentMode": "explicitRequestOnly"
+        }
+      }
+    },
+    {
+      "dir": "client",
+      "at": 1788525159246,
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "turn/start",
+        "params": {
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "input": [
+            {
+              "type": "text",
+              "text": "Run exactly one shell command that creates a file named probe.txt containing the word hi in the current directory, then tell me in one short line that it is done."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525159246,
+      "frame": {
+        "method": "thread/started",
+        "params": {
+          "thread": {
+            "id": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+            "extra": null,
+            "sessionId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+            "forkedFromId": null,
+            "parentThreadId": null,
+            "preview": "",
+            "ephemeral": false,
+            "historyMode": "legacy",
+            "modelProvider": "openai",
+            "createdAt": 1788525159,
+            "updatedAt": 1788525159,
+            "recencyAt": 1788525159,
+            "status": {
+              "type": "idle"
+            },
+            "path": "/Users/tom/.codex/sessions/2026/09/04/rollout-2026-09-04T14-32-39-01a06c68-2310-7c70-9787-f9f2e6a9140a.jsonl",
+            "cwd": "/private/tmp/claude-501/-Users-tom-My-Life-Folder---TR/bbd7d13c-ef05-494f-883d-d6b9898a7a1b/scratchpad/codex-probe/cwd",
+            "cliVersion": "0.143.0",
+            "source": "vscode",
+            "threadSource": null,
+            "agentNickname": null,
+            "agentRole": null,
+            "gitInfo": null,
+            "name": null,
+            "turns": []
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525159246,
+      "frame": {
+        "method": "mcpServer/startupStatus/updated",
+        "params": {
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "name": "codex_apps",
+          "status": "starting",
+          "error": null,
+          "failureReason": null
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525159246,
+      "frame": {
+        "id": 3,
+        "result": {
+          "turn": {
+            "id": "01a06c68-234e-71d1-91db-24b9745b4b59",
+            "items": [],
+            "itemsView": "notLoaded",
+            "status": "inProgress",
+            "error": null,
+            "startedAt": null,
+            "completedAt": null,
+            "durationMs": null
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525159248,
+      "frame": {
+        "method": "thread/status/changed",
+        "params": {
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "status": {
+            "type": "active",
+            "activeFlags": []
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525159249,
+      "frame": {
+        "method": "turn/started",
+        "params": {
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "turn": {
+            "id": "01a06c68-234e-71d1-91db-24b9745b4b59",
+            "items": [],
+            "itemsView": "notLoaded",
+            "status": "inProgress",
+            "error": null,
+            "startedAt": 1788525159,
+            "completedAt": null,
+            "durationMs": null
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525159445,
+      "frame": {
+        "method": "mcpServer/startupStatus/updated",
+        "params": {
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "name": "codex_apps",
+          "status": "failed",
+          "error": "MCP client for `codex_apps` failed to start: MCP startup failed: handshaking with MCP server failed: Send message error Transport [rmcp::transport::worker::WorkerTransport<rmcp::transport::streamable_http_client::StreamableHttpClientWorker<codex_rmcp_client::http_client_adapter::StreamableHttpClientAdapter>>] error: unexpected server response: HTTP 401: {\n  \"error\": {\n    \"message\": \"Could not parse your authentication token. Please try signing in again.\",\n    \"type\": null,\n    \"code\": \"unauthorized_unknown\",\n    \"param\": null\n  },\n  \"status\": 401\n}, when send initialize request",
+          "failureReason": null
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525160124,
+      "frame": {
+        "method": "item/started",
+        "params": {
+          "item": {
+            "type": "userMessage",
+            "id": "bdd4eb06-486e-44d8-8298-7ef89f2c934d",
+            "clientId": null,
+            "content": [
+              {
+                "type": "text",
+                "text": "Run exactly one shell command that creates a file named probe.txt containing the word hi in the current directory, then tell me in one short line that it is done.",
+                "text_elements": []
+              }
+            ]
+          },
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "turnId": "01a06c68-234e-71d1-91db-24b9745b4b59",
+          "startedAtMs": 1788525160124
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525160124,
+      "frame": {
+        "method": "item/completed",
+        "params": {
+          "item": {
+            "type": "userMessage",
+            "id": "bdd4eb06-486e-44d8-8298-7ef89f2c934d",
+            "clientId": null,
+            "content": [
+              {
+                "type": "text",
+                "text": "Run exactly one shell command that creates a file named probe.txt containing the word hi in the current directory, then tell me in one short line that it is done.",
+                "text_elements": []
+              }
+            ]
+          },
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "turnId": "01a06c68-234e-71d1-91db-24b9745b4b59",
+          "completedAtMs": 1788525160124
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525160525,
+      "frame": {
+        "method": "thread/status/changed",
+        "params": {
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "status": {
+            "type": "systemError"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525160525,
+      "frame": {
+        "method": "error",
+        "params": {
+          "error": {
+            "message": "Your access token could not be refreshed because your refresh token was revoked. Please log out and sign in again.",
+            "codexErrorInfo": "unauthorized",
+            "additionalDetails": null
+          },
+          "willRetry": false,
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "turnId": "01a06c68-234e-71d1-91db-24b9745b4b59"
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525160525,
+      "frame": {
+        "method": "turn/completed",
+        "params": {
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "turn": {
+            "id": "01a06c68-234e-71d1-91db-24b9745b4b59",
+            "items": [],
+            "itemsView": "notLoaded",
+            "status": "failed",
+            "error": {
+              "message": "Your access token could not be refreshed because your refresh token was revoked. Please log out and sign in again.",
+              "codexErrorInfo": "unauthorized",
+              "additionalDetails": null
+            },
+            "startedAt": 1788525159,
+            "completedAt": 1788525160,
+            "durationMs": 1278
+          }
+        }
+      }
+    },
+    {
+      "dir": "client",
+      "at": 1788525160526,
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "turn/start",
+        "params": {
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "input": [
+            {
+              "type": "text",
+              "text": "Count slowly from 1 to 200, one number per line, and after every ten numbers write one sentence about the number."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525160526,
+      "frame": {
+        "id": 4,
+        "result": {
+          "turn": {
+            "id": "01a06c68-284e-76c3-a5c0-5eca199ea0f1",
+            "items": [],
+            "itemsView": "notLoaded",
+            "status": "inProgress",
+            "error": null,
+            "startedAt": null,
+            "completedAt": null,
+            "durationMs": null
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525160529,
+      "frame": {
+        "method": "thread/status/changed",
+        "params": {
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "status": {
+            "type": "active",
+            "activeFlags": []
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525160529,
+      "frame": {
+        "method": "turn/started",
+        "params": {
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "turn": {
+            "id": "01a06c68-284e-76c3-a5c0-5eca199ea0f1",
+            "items": [],
+            "itemsView": "notLoaded",
+            "status": "inProgress",
+            "error": null,
+            "startedAt": 1788525160,
+            "completedAt": null,
+            "durationMs": null
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525160857,
+      "frame": {
+        "method": "item/started",
+        "params": {
+          "item": {
+            "type": "userMessage",
+            "id": "18bfda08-a8c9-41ce-a9db-3c4ff989c412",
+            "clientId": null,
+            "content": [
+              {
+                "type": "text",
+                "text": "Count slowly from 1 to 200, one number per line, and after every ten numbers write one sentence about the number.",
+                "text_elements": []
+              }
+            ]
+          },
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "turnId": "01a06c68-284e-76c3-a5c0-5eca199ea0f1",
+          "startedAtMs": 1788525160857
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525160857,
+      "frame": {
+        "method": "item/completed",
+        "params": {
+          "item": {
+            "type": "userMessage",
+            "id": "18bfda08-a8c9-41ce-a9db-3c4ff989c412",
+            "clientId": null,
+            "content": [
+              {
+                "type": "text",
+                "text": "Count slowly from 1 to 200, one number per line, and after every ten numbers write one sentence about the number.",
+                "text_elements": []
+              }
+            ]
+          },
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "turnId": "01a06c68-284e-76c3-a5c0-5eca199ea0f1",
+          "completedAtMs": 1788525160857
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525161331,
+      "frame": {
+        "method": "thread/status/changed",
+        "params": {
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "status": {
+            "type": "systemError"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525161331,
+      "frame": {
+        "method": "error",
+        "params": {
+          "error": {
+            "message": "Your access token could not be refreshed because your refresh token was revoked. Please log out and sign in again.",
+            "codexErrorInfo": "unauthorized",
+            "additionalDetails": null
+          },
+          "willRetry": false,
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "turnId": "01a06c68-284e-76c3-a5c0-5eca199ea0f1"
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525161331,
+      "frame": {
+        "method": "turn/completed",
+        "params": {
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "turn": {
+            "id": "01a06c68-284e-76c3-a5c0-5eca199ea0f1",
+            "items": [],
+            "itemsView": "notLoaded",
+            "status": "failed",
+            "error": {
+              "message": "Your access token could not be refreshed because your refresh token was revoked. Please log out and sign in again.",
+              "codexErrorInfo": "unauthorized",
+              "additionalDetails": null
+            },
+            "startedAt": 1788525160,
+            "completedAt": 1788525161,
+            "durationMs": 804
+          }
+        }
+      }
+    },
+    {
+      "dir": "client",
+      "at": 1788525161331,
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": 5,
+        "method": "thread/list",
+        "params": {
+          "cwd": "/private/tmp/claude-501/-Users-tom-My-Life-Folder---TR/bbd7d13c-ef05-494f-883d-d6b9898a7a1b/scratchpad/codex-probe/cwd",
+          "limit": 5,
+          "sortKey": "updated_at"
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525161413,
+      "frame": {
+        "id": 5,
+        "result": {
+          "data": [
+            {
+              "id": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+              "extra": null,
+              "sessionId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+              "forkedFromId": null,
+              "parentThreadId": null,
+              "preview": "Run exactly one shell command that creates a file named probe.txt containing the word hi in the current directory, then tell me in one short line that it is done.",
+              "ephemeral": false,
+              "historyMode": "legacy",
+              "modelProvider": "openai",
+              "createdAt": 1788525159,
+              "updatedAt": 1788525161,
+              "recencyAt": 1788525160,
+              "status": {
+                "type": "systemError"
+              },
+              "path": "/Users/tom/.codex/sessions/2026/09/04/rollout-2026-09-04T14-32-39-01a06c68-2310-7c70-9787-f9f2e6a9140a.jsonl",
+              "cwd": "/private/tmp/claude-501/-Users-tom-My-Life-Folder---TR/bbd7d13c-ef05-494f-883d-d6b9898a7a1b/scratchpad/codex-probe/cwd",
+              "cliVersion": "0.143.0",
+              "source": "vscode",
+              "threadSource": null,
+              "agentNickname": null,
+              "agentRole": null,
+              "gitInfo": null,
+              "name": null,
+              "turns": []
+            },
+            {
+              "id": "01a06c66-3b77-7a01-a3cb-4e3bcc974507",
+              "extra": null,
+              "sessionId": "01a06c66-3b77-7a01-a3cb-4e3bcc974507",
+              "forkedFromId": null,
+              "parentThreadId": null,
+              "preview": "Run exactly one shell command that creates a file named probe.txt containing the word hi in the current directory, then tell me in one short line that it is done.",
+              "ephemeral": false,
+              "historyMode": "legacy",
+              "modelProvider": "openai",
+              "createdAt": 1788525034,
+              "updatedAt": 1788525036,
+              "recencyAt": 1788525035,
+              "status": {
+                "type": "notLoaded"
+              },
+              "path": "/Users/tom/.codex/sessions/2026/09/04/rollout-2026-09-04T14-30-34-01a06c66-3b77-7a01-a3cb-4e3bcc974507.jsonl",
+              "cwd": "/private/tmp/claude-501/-Users-tom-My-Life-Folder---TR/bbd7d13c-ef05-494f-883d-d6b9898a7a1b/scratchpad/codex-probe/cwd",
+              "cliVersion": "0.143.0",
+              "source": "vscode",
+              "threadSource": null,
+              "agentNickname": null,
+              "agentRole": null,
+              "gitInfo": null,
+              "name": null,
+              "turns": []
+            }
+          ],
+          "nextCursor": null,
+          "backwardsCursor": "2026-09-04T12:32:41.330Z"
+        }
+      }
+    },
+    {
+      "dir": "client",
+      "at": 1788525161413,
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": 6,
+        "method": "thread/read",
+        "params": {
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "includeTurns": true
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525161416,
+      "frame": {
+        "id": 6,
+        "result": {
+          "thread": {
+            "id": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+            "extra": null,
+            "sessionId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+            "forkedFromId": null,
+            "parentThreadId": null,
+            "preview": "Run exactly one shell command that creates a file named probe.txt containing the word hi in the current directory, then tell me in one short line that it is done.",
+            "ephemeral": false,
+            "historyMode": "legacy",
+            "modelProvider": "openai",
+            "createdAt": 1788525159,
+            "updatedAt": 1788525159,
+            "recencyAt": 1788525160,
+            "status": {
+              "type": "systemError"
+            },
+            "path": "/Users/tom/.codex/sessions/2026/09/04/rollout-2026-09-04T14-32-39-01a06c68-2310-7c70-9787-f9f2e6a9140a.jsonl",
+            "cwd": "/private/tmp/claude-501/-Users-tom-My-Life-Folder---TR/bbd7d13c-ef05-494f-883d-d6b9898a7a1b/scratchpad/codex-probe/cwd",
+            "cliVersion": "0.143.0",
+            "source": "vscode",
+            "threadSource": null,
+            "agentNickname": null,
+            "agentRole": null,
+            "gitInfo": null,
+            "name": null,
+            "turns": [
+              {
+                "id": "01a06c68-234e-71d1-91db-24b9745b4b59",
+                "items": [
+                  {
+                    "type": "userMessage",
+                    "id": "item-1",
+                    "clientId": null,
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Run exactly one shell command that creates a file named probe.txt containing the word hi in the current directory, then tell me in one short line that it is done.",
+                        "text_elements": []
+                      }
+                    ]
+                  }
+                ],
+                "itemsView": "full",
+                "status": "completed",
+                "error": null,
+                "startedAt": 1788525159,
+                "completedAt": 1788525160,
+                "durationMs": 1278
+              },
+              {
+                "id": "01a06c68-284e-76c3-a5c0-5eca199ea0f1",
+                "items": [
+                  {
+                    "type": "userMessage",
+                    "id": "item-2",
+                    "clientId": null,
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Count slowly from 1 to 200, one number per line, and after every ten numbers write one sentence about the number.",
+                        "text_elements": []
+                      }
+                    ]
+                  }
+                ],
+                "itemsView": "full",
+                "status": "completed",
+                "error": null,
+                "startedAt": 1788525160,
+                "completedAt": 1788525161,
+                "durationMs": 804
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "dir": "client",
+      "at": 1788525161416,
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": 7,
+        "method": "model/list",
+        "params": {
+          "limit": 20
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525161512,
+      "frame": {
+        "id": 7,
+        "result": {
+          "data": [
+            {
+              "id": "gpt-5.5",
+              "model": "gpt-5.5",
+              "upgrade": null,
+              "upgradeInfo": null,
+              "availabilityNux": {
+                "message": "GPT-5.5 is now available in Codex. It's our strongest agentic coding model yet, built to reason through large codebases, check assumptions with tools, and keep going until the work is done.\n\nLearn more: https://openai.com/index/introducing-gpt-5-5/\n\n"
+              },
+              "displayName": "GPT-5.5",
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "hidden": false,
+              "supportedReasoningEfforts": [
+                {
+                  "reasoningEffort": "low",
+                  "description": "Fast responses with lighter reasoning"
+                },
+                {
+                  "reasoningEffort": "medium",
+                  "description": "Balances speed and reasoning depth for everyday tasks"
+                },
+                {
+                  "reasoningEffort": "high",
+                  "description": "Greater reasoning depth for complex problems"
+                },
+                {
+                  "reasoningEffort": "xhigh",
+                  "description": "Extra high reasoning depth for complex problems"
+                }
+              ],
+              "defaultReasoningEffort": "medium",
+              "inputModalities": [
+                "text",
+                "image"
+              ],
+              "supportsPersonality": true,
+              "additionalSpeedTiers": [
+                "fast"
+              ],
+              "serviceTiers": [
+                {
+                  "id": "priority",
+                  "name": "Fast",
+                  "description": "1.5x speed, increased usage"
+                }
+              ],
+              "defaultServiceTier": null,
+              "isDefault": true
+            },
+            {
+              "id": "gpt-5.4",
+              "model": "gpt-5.4",
+              "upgrade": null,
+              "upgradeInfo": null,
+              "availabilityNux": null,
+              "displayName": "gpt-5.4",
+              "description": "Strong model for everyday coding.",
+              "hidden": false,
+              "supportedReasoningEfforts": [
+                {
+                  "reasoningEffort": "low",
+                  "description": "Fast responses with lighter reasoning"
+                },
+                {
+                  "reasoningEffort": "medium",
+                  "description": "Balances speed and reasoning depth for everyday tasks"
+                },
+                {
+                  "reasoningEffort": "high",
+                  "description": "Greater reasoning depth for complex problems"
+                },
+                {
+                  "reasoningEffort": "xhigh",
+                  "description": "Extra high reasoning depth for complex problems"
+                }
+              ],
+              "defaultReasoningEffort": "medium",
+              "inputModalities": [
+                "text",
+                "image"
+              ],
+              "supportsPersonality": true,
+              "additionalSpeedTiers": [
+                "fast"
+              ],
+              "serviceTiers": [
+                {
+                  "id": "priority",
+                  "name": "Fast",
+                  "description": "1.5x speed, increased usage"
+                }
+              ],
+              "defaultServiceTier": null,
+              "isDefault": false
+            },
+            {
+              "id": "gpt-5.4-mini",
+              "model": "gpt-5.4-mini",
+              "upgrade": null,
+              "upgradeInfo": null,
+              "availabilityNux": null,
+              "displayName": "GPT-5.4-Mini",
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "hidden": false,
+              "supportedReasoningEfforts": [
+                {
+                  "reasoningEffort": "low",
+                  "description": "Fast responses with lighter reasoning"
+                },
+                {
+                  "reasoningEffort": "medium",
+                  "description": "Balances speed and reasoning depth for everyday tasks"
+                },
+                {
+                  "reasoningEffort": "high",
+                  "description": "Greater reasoning depth for complex problems"
+                },
+                {
+                  "reasoningEffort": "xhigh",
+                  "description": "Extra high reasoning depth for complex problems"
+                }
+              ],
+              "defaultReasoningEffort": "medium",
+              "inputModalities": [
+                "text",
+                "image"
+              ],
+              "supportsPersonality": true,
+              "additionalSpeedTiers": [],
+              "serviceTiers": [],
+              "defaultServiceTier": null,
+              "isDefault": false
+            },
+            {
+              "id": "gpt-5.3-codex",
+              "model": "gpt-5.3-codex",
+              "upgrade": "gpt-5.4",
+              "upgradeInfo": {
+                "model": "gpt-5.4",
+                "upgradeCopy": null,
+                "modelLink": null,
+                "migrationMarkdown": "Introducing GPT-5.4\n\nCodex just got an upgrade with GPT-5.4, our most capable model for professional work. It outperforms prior models while being more token efficient, with notable improvements on long-running tasks, tool calling, computer use, and frontend development.\n\nLearn more: https://openai.com/index/introducing-gpt-5-4\n\nYou can always keep using GPT-5.3-Codex if you prefer.\n"
+              },
+              "availabilityNux": null,
+              "displayName": "gpt-5.3-codex",
+              "description": "Coding-optimized model.",
+              "hidden": false,
+              "supportedReasoningEfforts": [
+                {
+                  "reasoningEffort": "low",
+                  "description": "Fast responses with lighter reasoning"
+                },
+                {
+                  "reasoningEffort": "medium",
+                  "description": "Balances speed and reasoning depth for everyday tasks"
+                },
+                {
+                  "reasoningEffort": "high",
+                  "description": "Greater reasoning depth for complex problems"
+                },
+                {
+                  "reasoningEffort": "xhigh",
+                  "description": "Extra high reasoning depth for complex problems"
+                }
+              ],
+              "defaultReasoningEffort": "medium",
+              "inputModalities": [
+                "text",
+                "image"
+              ],
+              "supportsPersonality": true,
+              "additionalSpeedTiers": [],
+              "serviceTiers": [],
+              "defaultServiceTier": null,
+              "isDefault": false
+            },
+            {
+              "id": "gpt-5.2",
+              "model": "gpt-5.2",
+              "upgrade": "gpt-5.4",
+              "upgradeInfo": {
+                "model": "gpt-5.4",
+                "upgradeCopy": null,
+                "modelLink": null,
+                "migrationMarkdown": "Introducing GPT-5.4\n\nCodex just got an upgrade with GPT-5.4, our most capable model for professional work. It outperforms prior models while being more token efficient, with notable improvements on long-running tasks, tool calling, computer use, and frontend development.\n\nLearn more: https://openai.com/index/introducing-gpt-5-4\n\nYou can always keep using GPT-5.3-Codex if you prefer.\n"
+              },
+              "availabilityNux": null,
+              "displayName": "gpt-5.2",
+              "description": "Optimized for professional work and long-running agents.",
+              "hidden": false,
+              "supportedReasoningEfforts": [
+                {
+                  "reasoningEffort": "low",
+                  "description": "Balances speed with some reasoning; useful for straightforward queries and short explanations"
+                },
+                {
+                  "reasoningEffort": "medium",
+                  "description": "Provides a solid balance of reasoning depth and latency for general-purpose tasks"
+                },
+                {
+                  "reasoningEffort": "high",
+                  "description": "Maximizes reasoning depth for complex or ambiguous problems"
+                },
+                {
+                  "reasoningEffort": "xhigh",
+                  "description": "Extra high reasoning for complex problems"
+                }
+              ],
+              "defaultReasoningEffort": "medium",
+              "inputModalities": [
+                "text",
+                "image"
+              ],
+              "supportsPersonality": false,
+              "additionalSpeedTiers": [],
+              "serviceTiers": [],
+              "defaultServiceTier": null,
+              "isDefault": false
+            }
+          ],
+          "nextCursor": null
+        }
+      }
+    },
+    {
+      "dir": "client",
+      "at": 1788525161512,
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": 8,
+        "method": "thread/name/set",
+        "params": {
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "name": "probe"
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525161518,
+      "frame": {
+        "id": 8,
+        "result": {}
+      }
+    },
+    {
+      "dir": "client",
+      "at": 1788525161518,
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": 9,
+        "method": "account/read",
+        "params": {}
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525161518,
+      "frame": {
+        "method": "thread/name/updated",
+        "params": {
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+          "threadName": "probe"
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525161518,
+      "frame": {
+        "id": 9,
+        "result": {
+          "account": null,
+          "requiresOpenaiAuth": true
+        }
+      }
+    },
+    {
+      "dir": "client",
+      "at": 1788525161518,
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": 10,
+        "method": "account/rateLimits/read",
+        "params": {}
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525161607,
+      "frame": {
+        "error": {
+          "code": -32603,
+          "message": "failed to fetch codex rate limits: GET https://chatgpt.com/backend-api/wham/usage failed: 401 Unauthorized; content-type=text/plain; body={\n  \"error\": {\n    \"message\": \"Could not parse your authentication token. Please try signing in again.\",\n    \"type\": null,\n    \"code\": \"unauthorized_unknown\",\n    \"param\": null\n  },\n  \"status\": 401\n}"
+        },
+        "id": 10
+      }
+    },
+    {
+      "dir": "client",
+      "at": 1788525161607,
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": 11,
+        "method": "thread/fork",
+        "params": {
+          "threadId": "01a06c68-2310-7c70-9787-f9f2e6a9140a"
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525161767,
+      "frame": {
+        "method": "mcpServer/startupStatus/updated",
+        "params": {
+          "threadId": "01a06c68-2cf4-7fe1-a2e9-1ad7d0d354db",
+          "name": "codex_apps",
+          "status": "starting",
+          "error": null,
+          "failureReason": null
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525161770,
+      "frame": {
+        "id": 11,
+        "result": {
+          "thread": {
+            "id": "01a06c68-2cf4-7fe1-a2e9-1ad7d0d354db",
+            "extra": null,
+            "sessionId": "01a06c68-2cf4-7fe1-a2e9-1ad7d0d354db",
+            "forkedFromId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+            "parentThreadId": null,
+            "preview": "Run exactly one shell command that creates a file named probe.txt containing the word hi in the current directory, then tell me in one short line that it is done.",
+            "ephemeral": false,
+            "historyMode": "legacy",
+            "modelProvider": "openai",
+            "createdAt": 1788525161,
+            "updatedAt": 1788525161,
+            "recencyAt": 1788525161,
+            "status": {
+              "type": "idle"
+            },
+            "path": "/Users/tom/.codex/sessions/2026/09/04/rollout-2026-09-04T14-32-41-01a06c68-2cf4-7fe1-a2e9-1ad7d0d354db.jsonl",
+            "cwd": "/private/tmp/claude-501/-Users-tom-My-Life-Folder---TR/bbd7d13c-ef05-494f-883d-d6b9898a7a1b/scratchpad/codex-probe/cwd",
+            "cliVersion": "0.143.0",
+            "source": "vscode",
+            "threadSource": null,
+            "agentNickname": null,
+            "agentRole": null,
+            "gitInfo": null,
+            "name": "probe",
+            "turns": [
+              {
+                "id": "01a06c68-234e-71d1-91db-24b9745b4b59",
+                "items": [
+                  {
+                    "type": "userMessage",
+                    "id": "item-1",
+                    "clientId": null,
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Run exactly one shell command that creates a file named probe.txt containing the word hi in the current directory, then tell me in one short line that it is done.",
+                        "text_elements": []
+                      }
+                    ]
+                  }
+                ],
+                "itemsView": "full",
+                "status": "completed",
+                "error": null,
+                "startedAt": 1788525159,
+                "completedAt": 1788525160,
+                "durationMs": 1278
+              },
+              {
+                "id": "01a06c68-284e-76c3-a5c0-5eca199ea0f1",
+                "items": [
+                  {
+                    "type": "userMessage",
+                    "id": "item-2",
+                    "clientId": null,
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Count slowly from 1 to 200, one number per line, and after every ten numbers write one sentence about the number.",
+                        "text_elements": []
+                      }
+                    ]
+                  }
+                ],
+                "itemsView": "full",
+                "status": "completed",
+                "error": null,
+                "startedAt": 1788525160,
+                "completedAt": 1788525161,
+                "durationMs": 804
+              }
+            ]
+          },
+          "model": "gpt-5.5",
+          "modelProvider": "openai",
+          "serviceTier": null,
+          "cwd": "/private/tmp/claude-501/-Users-tom-My-Life-Folder---TR/bbd7d13c-ef05-494f-883d-d6b9898a7a1b/scratchpad/codex-probe/cwd",
+          "runtimeWorkspaceRoots": [
+            "/private/tmp/claude-501/-Users-tom-My-Life-Folder---TR/bbd7d13c-ef05-494f-883d-d6b9898a7a1b/scratchpad/codex-probe/cwd"
+          ],
+          "instructionSources": [],
+          "approvalPolicy": "on-request",
+          "approvalsReviewer": "user",
+          "sandbox": {
+            "type": "readOnly",
+            "networkAccess": false
+          },
+          "activePermissionProfile": {
+            "id": ":read-only",
+            "extends": null
+          },
+          "reasoningEffort": "xhigh",
+          "multiAgentMode": "explicitRequestOnly"
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788525161770,
+      "frame": {
+        "method": "thread/started",
+        "params": {
+          "thread": {
+            "id": "01a06c68-2cf4-7fe1-a2e9-1ad7d0d354db",
+            "extra": null,
+            "sessionId": "01a06c68-2cf4-7fe1-a2e9-1ad7d0d354db",
+            "forkedFromId": "01a06c68-2310-7c70-9787-f9f2e6a9140a",
+            "parentThreadId": null,
+            "preview": "Run exactly one shell command that creates a file named probe.txt containing the word hi in the current directory, then tell me in one short line that it is done.",
+            "ephemeral": false,
+            "historyMode": "legacy",
+            "modelProvider": "openai",
+            "createdAt": 1788525161,
+            "updatedAt": 1788525161,
+            "recencyAt": 1788525161,
+            "status": {
+              "type": "idle"
+            },
+            "path": "/Users/tom/.codex/sessions/2026/09/04/rollout-2026-09-04T14-32-41-01a06c68-2cf4-7fe1-a2e9-1ad7d0d354db.jsonl",
+            "cwd": "/private/tmp/claude-501/-Users-tom-My-Life-Folder---TR/bbd7d13c-ef05-494f-883d-d6b9898a7a1b/scratchpad/codex-probe/cwd",
+            "cliVersion": "0.143.0",
+            "source": "vscode",
+            "threadSource": null,
+            "agentNickname": null,
+            "agentRole": null,
+            "gitInfo": null,
+            "name": "probe",
+            "turns": []
+          }
+        }
+      }
+    }
+  ]
+}
