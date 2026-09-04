@@ -21,10 +21,15 @@
 
 import type { ChatEvent, EffortName, ModelChoice, PermissionModeName } from '../model/types';
 
-/** `acp` is one provider that carries an agent recipe (Gemini, Copilot, OpenCode). */
-export type ProviderId = 'claude' | 'codex' | 'acp';
+/* One id per RUNTIME, never per protocol. `acp` was the placeholder for
+ * "some agent over the Agent Client Protocol"; it went the day the runtimes
+ * arrived (2026-09-04), because a manifest that says `acp` cannot say which
+ * agent had the session, and a resume needs exactly that. Gemini, Copilot
+ * CLI, OpenCode and Qwen Code all speak ACP through one client
+ * (`provider/acp`) and each keeps its own id. */
+export type ProviderId = 'claude' | 'codex' | 'gemini' | 'copilot' | 'opencode' | 'qwen';
 
-export const PROVIDER_IDS: readonly ProviderId[] = ['claude', 'codex', 'acp'];
+export const PROVIDER_IDS: readonly ProviderId[] = ['claude', 'codex', 'gemini', 'copilot', 'opencode', 'qwen'];
 
 export function isProviderId(value: unknown): value is ProviderId {
   return typeof value === 'string' && (PROVIDER_IDS as readonly string[]).includes(value);
@@ -160,9 +165,25 @@ export interface SessionStore {
   delete?(sessionId: string, cwd: string): Promise<void>;
 }
 
+/**
+ * How a member gets the runtime onto the machine. The plugin never runs it:
+ * Obsidian's policy forbids a plugin installing its own dependencies, and the
+ * vault's rule is that a runtime is started by the user, never by an agent.
+ * The plugin hands the line to a terminal pane or to the clipboard and opens
+ * the vendor's page; the user presses Enter.
+ */
+export interface RuntimeInstall {
+  /** The vendor's documented one-line install. */
+  command: string;
+  /** The vendor's own setup page. */
+  page: string;
+}
+
 export interface Provider {
   readonly id: ProviderId;
   readonly displayName: string;
+  /** The vendor's install line and page, for a runtime that was not found. */
+  readonly installation: RuntimeInstall;
   /** One-time host preparation before any session can launch. Optional. */
   install?(): void;
   detect(env: DetectEnvironment): Promise<Detection>;

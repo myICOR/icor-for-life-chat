@@ -1,0 +1,180 @@
+{
+  "command": [
+    "gemini",
+    "--acp"
+  ],
+  "cwd": "/private/tmp/claude-501/-Users-tom-My-Life-Folder---TR/bbd7d13c-ef05-494f-883d-d6b9898a7a1b/scratchpad/acp-probe",
+  "recordedAt": "2026-09-04T13:04:05.653Z",
+  "agentInfo": {
+    "name": "gemini-cli",
+    "title": "Gemini CLI",
+    "version": "0.58.0"
+  },
+  "agentCapabilities": {
+    "loadSession": true,
+    "promptCapabilities": {
+      "image": true,
+      "audio": true,
+      "embeddedContext": true
+    },
+    "mcpCapabilities": {
+      "http": true,
+      "sse": true
+    }
+  },
+  "authMethods": [
+    {
+      "id": "oauth-personal",
+      "name": "Log in with Google",
+      "description": "Log in with your Google account"
+    },
+    {
+      "id": "gemini-api-key",
+      "name": "Gemini API key",
+      "description": "Use an API key with Gemini Developer API",
+      "_meta": {
+        "api-key": {
+          "provider": "google"
+        }
+      }
+    },
+    {
+      "id": "vertex-ai",
+      "name": "Vertex AI",
+      "description": "Use an API key with Vertex AI GenAI API"
+    },
+    {
+      "id": "gateway",
+      "name": "AI API Gateway",
+      "description": "Use a custom AI API Gateway",
+      "_meta": {
+        "gateway": {
+          "protocol": "google",
+          "restartRequired": "false"
+        }
+      }
+    }
+  ],
+  "protocolVersion": 1,
+  "sessionNewError": {
+    "message": "Gemini API key is missing or not configured.",
+    "code": -32000,
+    "data": null
+  },
+  "updatesSeen": [],
+  "permissionAnswers": 0,
+  "stderrTail": [],
+  "durationMs": 1662,
+  "frames": [
+    {
+      "dir": "client",
+      "at": 1788527045654,
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+          "protocolVersion": 1,
+          "clientCapabilities": {
+            "fs": {
+              "readTextFile": false,
+              "writeTextFile": false
+            },
+            "terminal": false
+          },
+          "clientInfo": {
+            "name": "icor-for-life-chat-probe",
+            "title": "ICOR probe",
+            "version": "0.0.0"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788527047082,
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "protocolVersion": 1,
+          "authMethods": [
+            {
+              "id": "oauth-personal",
+              "name": "Log in with Google",
+              "description": "Log in with your Google account"
+            },
+            {
+              "id": "gemini-api-key",
+              "name": "Gemini API key",
+              "description": "Use an API key with Gemini Developer API",
+              "_meta": {
+                "api-key": {
+                  "provider": "google"
+                }
+              }
+            },
+            {
+              "id": "vertex-ai",
+              "name": "Vertex AI",
+              "description": "Use an API key with Vertex AI GenAI API"
+            },
+            {
+              "id": "gateway",
+              "name": "AI API Gateway",
+              "description": "Use a custom AI API Gateway",
+              "_meta": {
+                "gateway": {
+                  "protocol": "google",
+                  "restartRequired": "false"
+                }
+              }
+            }
+          ],
+          "agentInfo": {
+            "name": "gemini-cli",
+            "title": "Gemini CLI",
+            "version": "0.58.0"
+          },
+          "agentCapabilities": {
+            "loadSession": true,
+            "promptCapabilities": {
+              "image": true,
+              "audio": true,
+              "embeddedContext": true
+            },
+            "mcpCapabilities": {
+              "http": true,
+              "sse": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "dir": "client",
+      "at": 1788527047084,
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "session/new",
+        "params": {
+          "cwd": "/private/tmp/claude-501/-Users-tom-My-Life-Folder---TR/bbd7d13c-ef05-494f-883d-d6b9898a7a1b/scratchpad/acp-probe",
+          "mcpServers": []
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "at": 1788527047311,
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "error": {
+          "code": -32000,
+          "message": "Gemini API key is missing or not configured."
+        }
+      }
+    }
+  ]
+}

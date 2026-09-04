@@ -21,7 +21,7 @@ import { SubagentBus } from './state/subagents';
 import { ReplyActionRegistry } from './view/actions';
 import type { RenderHost } from './structured/render';
 import type { ItemView } from 'obsidian';
-import { availableProviders, missingProviderMessage, providerFor, providerName } from './provider/registry';
+import { availableProviders, configureArchiveIndex, missingProviderMessage, providerFor, providerName } from './provider/registry';
 import { providerFromFrontmatter, resumableSessionId } from './archive/resume';
 import { shortAge } from './view/dom';
 import { ChatView } from './view/ChatView';
@@ -29,7 +29,9 @@ import { captureTaskAction, startDeliverableAction } from './wip/actions';
 import { openTaskCount } from './team/load';
 import { routeChatLeaf } from './view/leafRoute';
 import { ChatSettingsTab } from './settings/SettingsTab';
-import { DEFAULT_SETTINGS, archiveRoot } from './model/settings';
+import { DEFAULT_SETTINGS, archiveRoot, pathSettingKey } from './model/settings';
+import { offerInstall } from './provider/install';
+import { archiveIndex } from './archive/index';
 import type { ChatSettings } from './model/settings';
 import type { ModelChoice } from './model/types';
 import type { DetectEnvironment, Detection, Provider, ProviderId } from './provider/types';
@@ -90,6 +92,9 @@ export default class IcorChatPlugin extends Plugin {
     // Each runtime prepares the host once, before anything can launch a query
     // (the Claude provider installs the renderer AbortSignal shim here).
     for (const provider of availableProviders()) provider.install?.();
+    /* The ACP runtimes have no session list of their own; the vault's archive
+       is their record, and it is read through this one door. */
+    configureArchiveIndex(archiveIndex(this.app, () => archiveRoot(this.settings, this.scaffoldDetected)));
     void this.refreshDetections();
 
     this.registerView(VIEW_TYPE_CHAT, (leaf) => new ChatView(leaf, this));
@@ -263,7 +268,22 @@ export default class IcorChatPlugin extends Plugin {
 
   /** The configured executable path for a runtime; empty means search. */
   pathFor(provider: ProviderId): string {
-    return provider === 'codex' ? this.settings.codexPath : provider === 'claude' ? this.settings.cliPath : '';
+    const value = this.settings[pathSettingKey(provider)];
+    return typeof value === 'string' ? value : '';
+  }
+
+  /**
+   * Offer a runtime's install: the vendor's line into a terminal pane or onto
+   * the clipboard, and the vendor's page. The plugin installs nothing; see
+   * provider/install.ts. The member presses Enter, then checks again.
+   */
+  async installRuntime(provider: ProviderId): Promise<void> {
+    const runtime = providerFor(provider);
+    if (!runtime) {
+      new Notice(missingProviderMessage(provider));
+      return;
+    }
+    await offerInstall(this.app, runtime);
   }
 
   private detectEnvironment(provider: ProviderId): DetectEnvironment {
@@ -358,6 +378,20 @@ export default class IcorChatPlugin extends Plugin {
           .setTitle(ordered.length === 1 ? 'Start new session' : `Start new session with ${runtime.displayName}`)
           .setIcon('message-square-plus')
           .onClick(() => void this.openChat(undefined, runtime.id)),
+      );
+    }
+    /* Every runtime the build knows and this machine lacks, as one row that
+       OFFERS the install rather than a dead entry: clicking it hands the
+       vendor's line to a terminal pane or the clipboard and opens the page.
+       The plugin installs nothing; the member presses Enter. */
+    for (const runtime of availableProviders()) {
+      if (this.detections[runtime.id]?.found !== false) continue;
+      menu.addItem((item) =>
+        item
+          .setTitle(`Install ${runtime.displayName}`)
+          .setIcon('download')
+          .setSection('install')
+          .onClick(() => void this.installRuntime(runtime.id)),
       );
     }
 

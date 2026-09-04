@@ -90,6 +90,10 @@ export function signedInFrom(result: unknown): boolean | null {
 export const codexProvider: Provider = {
   id: 'codex',
   displayName: 'Codex',
+  installation: {
+    command: 'npm install -g @openai/codex',
+    page: 'https://developers.openai.com/codex/cli',
+  },
   store: codexStore,
 
   install(): void {

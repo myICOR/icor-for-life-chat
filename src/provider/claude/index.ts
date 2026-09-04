@@ -45,6 +45,10 @@ function isExecutableFile(path: string): boolean {
 export const claudeProvider: Provider = {
   id: 'claude',
   displayName: 'Claude Code',
+  installation: {
+    command: 'curl -fsSL https://claude.ai/install.sh | bash',
+    page: 'https://code.claude.com/docs/en/setup',
+  },
   store: claudeStore,
 
   /* Before anything can launch a query. See renderer-compat.ts for why: the
