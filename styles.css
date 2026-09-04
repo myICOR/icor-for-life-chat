@@ -2723,6 +2723,136 @@
 
 /* ==== REGION D: pinned prompts ==== */
 
+/* D.1 the tray, rung 0. A quiet band above the stream with a hairline
+   below it, capped so a stack of open pins can never push the conversation
+   off the pane; past the cap it scrolls inside itself. */
+.aic-pins {
+  flex: 0 0 auto;
+  max-height: 30%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 16px;
+  border-bottom: 1px solid var(--aic-hairline-subtle);
+  background: var(--aic-surface);
+}
+.aic-pins.is-empty { display: none; }
+
+.aic-pin {
+  max-width: 70ch;
+  margin: 0 auto;
+  font-family: var(--aic-body);
+}
+.aic-pin + .aic-pin { border-top: 1px solid var(--aic-hairline-subtle); }
+
+/* D.2 the folded row. The whole head is the control on a foldable pin; the
+   two icon buttons in its right cell are their own controls, and the head's
+   click handler steps aside for them. */
+.aic-pin-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 0;
+  border-radius: var(--aic-r-control);
+  color: var(--aic-paper);
+}
+.aic-pin.is-foldable .aic-pin-head { cursor: pointer; transition: background-color 140ms var(--aic-ease); }
+.aic-pin.is-foldable .aic-pin-head:hover,
+.aic-pin.is-foldable .aic-pin-head:focus-visible { background: var(--aic-wash); }
+.aic-pin-icon { display: inline-flex; flex: 0 0 auto; color: var(--aic-marker); }
+.aic-pin-icon .svg-icon { width: 14px; height: 14px; }
+.aic-pin-ordinal {
+  flex: 0 0 auto;
+  font-family: var(--aic-mono);
+  font-size: 11px;
+  color: var(--aic-faint);
+}
+.aic-pin-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.aic-pin.is-open .aic-pin-text { white-space: normal; }
+
+/* D.3 the two icon buttons. Stated at (0,3,0) like every control in this
+   file, because the host theme skins `button` and would win otherwise. */
+.aic-pin-actions { display: inline-flex; flex: 0 0 auto; gap: 4px; }
+.aic-root.aic-root .aic-pin-btn {
+  appearance: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  opacity: 1;
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--aic-r-control);
+  color: var(--aic-dim);
+  cursor: pointer;
+  transition: background-color 140ms var(--aic-ease), color 140ms var(--aic-ease);
+}
+.aic-root.aic-root .aic-pin-btn:hover,
+.aic-root.aic-root .aic-pin-btn:focus-visible { background: var(--aic-wash); color: var(--aic-paper); }
+.aic-root.aic-root .aic-pin-btn .svg-icon { width: 14px; height: 14px; }
+
+/* D.4 the open body: the whole prompt, wrapped as typed, with its own cap
+   and its own scroll so one long prompt does not eat the tray. */
+.aic-pin-body {
+  padding: 0 0 8px 22px;
+  max-height: 40vh;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--aic-paper);
+}
+
+/* D.5 the pin control on a user well. Hidden until the well is hovered or
+   the control is focused, and always visible once the prompt IS pinned, so
+   a pinned well says so at rest. The well becomes the positioning box. */
+.aic-user { position: relative; }
+.aic-root.aic-root .aic-user-pin {
+  appearance: none;
+  background: var(--aic-surface);
+  border: none;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  opacity: 0;
+  font: inherit;
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--aic-r-control);
+  color: var(--aic-dim);
+  cursor: pointer;
+  transition: opacity 140ms var(--aic-ease), background-color 140ms var(--aic-ease), color 140ms var(--aic-ease);
+}
+.aic-user:hover .aic-user-pin,
+.aic-root.aic-root .aic-user-pin:focus-visible,
+.aic-user.is-pinned .aic-user-pin { opacity: 1; }
+.aic-root.aic-root .aic-user-pin:hover,
+.aic-root.aic-root .aic-user-pin:focus-visible { background: var(--aic-wash); color: var(--aic-paper); }
+.aic-user.is-pinned .aic-user-pin { color: var(--aic-marker); }
+.aic-root.aic-root .aic-user-pin .svg-icon { width: 14px; height: 14px; }
+
 /* ==== END REGION D ==== */
 
 /* ==== REGION E: follow-up prompts (queued turns, stop control) ==== */
