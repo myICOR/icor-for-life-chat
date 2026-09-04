@@ -27,6 +27,9 @@ import { baseOf, contextPickId, folderOf, previewText } from '../model/context';
 import type { ContextPick, ContextRef } from '../model/context';
 import { wikilinksIn } from './composer/mention';
 import { ContextModal, contextIcon } from './ContextModal';
+import { renderPinTray } from './PinTray';
+import { isPinned, pinFirstPrompt, pinsFromState, pinsToState, togglePin, unpin } from '../model/pins';
+import type { PinnedPrompt } from '../model/pins';
 import type { TrayChip } from './composer/Composer';
 import { ChatSession } from '../sdk/session';
 import { Normalizer, userTextOf } from '../sdk/normalize';
@@ -69,6 +72,13 @@ export class ChatView extends ItemView {
    * stored nowhere: the transcript is the record, so there is no flag to drift. */
   private readonly transcript: TranscriptEntry[] = [];
   private readonly surfaced: SurfacedDecision[] = [];
+  /* THE PINS. The first prompt is pinned by the plugin, the rest by the user,
+   * and the list lives on the leaf state so a reopened tab keeps it. `pinsEl`
+   * is rung 0; `openPins` is which rows are unfolded, owned here so a repaint
+   * never folds a pin the user just opened. */
+  private pins: PinnedPrompt[] = [];
+  private readonly openPins = new Set<string>();
+  private pinsEl: HTMLElement | null = null;
   private readonly blockIndex = new Map<string, number>();
   private turnCounter = 0;
   /** One catalogue fetch per session; a resumed tab re-asks on its own init. */
@@ -153,6 +163,7 @@ export class ChatView extends ItemView {
     });
     this.scroller = pane.scroller;
     this.column = pane.column;
+    this.pinsEl = pane.pins;
     this.chipTray = pane.chipTray;
     this.teamStripEl = pane.teamStrip;
     this.composer = pane.composer;
@@ -168,6 +179,7 @@ export class ChatView extends ItemView {
         const ref = this.sentGroups.get(label);
         if (ref) new ContextModal(this.app, ref).open();
       },
+      onTogglePin: (key, text) => this.togglePinFor(key, text),
       renderHost: {
         home: this.plugin.homeDir,
         insertCode: (code) => this.composer?.insert(`${code} `),
@@ -181,6 +193,7 @@ export class ChatView extends ItemView {
     });
     this.roster = detectTeam(this.app);
     this.stream.renderEmptyState(this.emptyTeamBlock());
+    this.renderPins();
     void this.fillResumeRows();
     this.addAction('bar-chart-3', 'Open AI team insights', () => void this.plugin.openInsights());
     /* The trigger shows the ACTUAL model from pane open. With no plugin
@@ -344,13 +357,23 @@ export class ChatView extends ItemView {
 
   /** The leaf carries the session id, so a reopened tab resumes its own thread. */
   override getState(): Record<string, unknown> {
-    return { resumeSessionId: this.store.state.sessionId ?? this.resumeSessionId };
+    return {
+      resumeSessionId: this.store.state.sessionId ?? this.resumeSessionId,
+      pins: pinsToState(this.pins),
+    };
   }
 
   override async setState(state: unknown, result: unknown): Promise<void> {
     if (state && typeof state === 'object' && 'resumeSessionId' in state) {
       const id = (state as { resumeSessionId?: unknown }).resumeSessionId;
       if (typeof id === 'string' && id) this.resumeSessionId = id;
+    }
+    if (state && typeof state === 'object' && 'pins' in state) {
+      /* Read back before the replay runs, so the replay finds pins already
+         there and leaves the first-prompt rule alone: the stored tray is the
+         user's, including a first prompt they chose to unpin. */
+      this.pins = pinsFromState((state as { pins?: unknown }).pins);
+      this.renderPins();
     }
     await super.setState(state, result as Parameters<ItemView['setState']>[1]);
   }
@@ -361,6 +384,8 @@ export class ChatView extends ItemView {
     this.clearanceObserver = null;
     this.statusline?.dispose();
     this.composer?.dispose();
+    this.pinsEl?.empty();
+    this.pinsEl = null;
     this.badge?.destroy();
     this.session?.dispose();
     this.session = null;
@@ -556,8 +581,12 @@ export class ChatView extends ItemView {
     for (const raw of messages) {
       const spoken = userTextOf(raw);
       if (spoken !== null) {
-        this.stream?.appendUserWell(spoken, null);
+        const key = String(this.turnCounter);
+        this.stream?.appendUserWell(spoken, null, [], null, [], key);
         this.transcript.push({ role: 'user', text: spoken, index: this.turnCounter, at: Date.now() });
+        // The first replayed prompt is the conversation's first prompt, and
+        // it is pinned by the same rule a live one is: only into an empty tray.
+        this.pins = pinFirstPrompt(this.pins, { key, text: spoken, index: this.turnCounter });
         this.turnCounter += 1;
       }
       for (const event of normalizer.normalize(raw)) {
@@ -579,8 +608,50 @@ export class ChatView extends ItemView {
     this.plugin.subagents.orphanRunning();
     this.renderChips();
     this.refreshDecisions();
+    // The wells exist now, so the stored pins can light their controls.
+    this.renderPins();
     this.stream?.sealReplay();
     this.scrollToEnd();
+  }
+
+  /* ----------------------------------------------------------------- pins */
+
+  /** The user clicked a well's pin control: pin it, or unpin it. */
+  private togglePinFor(key: string, text: string): void {
+    const index = Number(key);
+    if (!Number.isFinite(index)) return;
+    this.pins = togglePin(this.pins, { key, text, index });
+    this.renderPins();
+  }
+
+  /**
+   * Repaint rung 0 and every well's pinned state from the one list. Also
+   * asks the workspace to persist the leaf, because the pins ride the leaf
+   * state and Obsidian only writes that when told a view's state changed.
+   */
+  private renderPins(): void {
+    if (this.pinsEl) {
+      renderPinTray(this.pinsEl, this.pins, {
+        open: this.openPins,
+        onToggleOpen: (key) => {
+          if (this.openPins.has(key)) this.openPins.delete(key);
+          else this.openPins.add(key);
+          this.renderPins();
+        },
+        onUnpin: (key) => {
+          this.pins = unpin(this.pins, key);
+          this.openPins.delete(key);
+          this.renderPins();
+        },
+        onJump: (key) => this.stream?.scrollToWell(key),
+      });
+    }
+    for (const entry of this.transcript) {
+      if (entry.role !== 'user') continue;
+      const key = String(entry.index);
+      this.stream?.setPinned(key, isPinned(this.pins, key));
+    }
+    this.app.workspace.requestSaveLayout();
   }
 
   /* -------------------------------------------------------------- context */
@@ -802,8 +873,14 @@ export class ChatView extends ItemView {
       contextPath: ctx ? ctx.path : null,
       images,
       contexts,
+      key: String(index),
       stream: null,
     });
+    /* The first prompt of a fresh conversation is pinned on send. The pin
+       carries the words as typed, never the preamble the model receives: the
+       tray answers "what did I ask", and the open note was not asked. */
+    this.pins = pinFirstPrompt(this.pins, { key: String(index), text, index });
+    this.renderPins();
     this.refreshDecisions();
     this.refreshContext();
     session.send(withContext(text, ctx, refs), images);

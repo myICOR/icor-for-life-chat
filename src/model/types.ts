@@ -98,6 +98,10 @@ export type ChatEventBody =
          count so the chip can say how much it stands for. Optional because a
          0.5.x transcript never wrote it, and a replay must not lose the turn. */
       contexts?: TurnContext[];
+      /* The turn's transcript index as a string, so the well can carry a pin
+         control that the pin tray recognises. Optional for the same reason
+         `contexts` is: older transcripts never wrote it. */
+      key?: string;
     }
   | { kind: 'text-open'; blockId: string }
   | { kind: 'text-delta'; blockId: string; text: string }
