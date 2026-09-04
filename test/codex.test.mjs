@@ -94,6 +94,13 @@ test('the live turn replays as reasoning, one Bash row with its result, the stre
   const end = events.find((e) => e.kind === 'turn-end');
   assert.equal(end.isError, false);
   assert.ok(end.usage.totalTokens > 0 && end.usage.inputTokens > 0 && end.usage.outputTokens > 0, 'usage is measured from the wire');
+  /* The wire's own numbers, so the cached-inside-input rule is held against
+     the recording and not only against a synthetic frame. */
+  const wire = notifications().filter((n) => n.method === 'thread/tokenUsage/updated').map((n) => n.params.tokenUsage.total);
+  const last = wire[wire.length - 1];
+  assert.equal(end.usage.cacheReadTokens, last.cachedInputTokens);
+  assert.equal(end.usage.inputTokens, last.inputTokens - last.cachedInputTokens, 'cached tokens counted once, not inside input as well');
+  assert.equal(end.usage.totalTokens, last.totalTokens);
   assert.ok(end.durationMs > 0);
   assert.ok(kinds.indexOf('tool-call') < kinds.indexOf('text-final'), 'the command ran before the answer');
 });
@@ -192,7 +199,7 @@ test('the model-output path, per schema: rows keyed by item id, purposes in the 
   assert.equal(results[1].detail, 'no such file');
   assert.equal(results[2].ok, true);
   const end = events[events.length - 1];
-  assert.deepEqual(end.usage, { inputTokens: 100, outputTokens: 10, cacheReadTokens: 40, totalTokens: 150, costUsd: 0 });
+  assert.deepEqual(end.usage, { inputTokens: 60, outputTokens: 10, cacheReadTokens: 40, totalTokens: 150, costUsd: 0 });
   assert.equal(end.contextWindow, 200000);
   assert.equal(end.durationMs, 1234);
   assert.equal(end.isError, false);
