@@ -64,14 +64,17 @@ export function renderTeamStrip(
     entry.toggleClass('is-unmatched', !share.matched);
     renderAvatar(entry, share.name, agent?.avatarPath ?? null, resolve, 'aic-team-face');
     entry.createSpan({ cls: 'aic-team-name', text: share.name });
-    entry.createSpan({ cls: 'aic-team-pct', text: `${pct}%` });
+    // A percentage only where activity was measured; an agent that ran with
+    // nothing forwarded says so in a word rather than in a zero.
+    const measured = share.activity > 0;
+    entry.createSpan({ cls: 'aic-team-pct', text: measured ? `${pct}%` : 'RAN' });
     const facts = [`${share.name}`, `${share.toolCalls} tool call${share.toolCalls === 1 ? '' : 's'}`];
     if (share.durationMs > 0) facts.push(shortDuration(share.durationMs));
     const tip = `${facts.join(' · ')} · ${SHARE_BASIS}`;
     setTooltip(entry, tip);
     entry.setAttr(
       'aria-label',
-      `${share.name}, ${pct} percent, ${facts.slice(1).join(', ')}. ${agent?.bioPath ? 'Open the bio' : 'Open the transcript'}.`,
+      `${share.name}, ${measured ? `${pct} percent` : 'ran, nothing measured'}, ${facts.slice(1).join(', ')}. ${agent?.bioPath ? 'Open the bio' : 'Open the transcript'}.`,
     );
     entry.addEventListener('click', () => onOpen(share));
   }

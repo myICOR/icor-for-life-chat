@@ -239,14 +239,17 @@ export function renderInsights(root: HTMLElement, page: InsightsPage, state: Ins
     (v) => String(Math.round(v)),
   );
 
-  const agentsSec = section(root, 'MOST USED AGENTS · BY ACTIVITY');
+  const agentsSec = section(root, 'MOST USED AGENTS · BY RUNS');
   hbars(
     agentsSec,
     agg.agents.map((a) => ({
       key: a.key,
       name: a.name,
-      count: a.activity,
-      detail: `${a.toolCalls} tool call${a.toolCalls === 1 ? '' : 's'} · ${a.sessions} session${a.sessions === 1 ? '' : 's'}`,
+      count: a.runs,
+      detail: [
+        `${a.sessions} session${a.sessions === 1 ? '' : 's'}`,
+        a.toolCalls > 0 ? `${a.toolCalls} tool call${a.toolCalls === 1 ? '' : 's'}` : null,
+      ].filter((part): part is string => part !== null).join(' · '),
       avatar: host.avatarFor(a.key),
       active: state.filters.agent === a.key,
     })),

@@ -178,10 +178,20 @@ export class Composer {
   private sources: ContextSources | null = null;
   /** Lists fetched while the menu is open; dropped when it closes. */
   private menuCache: { [K in keyof ContextSources]?: ReturnType<ContextSources[K]> } = {};
+  /* THE OUTSIDE-CLICK GUARD RUNS IN THE CAPTURE PHASE, and that is the whole
+     fix for "clicking Tags does nothing" (Tom, 2026-09-04). A row answers on
+     mousedown by entering the next view, which EMPTIES the menu and rebuilds
+     it; a bubbling document listener then saw a mousedown whose target was a
+     node no longer in the document, `contains` said no, and the menu closed on
+     the very click that had just opened its submenu. Capture runs before the
+     row's own handler, so the row is still attached when containment is
+     decided. The connected check is belt and braces: a target that has left
+     the document is never evidence of a click outside it. */
   private readonly onDocMouseDown = (ev: MouseEvent): void => {
     if (!this.menuOpen) return;
     const target = ev.target as Node | null;
-    if (target && (this.menuEl.contains(target) || this.addBtn.contains(target))) return;
+    if (!target || !target.isConnected) return;
+    if (this.menuEl.contains(target) || this.addBtn.contains(target)) return;
     this.closeMenu(false);
   };
   private slashNames: string[] = [];
@@ -390,7 +400,7 @@ export class Composer {
     /* The `+` menu closes on a click anywhere else. Registered on the
        document once; the handler checks the open flag first so a closed menu
        costs one boolean per click. */
-    document.addEventListener('mousedown', this.onDocMouseDown);
+    document.addEventListener('mousedown', this.onDocMouseDown, { capture: true });
 
     /* PASTE AND DROP, on the CARD rather than on the textarea.
      *
@@ -520,7 +530,7 @@ export class Composer {
 
   /** Release the document listener. The view calls this on close. */
   dispose(): void {
-    document.removeEventListener('mousedown', this.onDocMouseDown);
+    document.removeEventListener('mousedown', this.onDocMouseDown, { capture: true });
     if (this.previewTimer !== null) window.clearTimeout(this.previewTimer);
   }
 
@@ -1024,7 +1034,15 @@ export class Composer {
     const cache = this.menuCache as Record<string, unknown>;
     const cached = cache[key];
     if (cached !== undefined) return cached as ReturnType<ContextSources[K]>;
-    const fetched = (this.sources ? this.sources[key]() : []) as ReturnType<ContextSources[K]>;
+    let fetched: ReturnType<ContextSources[K]>;
+    try {
+      fetched = (this.sources ? this.sources[key]() : []) as ReturnType<ContextSources[K]>;
+    } catch (error) {
+      // A vault-side scan that throws must say so; an empty list would read
+      // as "this vault has no tags", which is a lie about the vault.
+      this.notice(`Could not list ${key}: ${error instanceof Error ? error.message : String(error)}`);
+      fetched = [] as unknown as ReturnType<ContextSources[K]>;
+    }
     cache[key] = fetched;
     return fetched;
   }

@@ -2242,7 +2242,9 @@
   font-family: var(--aic-mono);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
-  color: var(--aic-faint);
+  /* The quiet ink, not the faint one: a 10px count in the faint voice measured
+     under the 4.5:1 floor in the ink room once the submenu was reachable. */
+  color: var(--aic-dim);
   flex: 0 0 auto;
 }
 .aic-ctx-row-more { display: inline-flex; color: var(--aic-faint); flex: 0 0 auto; }
@@ -2256,12 +2258,22 @@
 /* The field, stated with the reset so a host theme's input skin stays out.
    It sits above the rows in a submenu and below them at the root; the border
    side follows. */
-.aic-root.aic-root .aic-ctx-search {
+/* The host theme's input family is stated as an :is() list behind four :not()
+   clauses, which is (0,5,1); the composer's textarea already answers it with
+   the four-times-repeated class, and this field takes the same pen. It sat at
+   (0,3,0) and lost every colour in the Tags view the moment that view could
+   actually be reached (the outside-click guard closed it before). */
+/* No `outline` and no `:focus-visible` twin here: at (0,6,1) either would
+   outrank the focus pen, and this field DOES take the ring (the composer's
+   textarea is the one exception, and its ring lives on the card). */
+.aic-root .aic-ctx-menu input.aic-ctx-search.aic-ctx-search.aic-ctx-search.aic-ctx-search,
+.aic-root .aic-ctx-menu input.aic-ctx-search.aic-ctx-search.aic-ctx-search.aic-ctx-search:hover,
+.aic-root .aic-ctx-menu input.aic-ctx-search.aic-ctx-search.aic-ctx-search.aic-ctx-search:active,
+.aic-root .aic-ctx-menu input.aic-ctx-search.aic-ctx-search.aic-ctx-search.aic-ctx-search:focus {
   appearance: none;
   background: transparent;
   border: none;
   box-shadow: none;
-  outline: none;
   margin: 0;
   padding: 8px 12px;
   width: 100%;
@@ -2270,8 +2282,7 @@
   color: var(--aic-paper);
   flex: 0 0 auto;
 }
-.aic-root.aic-root .aic-ctx-search::placeholder { color: var(--aic-faint); }
-.aic-root.aic-root .aic-ctx-search:focus { outline: none; box-shadow: none; }
+.aic-root .aic-ctx-menu input.aic-ctx-search.aic-ctx-search.aic-ctx-search.aic-ctx-search::placeholder { color: var(--aic-faint); }
 .aic-ctx-menu .aic-ctx-search:last-child { border-top: 1px solid var(--aic-hairline-subtle); }
 .aic-ctx-menu .aic-ctx-head + .aic-ctx-search { border-bottom: 1px solid var(--aic-hairline-subtle); }
 

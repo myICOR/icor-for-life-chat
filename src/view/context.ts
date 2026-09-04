@@ -79,20 +79,36 @@ export function resolveFolder(app: App, folderPath: string): string[] {
   return markdownFilesUnder(folder).map((f) => f.path).sort();
 }
 
-function normalizeTag(tag: string): string {
-  const bare = tag.trim().replace(/^#+/, '');
-  return `#${bare.toLowerCase()}`;
+function normalizeTag(tag: unknown): string | null {
+  // A frontmatter `tags: [2026]` reaches here as a number; `.trim` on it was
+  // one throw away from an empty Tags submenu. Stringify, then normalise.
+  const text = typeof tag === 'string' ? tag : typeof tag === 'number' ? String(tag) : '';
+  const bare = text.trim().replace(/^#+/, '');
+  return bare ? `#${bare.toLowerCase()}` : null;
 }
 
 function tagsOf(cache: CachedMetadata | null): string[] {
   if (!cache) return [];
-  return (getAllTags(cache) ?? []).map(normalizeTag);
+  let raw: unknown[];
+  try {
+    raw = getAllTags(cache) ?? [];
+  } catch {
+    // One note with a malformed cache must not empty the whole list.
+    return [];
+  }
+  const out: string[] = [];
+  for (const tag of raw) {
+    const norm = normalizeTag(tag);
+    if (norm) out.push(norm);
+  }
+  return out;
 }
 
 /** Every note carrying the tag, in either `#tag` or `tag` form, any case. */
 export function resolveTag(app: App, tag: string): string[] {
   const wanted = normalizeTag(tag);
   const out: string[] = [];
+  if (!wanted) return out;
   for (const file of app.vault.getMarkdownFiles()) {
     if (tagsOf(app.metadataCache.getFileCache(file)).includes(wanted)) out.push(file.path);
   }

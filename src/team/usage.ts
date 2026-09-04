@@ -79,16 +79,22 @@ export function agentShares(input: ShareInput): AgentShare[] {
     buckets.set(key, { ...seed, activity, toolCalls, durationMs });
   };
 
+  /* EVERY AGENT THAT RAN IS IN THE STRIP, measured activity or not. A
+     subagent that forwards no text and calls no tool still ran - the CLI
+     spawned it, it took its time, and it handed a result back - and a strip
+     that dropped it read as "subagents are not tracked" (Tom, 2026-09-04). It
+     keeps a zero share; the renderer prints RAN in place of a percentage, so
+     no number is shown that was not measured. The main thread is listed once
+     there is anything at all to list. */
   const larry = matchRoster('larry', input.roster);
   const mainActivity = input.main.toolCalls + input.main.textBlocks;
-  if (mainActivity > 0) {
+  if (mainActivity > 0 || input.subagents.length > 0) {
     if (larry) add(larry.slug, { name: larry.name, slug: larry.slug, matched: true }, mainActivity, input.main.toolCalls, 0);
     else add('team', { name: MAIN_UNMATCHED_NAME, slug: 'team', matched: false }, mainActivity, input.main.toolCalls, 0);
   }
 
   for (const sub of input.subagents) {
     const activity = sub.toolCalls + sub.textBlocks;
-    if (activity <= 0) continue;
     const hit = matchRoster(sub.agentType, input.roster);
     const raw = sub.agentType.trim() || 'agent';
     const key = hit ? hit.slug : raw.toLowerCase();
@@ -102,8 +108,7 @@ export function agentShares(input: ShareInput): AgentShare[] {
   }
 
   const total = Array.from(buckets.values()).reduce((sum, b) => sum + b.activity, 0);
-  if (total <= 0) return [];
   return Array.from(buckets.values())
-    .map((b) => ({ ...b, share: b.activity / total }))
+    .map((b) => ({ ...b, share: total > 0 ? b.activity / total : 0 }))
     .sort((a, b) => b.share - a.share || a.name.localeCompare(b.name));
 }

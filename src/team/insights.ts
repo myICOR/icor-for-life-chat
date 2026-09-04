@@ -126,6 +126,8 @@ export interface Bucket {
 export interface AgentTotal {
   key: string;
   name: string;
+  /** Times the agent worked: one per session for the main thread, one per spawn for a subagent. */
+  runs: number;
   activity: number;
   toolCalls: number;
   sessions: number;
@@ -194,14 +196,21 @@ export function mainKey(roster: RosterRef[] | null): { key: string; name: string
 }
 
 /** Every participant of a session, main thread included, keyed. */
-function participants(session: SessionRecord, roster: RosterRef[] | null): Array<{ key: string; name: string; matched: boolean; activity: number; toolCalls: number }> {
-  const out: Array<{ key: string; name: string; matched: boolean; activity: number; toolCalls: number }> = [];
+/* EVERY AGENT THAT RAN IS A PARTICIPANT, measured activity or not.
+ *
+ * The archive carries a subagent's spawn (`subagent-start`) but not its own
+ * stream: the SDK's session file holds only the main thread, so a 0.5.x
+ * folder records that Quinn ran and nothing of what Quinn did. Dropping the
+ * zero-activity rows made those agents vanish from the ranking while their
+ * avatars still sat on the session list - "subagents are not tracked" (Tom,
+ * 2026-09-04). A run is a fact the archive does hold, so runs are what the
+ * ranking counts; tool calls stay a detail, shown only when measured. */
+function participants(session: SessionRecord, roster: RosterRef[] | null): Array<{ key: string; name: string; matched: boolean; activity: number; toolCalls: number; runs: number }> {
+  const out: Array<{ key: string; name: string; matched: boolean; activity: number; toolCalls: number; runs: number }> = [];
   const mainActivity = session.mainToolCalls + session.mainTextBlocks;
-  if (mainActivity > 0) out.push({ ...mainKey(roster), activity: mainActivity, toolCalls: session.mainToolCalls });
+  out.push({ ...mainKey(roster), activity: mainActivity, toolCalls: session.mainToolCalls, runs: 1 });
   for (const agent of session.agents) {
-    const activity = agent.toolCalls + agent.textBlocks;
-    if (activity <= 0) continue;
-    out.push({ ...agentKey(agent.agentType, roster), activity, toolCalls: agent.toolCalls });
+    out.push({ ...agentKey(agent.agentType, roster), activity: agent.toolCalls + agent.textBlocks, toolCalls: agent.toolCalls, runs: 1 });
   }
   return out;
 }
@@ -263,9 +272,10 @@ export function aggregate(
   for (const s of sessions) {
     const seen = new Set<string>();
     for (const p of participants(s, roster)) {
-      const row = agentMap.get(p.key) ?? { key: p.key, name: p.name, activity: 0, toolCalls: 0, sessions: 0, matched: p.matched };
+      const row = agentMap.get(p.key) ?? { key: p.key, name: p.name, activity: 0, toolCalls: 0, runs: 0, sessions: 0, matched: p.matched };
       row.activity += p.activity;
       row.toolCalls += p.toolCalls;
+      row.runs += p.runs;
       if (!seen.has(p.key)) {
         row.sessions += 1;
         seen.add(p.key);
@@ -282,7 +292,7 @@ export function aggregate(
     buckets,
     sessionCount: sessions.length,
     tokens,
-    agents: Array.from(agentMap.values()).sort((a, b) => b.activity - a.activity || a.name.localeCompare(b.name)),
+    agents: Array.from(agentMap.values()).sort((a, b) => b.runs - a.runs || b.activity - a.activity || a.name.localeCompare(b.name)),
     tools: Array.from(toolMap.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
     models: Array.from(modelMap.entries()).map(([model, sessions]) => ({ model, sessions })).sort((a, b) => b.sessions - a.sessions),
   };

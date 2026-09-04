@@ -53,13 +53,27 @@ test('the same agent spawned twice sums, and shares add to one', () => {
   assert.equal(shares[1].share, 4 / 12);
 });
 
-test('nothing measured means no shares at all, never a row of zeros', () => {
+test('nothing ran means no shares at all, never a row of zeros', () => {
   assert.deepEqual(agentShares({ main: { toolCalls: 0, textBlocks: 0 }, subagents: [], roster: ROSTER }), []);
-  assert.deepEqual(agentShares({
+});
+
+test('a subagent that ran with nothing forwarded is listed with a zero share, not dropped', () => {
+  const shares = agentShares({
+    main: { toolCalls: 3, textBlocks: 1 },
+    subagents: [{ agentType: 'pax', toolCalls: 0, textBlocks: 0, durationMs: 9, status: 'done' }],
+    roster: ROSTER,
+  });
+  assert.deepEqual(shares.map((s) => [s.name, s.activity, s.share, s.durationMs]), [
+    ['Larry', 4, 1, 0],
+    ['Pax', 0, 0, 9],
+  ]);
+  // Nothing measured anywhere: everyone is listed, every share is zero.
+  const none = agentShares({
     main: { toolCalls: 0, textBlocks: 0 },
     subagents: [{ agentType: 'pax', toolCalls: 0, textBlocks: 0, durationMs: 9, status: 'done' }],
     roster: ROSTER,
-  }), []);
+  });
+  assert.deepEqual(none.map((s) => [s.name, s.share]), [['Larry', 0], ['Pax', 0]]);
 });
 
 /* -------------------------------------------------- deriving from events */
@@ -140,16 +154,19 @@ test('the axis becomes weeks past the threshold', () => {
   assert.equal(agg.buckets.reduce((n, b) => n + b.sessions, 0), 2);
 });
 
-test('agent totals count activity and sessions, main thread included as Larry', () => {
+test('agent totals count runs, activity and sessions, main thread included as Larry', () => {
   const agg = aggregate([
     session(0, { agents: [{ agentType: 'pax', toolCalls: 4, textBlocks: 1, durationMs: 10, status: 'done' }] }),
     session(1, { agents: [{ agentType: 'PAX', toolCalls: 1, textBlocks: 0, durationMs: 10, status: 'done' },
-                          { agentType: 'general-purpose', toolCalls: 2, textBlocks: 0, durationMs: 10, status: 'done' }] }),
+                          { agentType: 'general-purpose', toolCalls: 2, textBlocks: 0, durationMs: 10, status: 'done' },
+                          // A 0.5.x archive: the spawn is recorded, the activity is not.
+                          { agentType: 'quinn', toolCalls: 0, textBlocks: 0, durationMs: 0, status: 'done' }] }),
   ], '7d', { agent: null, model: null }, ROSTER, NOW);
-  assert.deepEqual(agg.agents.map((a) => [a.key, a.name, a.activity, a.sessions, a.matched]), [
-    ['pax', 'Pax', 6, 2, true],
-    ['larry', 'Larry', 4, 2, true],
-    ['general-purpose', 'general-purpose', 2, 1, false],
+  assert.deepEqual(agg.agents.map((a) => [a.key, a.name, a.runs, a.activity, a.sessions, a.matched]), [
+    ['pax', 'Pax', 2, 6, 2, true],
+    ['larry', 'Larry', 2, 4, 2, true],
+    ['general-purpose', 'general-purpose', 1, 2, 1, false],
+    ['quinn', 'quinn', 1, 0, 1, false],
   ]);
 });
 
