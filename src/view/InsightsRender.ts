@@ -27,9 +27,13 @@ export interface InsightsHost {
   /** The roster's portrait for a participant key, or null. */
   avatarFor: (key: string) => string | null;
   openSession: (folder: string) => void;
+  /** Open a WiP folder's brief or README (R1). */
+  openWip: (folder: string) => void;
   onRange: (range: RangeKey) => void;
   onAgent: (key: string | null) => void;
   onModel: (model: string | null) => void;
+  /** An agent's journal, read lazily per row; absent hosts show no journal line. */
+  journalsFor?: (key: string) => Promise<{ count: number; newest: { path: string; title: string; date: string | null } | null } | null>;
 }
 
 export interface InsightsPage {
@@ -256,6 +260,29 @@ export function renderInsights(root: HTMLElement, page: InsightsPage, state: Ins
     host.resolveAvatar,
     (key) => host.onAgent(state.filters.agent === key ? null : key),
   );
+  /* THE JOURNAL LINE, per roster agent, filled in after the row exists. The
+     journals are the agents' own memory and this is the one place the vault
+     shows who learned what; read lazily so a 52-agent roster costs nothing
+     until the page is open. An agent with no journal folder gets no line, and
+     a folder with zero entries says so in words rather than in a zero. */
+  if (host.journalsFor) {
+    const rows = Array.from(agentsSec.querySelectorAll<HTMLElement>('.aic-hbar-row'));
+    agg.agents.forEach((a, i) => {
+      const row = rows[i];
+      if (!row || !a.matched) return;
+      void host.journalsFor?.(a.key).then((journal) => {
+        if (!journal || !row.isConnected) return;
+        const line = row.createSpan({ cls: 'aic-hbar-journal' });
+        if (journal.count === 0) {
+          line.setText('No journal entries yet');
+          return;
+        }
+        const parts = [`${journal.count} journal entr${journal.count === 1 ? 'y' : 'ies'}`];
+        if (journal.newest?.date) parts.push(journal.newest.date);
+        line.setText(parts.join(' · '));
+      });
+    });
+  }
 
   const toolsSec = section(root, 'TOOLS USED · MAIN THREAD');
   hbars(
@@ -294,5 +321,23 @@ export function renderInsights(root: HTMLElement, page: InsightsPage, state: Ins
       setTooltip(face, a.agentType);
     }
     if (s.tokens !== null) row.createSpan({ cls: 'aic-ins-session-tokens', text: `${compactNumber(s.tokens)} TOK` });
+    /* THE DELIVERABLES A SESSION TOUCHED (R1): one glyph per WiP folder, each
+       its own button so a click opens the folder and not the conversation.
+       Only sessions whose manifest carries the fact show it; an older folder
+       shows nothing rather than an empty glyph. */
+    const wip = s.wip ?? [];
+    if (wip.length > 0) {
+      const strip = list.createDiv({ cls: 'aic-ins-session-wip' });
+      for (const folder of wip) {
+        const name = folder.split('/').pop() ?? folder;
+        const btn = strip.createEl('button', { cls: 'aic-ins-wip', type: 'button' });
+        const glyph = btn.createSpan({ cls: 'aic-ins-wip-icon' });
+        setIcon(glyph, 'briefcase');
+        btn.createSpan({ cls: 'aic-ins-wip-name', text: name });
+        btn.setAttr('aria-label', `Open the deliverable ${name}`);
+        setTooltip(btn, folder);
+        btn.addEventListener('click', () => host.openWip(folder));
+      }
+    }
   }
 }

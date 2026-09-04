@@ -2922,13 +2922,222 @@
 
 /* ==== REGION G1: vault sources (WiP, tasks, linked notes) ==== */
 
+/* G1.1 a disabled menu row: a measured zero, shown and not offered. The row
+   keeps its count so the user learns the fact; it loses the pointer and the
+   wash so it never reads as a choice. */
+.aic-root.aic-root .aic-ctx-row.is-disabled {
+  cursor: default;
+  color: var(--aic-faint);
+}
+.aic-root.aic-root .aic-ctx-row.is-disabled.is-active { background: transparent; color: var(--aic-faint); }
+.aic-root.aic-root .aic-ctx-row.is-disabled .aic-ctx-row-icon { color: var(--aic-faint); }
+
+/* G1.2 the deliverables a session touched, one button per WiP folder, under
+   the session row in the Insights list. Quiet by design: the folder name in
+   the kicker voice, the briefcase in the faint ink, the marker only on hover. */
+.aic-root.aic-root .aic-ins-session-wip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 0 12px 8px 12px;
+}
+.aic-root.aic-root .aic-ins-wip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--aic-hairline-subtle);
+  border-radius: var(--aic-r-pill);
+  background: transparent;
+  box-shadow: none;
+  color: var(--aic-dim);
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  cursor: pointer;
+  transition: border-color 140ms var(--aic-ease), color 140ms var(--aic-ease);
+}
+.aic-root.aic-root .aic-ins-wip:hover { border-color: var(--aic-marker); color: var(--aic-paper); }
+.aic-root.aic-root .aic-ins-wip-icon { display: inline-flex; color: var(--aic-faint); }
+.aic-root.aic-root .aic-ins-wip-icon .svg-icon { width: 12px; height: 12px; }
+.aic-root.aic-root .aic-ins-wip:hover .aic-ins-wip-icon { color: var(--aic-marker); }
+
 /* ==== END REGION G1 ==== */
 
 /* ==== REGION G2: reply surface (activity sentence, message actions, finish signals) ==== */
 
+/* G2.1 THE ACTION BAR. Bottom-right of a finished block, quiet until the block
+   is hovered or a control in it holds focus. The buttons ride the icon-button
+   reset that is already stated at (0,3,0); this region only sizes and places
+   them. A block is `position: relative` so the bar can sit in its corner
+   without pushing the words. */
+.aic-assistant, .aic-structured { position: relative; }
+.aic-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  opacity: 0;
+  transition: opacity 140ms var(--aic-ease);
+}
+.aic-assistant:hover .aic-actions,
+.aic-structured:hover .aic-actions,
+.aic-user:hover .aic-actions,
+.aic-actions:focus-within { opacity: 1; }
+.aic-root.aic-root .aic-action {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--aic-r-control);
+  color: var(--aic-dim);
+}
+.aic-root.aic-root .aic-action:hover,
+.aic-root.aic-root .aic-action:focus-visible { background: var(--aic-wash); color: var(--aic-paper); }
+.aic-root.aic-root .aic-action .svg-icon { width: 14px; height: 14px; }
+
+/* G2.2 THE ACTIVITY SENTENCE on a collapsed group: body voice, the quiet ink,
+   the count in the mono voice beside it. It replaces the `12 TOOL CALLS`
+   kicker, which counted the thing the reader was not looking at. */
+.aic-tool-summary-label { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; }
+.aic-tool-summary-text {
+  font-family: var(--aic-body);
+  font-size: 13px;
+  color: var(--aic-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.aic-tool-summary-count {
+  font-family: var(--aic-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--aic-dim);
+  flex: 0 0 auto;
+}
+
+/* G2.3 THE FINISH BADGE, on the workspace tab header. Outside .aic-root by
+   nature, so the marker is read off the theme's own channel here with the
+   same stock fallback the token block declares. */
+.workspace-tab-header.aic-tab-done .workspace-tab-header-inner-title { position: relative; padding-right: 12px; }
+.workspace-tab-header.aic-tab-done .workspace-tab-header-inner-title::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 999px;
+  background: var(--ink-marker, #d43f16);
+}
+.theme-dark .workspace-tab-header.aic-tab-done .workspace-tab-header-inner-title::after { background: var(--ink-marker, #ff5a2d); }
+
 /* ==== END REGION G2 ==== */
 
 /* ==== REGION G3: memory (recent logs, remember, journals) ==== */
+
+/* G3.1 the LAST SESSIONS block under the resume rows. The same rhythm as the
+   resume rows (hairline between rows, the wash on hover, the marker underline
+   on the title), one rung quieter: the date in mono, the insight in the quiet
+   ink. Rows are real buttons because they open a note. */
+.aic-memory { margin-top: 32px; }
+.aic-memory .aic-kicker { margin-bottom: 8px; }
+.aic-root.aic-root .aic-memory-row {
+  appearance: none;
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 12px 4px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--aic-hairline-subtle);
+  border-radius: 0;
+  box-shadow: none;
+  text-align: left;
+  font: inherit;
+  color: var(--aic-paper);
+  cursor: pointer;
+  position: relative;
+}
+.aic-root.aic-root .aic-memory-row:last-of-type { border-bottom: none; }
+.aic-root.aic-root .aic-memory-row:hover { background: var(--aic-wash); }
+.aic-memory-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.aic-memory-date {
+  font-family: var(--aic-mono);
+  font-size: 11px;
+  color: var(--aic-dim);
+  flex: 0 0 auto;
+}
+.aic-memory-title {
+  font-size: 14px;
+  font-weight: 560;
+  color: var(--aic-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  position: relative;
+  min-width: 0;
+}
+.aic-memory-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -3px;
+  width: 26px;
+  height: 2px;
+  background: var(--aic-marker);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 240ms var(--aic-ease);
+}
+.aic-root.aic-root .aic-memory-row:hover .aic-memory-title::after { transform: scaleX(1); }
+.aic-memory-insight {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--aic-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* G3.2 the task line: one quiet sentence, a button because it opens a task. */
+.aic-root.aic-root .aic-memory-tasks {
+  appearance: none;
+  display: block;
+  margin: 12px 0 0;
+  padding: 0 4px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  text-align: left;
+  font-family: var(--aic-body);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--aic-dim);
+  cursor: pointer;
+}
+.aic-root.aic-root .aic-memory-tasks:hover { color: var(--aic-paper); }
+/* G3.3 the journal line on an insights agent row, in the quiet ink. */
+.aic-hbar-journal {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  font-family: var(--aic-mono);
+  font-size: 11px;
+  color: var(--aic-dim);
+  white-space: nowrap;
+}
 
 /* ==== END REGION G3 ==== */
 

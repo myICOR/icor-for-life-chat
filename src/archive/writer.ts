@@ -22,6 +22,7 @@ import {
 import type { ArchiveManifest } from './naming';
 import { withoutImageBytes } from './redact';
 import { agentRecords } from './agents';
+import { sessionLine, wipFoldersTouched, withSessionLine } from '../wip/naming';
 
 export interface ArchiveInput {
   title: string;
@@ -37,6 +38,8 @@ export interface ArchiveInput {
   tokens: number;
   pluginVersion: string;
   sdkVersion: string;
+  /** WiP folders the user attached as context; the writer adds the ones the tools touched. */
+  wipAttached?: string[];
 }
 
 function iso(ms: number): string {
@@ -201,9 +204,25 @@ export class ArchiveWriter {
         tokens: input.tokens,
       },
       ...agentRecords(input.events, input.subagents),
+      wip: wipFoldersTouched(input.events, input.wipAttached ?? []),
     };
     await adapter.write(`${folder}/${MANIFEST_FILE}`, JSON.stringify(manifest, null, 2));
+    /* THE LINK BACK. A WiP folder this session worked on gets one line under
+       its README's `## Sessions`, so the deliverable knows the conversations
+       behind it without anyone remembering to write that down. Idempotent:
+       the archive is rewritten after every turn and the line is added once. */
+    for (const wip of manifest.wip ?? []) await this.linkSession(wip, folder, input.title);
     return folder;
+  }
+
+  private async linkSession(wipFolder: string, archiveFolder: string, title: string): Promise<void> {
+    const adapter = this.app.vault.adapter;
+    if (!(await adapter.exists(wipFolder))) return;
+    const readmePath = `${wipFolder}/README.md`;
+    const existing = (await adapter.exists(readmePath)) ? await adapter.read(readmePath) : null;
+    const folderTitle = wipFolder.split('/').pop() ?? wipFolder;
+    const next = withSessionLine(existing, folderTitle, sessionLine(archiveFolder, title));
+    if (next !== existing) await adapter.write(readmePath, next);
   }
 
   async readManifest(folder: string): Promise<ArchiveManifest | null> {

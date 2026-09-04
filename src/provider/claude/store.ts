@@ -178,7 +178,13 @@ export async function readSessionReplay(sessionId: string, dir: string, cap = 40
   const { messages, omitted } = await readSessionMessages(sessionId, dir, cap);
   const normalizer = new Normalizer();
   return {
-    entries: messages.map((raw) => ({ spoken: userTextOf(raw), events: normalizer.normalize(raw) })),
+    entries: messages.map((raw) => ({
+      spoken: userTextOf(raw),
+      events: normalizer.normalize(raw),
+      // The chain-entry uuid every stored SDK message carries; forkSession
+      // takes it as `upToMessageId` (inclusive).
+      messageId: typeof (raw as { uuid?: unknown }).uuid === 'string' ? (raw as { uuid: string }).uuid : null,
+    })),
     omitted,
   };
 }

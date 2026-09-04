@@ -114,6 +114,8 @@ export interface ArchiveManifest {
   tools?: Record<string, number>;
   mainToolCalls?: number;
   mainTextBlocks?: number;
+  /** The `03 WiP/<folder>` paths this session wrote to or was given as context (R1). Absent before 0.7.x. */
+  wip?: string[];
 }
 
 export interface ManifestAgentRecord {

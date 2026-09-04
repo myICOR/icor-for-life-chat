@@ -237,10 +237,25 @@ async function mount(): Promise<void> {
         openUrl: () => {}, copy: () => {}, decisionState: () => null,
       },
       onDecisions: () => {},
+      /* THE ACTION BAR, drawn by the shipped renderer from a bound list the
+         way the view hands it one: two primary buttons and one behind the
+         dots, on replies and on the user's own well alike. */
+      actionsFor: (target) => [
+        { id: 'copy', icon: 'copy', label: 'Copy', section: 'primary', run: () => {} },
+        ...(target.role === 'assistant'
+          ? [{ id: 'save', icon: 'file-plus', label: 'Save as note', section: 'primary' as const, run: () => {} },
+             { id: 'regen', icon: 'refresh-cw', label: 'Regenerate', section: 'more' as const, run: () => {} }]
+          : [{ id: 'edit', icon: 'pencil-line', label: 'Edit and resend', section: 'primary' as const, run: () => {} }]),
+      ],
     },
   );
   const ev = <T extends Record<string, unknown>>(body: T): never =>
     ({ ...body, stream: 'main' }) as never;
+  /* A FINISHED PROSE REPLY, so the bar exists under a block the sweep can
+     hover. Plain mode, so the shim's MarkdownRenderer paints it and no card
+     parser is involved. */
+  stream2.apply(ev({ kind: 'text-open', blockId: 'reply-1' }));
+  stream2.apply(ev({ kind: 'text-final', blockId: 'reply-1', text: 'The sweep found nine selectors under the host theme.' }));
   stream2.apply(ev({ kind: 'tool-call', toolUseId: 't1', name: 'Read', target: 'note.md', purpose: 'Read note.md', input: {} }));
   stream2.apply(ev({ kind: 'tool-call', toolUseId: 't2', name: 'Bash', target: 'ls', purpose: 'List the vault root', input: {} }));
   stream2.apply(ev({ kind: 'tool-result', toolUseId: 't2', ok: true, detail: '', output: '' }));
@@ -354,8 +369,25 @@ async function mount(): Promise<void> {
     folders: () => [{ path: '04 Inner World', count: 3 }],
     tags: () => [{ tag: '#gamedev', count: 14 }],
     properties: () => [{ key: 'age', values: [{ value: '4', count: 2 }] }],
+    /* THE VAULT'S OTHER ROOMS (G1): a WiP folder, an open task, and the open
+       note's links with one measured zero, so the root carries its three new
+       rows and the sweep meets a disabled row. */
+    wip: () => [{ path: '03 WiP/2026-09-04-a-brief', name: '2026-09-04-a-brief', notes: 2 }],
+    tasks: () => [{ path: '06 AI Team/AI Team Knowledge/Tasks/open/tsk-2026-09-04-001-x.md', title: 'A task', owner: 'larry', status: 'open' }],
+    linked: () => ({ path: '04 Inner World/a.md', basename: 'a', from: 3, to: 0 }),
   });
   (composer.el.querySelector('.aic-add') as HTMLButtonElement).click();
+  const rootLabels = Array.from(composer.el.querySelectorAll('.aic-ctx-row')).map((r) => r.textContent ?? '');
+  for (const want of ['WiP folder', 'Open tasks', 'Linked notes']) {
+    if (!rootLabels.some((l) => l.includes(want))) throw new Error(`the + menu root lost its ${want} row`);
+  }
+  /* Into the linked view and back, so a disabled row (Links to a, 0) is
+     painted under the sweep, then the Tags view the sweep already covers. */
+  const linkedRow = Array.from(composer.el.querySelectorAll('.aic-ctx-row'))
+    .find((r) => r.textContent?.includes('Linked notes')) as HTMLElement;
+  linkedRow.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  if (!composer.el.querySelector('.aic-ctx-row.is-disabled')) throw new Error('a zero-count linked row is not disabled');
+  (composer.el.querySelector('.aic-ctx-back') as HTMLButtonElement).click();
   const tagsRow = Array.from(composer.el.querySelectorAll('.aic-ctx-row'))
     .find((r) => r.textContent?.includes('Tags')) as HTMLElement;
   tagsRow.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
@@ -376,6 +408,7 @@ async function mount(): Promise<void> {
 
   await mountStates(root);
   mountTeamStates();
+  mountMemoryState();
   mountSettings();
 }
 
@@ -384,6 +417,30 @@ async function mount(): Promise<void> {
  * focus sweeps walk them. The setup button and the filter chips are controls
  * the host theme's button skin competes for, and a control the fixture never
  * mounts is a control the sweep never sees. */
+/* THE MEMORY BLOCK of the empty state: two log rows (one with an insight, one
+ * without) and the task line, under its own root so the sweeps measure the
+ * quiet ink at 12px and the buttons against the host skin. */
+function mountMemoryState(): void {
+  const noHost = {
+    onApproval: () => {}, structured: () => false,
+    renderHost: { home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {}, openUrl: () => {}, copy: () => {}, decisionState: () => null },
+    onDecisions: () => {},
+  };
+  const root = document.body.createDiv({ cls: 'aic-root aic-memory-probe' });
+  const renderer = new StreamRenderer({} as App, new Component() as never, root.createDiv({ cls: 'aic-column' }), '', noHost);
+  renderer.renderEmptyState({ detected: { count: 8, onInsights: () => {} }, onSetup: () => Promise.resolve() });
+  renderer.renderEmptyMemory({
+    logs: [
+      { path: 'a.md', title: 'AI Chat 0.6.1: six improvements shipped', date: '2026-09-04', agent: 'larry',
+        insight: 'A guard that closes a popover must decide before the handler it guards can mutate the DOM.' },
+      { path: 'b.md', title: 'myICOR default Open Graph card', date: '2026-09-04', agent: 'pixel', insight: null },
+    ],
+    tasks: { open: 163, inProgress: 10 },
+    onOpenLog: () => {},
+    onOpenTasks: () => {},
+  });
+}
+
 function mountTeamStates(): void {
   const noHost = {
     onApproval: () => {}, structured: () => false,
