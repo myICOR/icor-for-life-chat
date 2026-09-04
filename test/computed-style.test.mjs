@@ -303,7 +303,9 @@ ${HELPERS}
     segAsk: ".aic-seg-btn.is-active[data-tone='default']",
     segAuto: ".aic-seg-btn.is-active[data-tone='acceptEdits']",
     segBypass: ".aic-seg-btn.is-active[data-tone='bypassPermissions']",
-    sendStop: '.aic-send.is-stop',
+    sendStop: '.aic-stop',
+    sendQueue: '.aic-send.is-queue',
+    userQueued: '.aic-user.is-queued .aic-user-queued',
     toolRunningName: '.aic-tool.is-running .aic-tool-purpose',
     toolFailedName: '.aic-tool.is-failed .aic-tool-purpose',
     toolFailedGlyph: '.aic-tool.is-failed .aic-glyph-fail',
@@ -1330,7 +1332,7 @@ test('the fixture actually builds the states the sweep claims to cover', () => {
   // state the sweep goes green by absence, which is the failure a state sweep
   // exists to prevent.
   forEachRoom((s, room) => {
-    for (const name of ['segPlan', 'segAsk', 'segAuto', 'segBypass', 'sendStop', 'toolRunningName',
+    for (const name of ['segPlan', 'segAsk', 'segAuto', 'segBypass', 'sendStop', 'sendQueue', 'userQueued', 'toolRunningName',
                         'toolFailedName', 'toolFailedGlyph', 'decisionBlocked', 'decisionCleared',
                         'dangerFact', 'dangerDir', 'settingsIndex', 'toolChevron', 'toolRowExpandable', 'thumb', 'thumbX',
                         /* The ring, in both escalated bands, plus its track. These replaced

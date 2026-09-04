@@ -4,7 +4,28 @@
  * Streaming input rather than a query per turn, because the control channel is
  * only open in that mode: interrupt(), setModel() and setPermissionMode() mid
  * turn all require it, and a queued message can be handed over without tearing
- * the process down and resuming it. */
+ * the process down and resuming it.
+ *
+ * WHAT A MID-TURN MESSAGE DOES, measured 2026-09-04 against SDK 0.3.226 and
+ * the installed CLI with `tools/followup-entry.ts` (haiku, a 30-number counting
+ * task, a second message pushed 1.5 s after the first text block opened):
+ *
+ *   sent #1 -> system/init -> thinking -> text-open
+ *   sent #2 (mid-turn)
+ *   ... the first turn runs to its end untouched ...
+ *   assistant text (all 30 numbers) -> result/success  (turn-end #1)
+ *   system/init (same session id) -> thinking -> assistant text "PINEAPPLE"
+ *   -> result/success                                   (turn-end #2)
+ *
+ * So the CLI QUEUES a second user message and answers it as its own turn
+ * after the running one ends. It is not merged into the running turn, it does
+ * not interrupt it, and the queued message is not echoed back as a `user`
+ * frame. The queued turn announces itself with a fresh `system/init`. The
+ * composer therefore says "Queue" while a turn runs, Enter never stops
+ * anything, and the view keeps the composer busy across the turn boundary
+ * while a follow-up is pending (model/followups.ts). Before this the send pill
+ * BECAME the Stop control mid-turn, so Enter on a follow-up interrupted the
+ * work the follow-up was about. */
 
 import { query, AbortError } from '@anthropic-ai/claude-agent-sdk';
 import type { Options, Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
@@ -48,6 +69,8 @@ export interface SessionHooks {
   onApprovalRequest: (request: PendingApproval) => void;
   onApprovalSettled: (toolUseId: string, choice: ApprovalChoice) => void;
   onStderr?: (line: string) => void;
+  /** Every wire frame before normalisation. Measurement tools only. */
+  onRawMessage?: (raw: unknown) => void;
   /** The provider refused a mid-session mode switch, in its own words. */
   onModeRefused?: (mode: PermissionModeName, message: string) => void;
 }
@@ -274,6 +297,7 @@ export class ChatSession {
     try {
       for await (const message of handle) {
         if (this.disposed) break;
+        this.hooks.onRawMessage?.(message);
         for (const event of this.normalizer.normalize(message)) {
           this.hooks.onEvent(event);
         }

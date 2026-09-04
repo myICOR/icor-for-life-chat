@@ -2415,4 +2415,54 @@
 
 /* ==== REGION E: follow-up prompts (queued turns, stop control) ==== */
 
+/* E.1 the Stop control. Its own button, click only, and it exists only while
+   a turn runs (the composer sets `hidden`). The destructive-text voice on the
+   neutral card ground, the same reading the old Stop pill measured at 4.5:1
+   and better in every room. Stated at (0,3,0) like every control here so the
+   host's `button:not(.clickable-icon)` skin cannot outrank it. */
+.aic-root.aic-root .aic-stop {
+  appearance: none;
+  border: 1px solid var(--aic-destructive);
+  box-shadow: none;
+  outline: none;
+  margin: 0 8px 0 0;
+  opacity: 1;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  border-radius: var(--aic-r-pill);
+  background: transparent;
+  color: var(--aic-destructive-text);
+  font-family: var(--aic-display);
+  font-weight: 600;
+  font-size: 12px;
+  height: 28px;
+  line-height: 26px;
+  padding: 0 12px 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.aic-root.aic-root .aic-stop:hover { background: var(--aic-wash); }
+.aic-root.aic-root .aic-stop[hidden] { display: none; }
+.aic-root.aic-root .aic-stop .aic-stop-icon { display: inline-flex; }
+.aic-root.aic-root .aic-stop .aic-stop-icon .svg-icon { width: 12px; height: 12px; }
+
+/* E.2 the pill while a turn runs. Same fill, same on-colour: "Queue" is the
+   same control naming what will happen, not a different control. */
+.aic-root.aic-root .aic-send.is-queue { background: var(--aic-marker-fill); }
+
+/* E.3 the QUEUED mark on a well. A kicker in the corner, quiet ink, and the
+   well itself steps to the faint hairline so it reads as "not yet". */
+.aic-user.is-queued { border-color: var(--aic-hairline-subtle); position: relative; }
+.aic-user.is-queued .aic-user-text { color: var(--aic-dim); }
+.aic-user-queued {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  color: var(--aic-faint);
+  font-size: 10px;
+}
+
 /* ==== END REGION E ==== */
