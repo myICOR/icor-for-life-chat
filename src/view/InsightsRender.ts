@@ -32,6 +32,8 @@ export interface InsightsHost {
   onRange: (range: RangeKey) => void;
   onAgent: (key: string | null) => void;
   onModel: (model: string | null) => void;
+  /** An agent's journal, read lazily per row; absent hosts show no journal line. */
+  journalsFor?: (key: string) => Promise<{ count: number; newest: { path: string; title: string; date: string | null } | null } | null>;
 }
 
 export interface InsightsPage {
@@ -258,6 +260,29 @@ export function renderInsights(root: HTMLElement, page: InsightsPage, state: Ins
     host.resolveAvatar,
     (key) => host.onAgent(state.filters.agent === key ? null : key),
   );
+  /* THE JOURNAL LINE, per roster agent, filled in after the row exists. The
+     journals are the agents' own memory and this is the one place the vault
+     shows who learned what; read lazily so a 52-agent roster costs nothing
+     until the page is open. An agent with no journal folder gets no line, and
+     a folder with zero entries says so in words rather than in a zero. */
+  if (host.journalsFor) {
+    const rows = Array.from(agentsSec.querySelectorAll<HTMLElement>('.aic-hbar-row'));
+    agg.agents.forEach((a, i) => {
+      const row = rows[i];
+      if (!row || !a.matched) return;
+      void host.journalsFor?.(a.key).then((journal) => {
+        if (!journal || !row.isConnected) return;
+        const line = row.createSpan({ cls: 'aic-hbar-journal' });
+        if (journal.count === 0) {
+          line.setText('No journal entries yet');
+          return;
+        }
+        const parts = [`${journal.count} journal entr${journal.count === 1 ? 'y' : 'ies'}`];
+        if (journal.newest?.date) parts.push(journal.newest.date);
+        line.setText(parts.join(' · '));
+      });
+    });
+  }
 
   const toolsSec = section(root, 'TOOLS USED · MAIN THREAD');
   hbars(

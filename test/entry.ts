@@ -15,6 +15,7 @@ export * from '../src/model/followups';
 export * from '../src/model/pins';
 export * from '../src/model/activity';
 export * from '../src/view/actions';
+export * from '../src/team/memoryParse';
 export { STRUCTURED_REPLY_PROMPT, INK_PLUGIN_NAME, PLUGIN_ID } from '../src/constants';
 export * from '../src/model/facts';
 export * from '../src/model/format';

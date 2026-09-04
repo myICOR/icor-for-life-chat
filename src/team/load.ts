@@ -89,9 +89,16 @@ async function recordOf(app: App, folder: string, manifest: ArchiveManifest): Pr
   };
 }
 
-/** The open and in-progress task counts, or null per folder when the room is absent. */
-export function openTaskCount(app: App): { open: number | null; inProgress: number | null } {
-  return { open: countNotes(app, `${TASKS}/open`), inProgress: countNotes(app, `${TASKS}/in-progress`) };
+/**
+ * The open and in-progress task counts, for the empty state's one line. Null
+ * when the vault has no Tasks folder at all; a folder that exists and holds
+ * nothing is a real zero and is reported as one.
+ */
+export async function openTaskCount(app: App): Promise<{ open: number; inProgress: number } | null> {
+  const open = countNotes(app, `${TASKS}/open`);
+  const inProgress = countNotes(app, `${TASKS}/in-progress`);
+  if (open === null && inProgress === null) return null;
+  return { open: open ?? 0, inProgress: inProgress ?? 0 };
 }
 
 export async function loadInsights(app: App, archiveRoot: string, rosterCount: number | null): Promise<InsightsData> {

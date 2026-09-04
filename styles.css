@@ -3043,6 +3043,102 @@
 
 /* ==== REGION G3: memory (recent logs, remember, journals) ==== */
 
+/* G3.1 the LAST SESSIONS block under the resume rows. The same rhythm as the
+   resume rows (hairline between rows, the wash on hover, the marker underline
+   on the title), one rung quieter: the date in mono, the insight in the quiet
+   ink. Rows are real buttons because they open a note. */
+.aic-memory { margin-top: 32px; }
+.aic-memory .aic-kicker { margin-bottom: 8px; }
+.aic-root.aic-root .aic-memory-row {
+  appearance: none;
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 12px 4px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--aic-hairline-subtle);
+  border-radius: 0;
+  box-shadow: none;
+  text-align: left;
+  font: inherit;
+  color: var(--aic-paper);
+  cursor: pointer;
+  position: relative;
+}
+.aic-root.aic-root .aic-memory-row:last-of-type { border-bottom: none; }
+.aic-root.aic-root .aic-memory-row:hover { background: var(--aic-wash); }
+.aic-memory-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.aic-memory-date {
+  font-family: var(--aic-mono);
+  font-size: 11px;
+  color: var(--aic-dim);
+  flex: 0 0 auto;
+}
+.aic-memory-title {
+  font-size: 14px;
+  font-weight: 560;
+  color: var(--aic-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  position: relative;
+  min-width: 0;
+}
+.aic-memory-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -3px;
+  width: 26px;
+  height: 2px;
+  background: var(--aic-marker);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 240ms var(--aic-ease);
+}
+.aic-root.aic-root .aic-memory-row:hover .aic-memory-title::after { transform: scaleX(1); }
+.aic-memory-insight {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--aic-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* G3.2 the task line: one quiet sentence, a button because it opens a task. */
+.aic-root.aic-root .aic-memory-tasks {
+  appearance: none;
+  display: block;
+  margin: 12px 0 0;
+  padding: 0 4px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  text-align: left;
+  font-family: var(--aic-body);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--aic-dim);
+  cursor: pointer;
+}
+.aic-root.aic-root .aic-memory-tasks:hover { color: var(--aic-paper); }
+/* G3.3 the journal line on an insights agent row, in the quiet ink. */
+.aic-hbar-journal {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  font-family: var(--aic-mono);
+  font-size: 11px;
+  color: var(--aic-dim);
+  white-space: nowrap;
+}
+
 /* ==== END REGION G3 ==== */
 
 /* ==== REGION F2: providers (picker, settings rows) ==== */

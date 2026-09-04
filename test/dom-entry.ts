@@ -408,6 +408,7 @@ async function mount(): Promise<void> {
 
   await mountStates(root);
   mountTeamStates();
+  mountMemoryState();
   mountSettings();
 }
 
@@ -416,6 +417,30 @@ async function mount(): Promise<void> {
  * focus sweeps walk them. The setup button and the filter chips are controls
  * the host theme's button skin competes for, and a control the fixture never
  * mounts is a control the sweep never sees. */
+/* THE MEMORY BLOCK of the empty state: two log rows (one with an insight, one
+ * without) and the task line, under its own root so the sweeps measure the
+ * quiet ink at 12px and the buttons against the host skin. */
+function mountMemoryState(): void {
+  const noHost = {
+    onApproval: () => {}, structured: () => false,
+    renderHost: { home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {}, openUrl: () => {}, copy: () => {}, decisionState: () => null },
+    onDecisions: () => {},
+  };
+  const root = document.body.createDiv({ cls: 'aic-root aic-memory-probe' });
+  const renderer = new StreamRenderer({} as App, new Component() as never, root.createDiv({ cls: 'aic-column' }), '', noHost);
+  renderer.renderEmptyState({ detected: { count: 8, onInsights: () => {} }, onSetup: () => Promise.resolve() });
+  renderer.renderEmptyMemory({
+    logs: [
+      { path: 'a.md', title: 'AI Chat 0.6.1: six improvements shipped', date: '2026-09-04', agent: 'larry',
+        insight: 'A guard that closes a popover must decide before the handler it guards can mutate the DOM.' },
+      { path: 'b.md', title: 'myICOR default Open Graph card', date: '2026-09-04', agent: 'pixel', insight: null },
+    ],
+    tasks: { open: 163, inProgress: 10 },
+    onOpenLog: () => {},
+    onOpenTasks: () => {},
+  });
+}
+
 function mountTeamStates(): void {
   const noHost = {
     onApproval: () => {}, structured: () => false,

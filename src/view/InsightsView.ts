@@ -8,6 +8,8 @@
  * another tab shows up without reopening. */
 
 import { ItemView, Notice, TFile } from 'obsidian';
+import { ItemView, TFile } from 'obsidian';
+import { recentJournals } from '../team/memory';
 import type { WorkspaceLeaf } from 'obsidian';
 import { INK_PLUGIN_ATTR, INK_PLUGIN_NAME, VIEW_TYPE_INSIGHTS } from '../constants';
 import { archiveRoot } from '../model/settings';
@@ -98,6 +100,10 @@ export class InsightsView extends ItemView {
         onRange: (range) => { this.range = range; this.paint(); },
         onAgent: (key) => { this.filters = { ...this.filters, agent: key }; this.paint(); },
         onModel: (model) => { this.filters = { ...this.filters, model }; this.paint(); },
+        journalsFor: (key) => {
+          const agent = this.roster?.agents.find((a) => a.slug === key);
+          return agent ? recentJournals(this.app, agent.folder) : Promise.resolve(null);
+        },
       },
     );
   }

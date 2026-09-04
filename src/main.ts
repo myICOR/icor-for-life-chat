@@ -34,6 +34,8 @@ import { DEFAULT_SETTINGS, archiveRoot } from './model/settings';
 import type { ChatSettings } from './model/settings';
 import type { ModelChoice } from './model/types';
 import type { ProviderId } from './provider/types';
+import { ReplyActionRegistry } from './view/actions';
+import { installMemory } from './team/memory';
 
 /* The file-explorer BLOCK this plugin used to inject above the file tree - a
  * whole panel section, not an icon. It is gone for good; the name survives
@@ -73,9 +75,12 @@ export default class IcorChatPlugin extends Plugin {
    * offer it and nothing in the build could notice. Empty stays EMPTY and the
    * tab says so; it is never backfilled with a guess. */
   modelCatalog: ModelChoice[] = [];
+  /** Actions any reply offers; streams register theirs here at load. */
+  readonly replyActions = new ReplyActionRegistry();
 
   override async onload(): Promise<void> {
     await this.loadSettings();
+    installMemory(this);
     // Each runtime prepares the host once, before anything can launch a query
     // (the Claude provider installs the renderer AbortSignal shim here).
     for (const provider of availableProviders()) provider.install?.();

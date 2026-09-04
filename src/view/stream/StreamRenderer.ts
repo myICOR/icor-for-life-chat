@@ -127,6 +127,17 @@ export interface EmptyTeamBlock {
   onSetup: () => Promise<void>;
 }
 
+/* THE EMPTY STATE'S MEMORY BLOCK, supplied by the view once it has read the
+ * vault. The renderer draws rows it is handed and opens what it is told to;
+ * which logs count and what a row says are decided in team/memoryParse.ts. */
+export interface EmptyMemoryBlock {
+  logs: Array<{ path: string; title: string; date: string | null; agent: string | null; insight: string | null }>;
+  /** Null when the vault has no Tasks folder; zero is a real count and is shown. */
+  tasks: { open: number; inProgress: number } | null;
+  onOpenLog: (path: string) => void;
+  onOpenTasks: () => void;
+}
+
 export class StreamRenderer {
   private readonly blocks = new Map<string, HTMLElement>();
   private readonly blockText = new Map<string, string>();
@@ -233,6 +244,42 @@ export class StreamRenderer {
       btn.setText('Setting up the team');
       void team.onSetup();
     });
+  }
+
+  /**
+   * The last sessions, read back. Drawn AFTER the resume rows so the order on
+   * screen is what a new sitting needs: who to resume, then what was
+   * concluded last time, then how much is open. A vault without session logs
+   * gets no block at all: an empty LAST SESSIONS kicker would be chrome
+   * announcing an absence.
+   */
+  renderEmptyMemory(memory: EmptyMemoryBlock): void {
+    if (!this.emptyEl) return;
+    this.emptyEl.querySelector('.aic-memory')?.remove();
+    if (memory.logs.length === 0 && memory.tasks === null) return;
+    const block = this.emptyEl.createDiv({ cls: 'aic-memory' });
+    if (memory.logs.length > 0) {
+      kicker(block, 'LAST SESSIONS');
+      for (const log of memory.logs) {
+        const row = block.createEl('button', { cls: 'aic-memory-row', type: 'button' });
+        const head = row.createDiv({ cls: 'aic-memory-head' });
+        if (log.date) {
+          head.createSpan({ cls: 'aic-memory-date', text: log.date });
+          head.createSpan({ cls: 'aic-middot', text: '·' });
+        }
+        head.createSpan({ cls: 'aic-memory-title', text: log.title });
+        if (log.insight) row.createDiv({ cls: 'aic-memory-insight', text: log.insight });
+        row.setAttr('aria-label', `Open the session log: ${log.title}`);
+        row.addEventListener('click', () => memory.onOpenLog(log.path));
+      }
+    }
+    if (memory.tasks) {
+      const { open, inProgress } = memory.tasks;
+      const line = block.createEl('button', { cls: 'aic-memory-tasks', type: 'button' });
+      line.setText(`${open} task${open === 1 ? '' : 's'} open · ${inProgress} in progress`);
+      line.setAttr('aria-label', `${open} tasks open, ${inProgress} in progress. Open the newest open task.`);
+      line.addEventListener('click', memory.onOpenTasks);
+    }
   }
 
   /** At most three resume rows, and only when there is history to resume. */
