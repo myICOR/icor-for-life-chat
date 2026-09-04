@@ -581,41 +581,39 @@
   display: grid;
   grid-template-columns: 16px 1fr auto;
   gap: 8px;
-  align-items: baseline;
+  align-items: center;
   min-height: 28px;
   padding: 4px 0;
   border-bottom: 1px solid var(--aic-hairline-subtle);
 }
 .aic-tool-gutter { display: inline-flex; align-items: center; height: 100%; }
-.aic-tool-main { min-width: 0; display: flex; align-items: baseline; gap: 8px; }
-.aic-tool-name {
-  font-size: 11px;
+.aic-tool-main { min-width: 0; display: flex; align-items: center; gap: 8px; }
+/* THE ICON NAMES THE FAMILY, the sentence names the call. One rung under the
+   sentence in the dim ink so the column of icons reads as a margin, not as a
+   second column of content. */
+.aic-tool-icon { display: inline-flex; flex: 0 0 auto; color: var(--aic-dim); }
+.aic-tool-icon .svg-icon { width: 14px; height: 14px; }
+/* THE PURPOSE LINE is prose: body face, mixed case, the paper ink one rung
+   down. It is the one thing the closed row says, and it is cut with an
+   ellipsis rather than wrapped so the rows stay a list a reader can scan. */
+.aic-tool-purpose {
+  font-family: var(--aic-body);
+  font-size: 13px;
   color: var(--aic-dim);
-  flex: 0 0 auto;
-}
-.aic-tool.is-running .aic-tool-name { color: var(--aic-paper); }
-.aic-tool.is-failed .aic-tool-name { color: var(--aic-destructive-text); }
-.aic-tool-target {
-  font-size: 12.5px;
-  color: var(--aic-faint);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
 }
+.aic-tool.is-running .aic-tool-purpose { color: var(--aic-paper); }
+.aic-tool.is-running .aic-tool-icon { color: var(--aic-paper); }
+.aic-tool.is-failed .aic-tool-purpose { color: var(--aic-destructive-text); }
+.aic-tool.is-failed .aic-tool-icon { color: var(--aic-destructive-text); }
 
 /* THE ROW OPENS, and the whole row is the control.
-   A Bash payload is cut at the pane's width and the cut lands after the `cd`,
-   so every row in a session reads the same for its first sixty characters and
-   the part that differs is always the part that is gone.
-
-   No disclosure glyph. The pickers just lost theirs, and a stream that grows an
-   arrow per row is chrome in the one region meant to be content - so the
-   affordance is the cursor and a hover ground, and the ground is the wash the
-   session rows already use rather than a new one.
-
-   It is stated only on `.is-expandable`, which is set from a MEASUREMENT: a row
-   whose payload fits gets no pointer and no tab stop, because an expand
+   It is stated only on `.is-expandable`, which is a fact about CONTENT: a row
+   opens when it carries a raw argument or a result, and a row that carries
+   neither gets no pointer, no tab stop and no chevron, because an expand
    affordance on a row with nothing to reveal is an empty promise. */
 /* THE WASH IS THE PLUGIN'S "THIS ROW RESPONDS" GROUND, and it is fenced:
    actionable rows only, the ground ALONE with no second device, never on
@@ -625,30 +623,62 @@
 .aic-tool.is-expandable { cursor: pointer; transition: background-color 140ms var(--aic-ease); }
 .aic-tool.is-expandable:hover,
 .aic-tool.is-expandable:focus-visible { background: var(--aic-wash); }
-/* WRAP, never scroll. A horizontal scrollbar inside a chat row hides the end of
-   the string behind a gesture and takes the row out of the column's reading
-   rhythm. `anywhere` because a shell command is one long token as often as not,
-   and a path that will not break is a row that overflows anyway. */
-.aic-tool.is-expanded .aic-tool-target {
+/* THE BODY spans the row's full width on its own grid line, under the head.
+   Empty (and therefore no line at all) while the row is closed. */
+.aic-tool-body { grid-column: 1 / -1; min-width: 0; }
+.aic-tool-body:empty { display: none; }
+.aic-tool.is-expanded .aic-tool-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0 8px 24px;
+}
+.aic-tool-body-kicker { margin-top: 4px; }
+/* WRAP, never scroll sideways. A horizontal scrollbar inside a chat row hides
+   the end of the string behind a gesture and takes the row out of the
+   column's reading rhythm. `anywhere` because a shell command is one long
+   token as often as not. The result box is bounded in HEIGHT with its own
+   vertical scroll: a 4000-character cat is legitimate output and a row that
+   grew to it would push the conversation off the screen. */
+.aic-tool-target,
+.aic-tool-body-pre {
+  margin: 0;
+  padding: 8px 12px;
+  font-family: var(--aic-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--aic-paper);
+  background: var(--aic-surface);
+  border: 1px solid var(--aic-hairline-subtle);
+  border-radius: var(--aic-r-subtle);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  overflow: visible;
-  text-overflow: clip;
+  overflow-x: hidden;
+  cursor: text;
+  /* eslint-disable-next-line css/use-baseline -- Obsidian desktop is a pinned Chromium; both spellings ship */
+  user-select: text;
+  -webkit-user-select: text;
 }
-/* The name and the duration keep their places: the row is a three-column grid
-   and only the middle cell grows, so the timing - often the reason the row was
-   opened - stays where the eye left it. */
+.aic-tool-body-pre { max-height: 280px; overflow-y: auto; }
+.aic-tool.is-failed .aic-tool-body-pre { color: var(--aic-destructive-text); }
+.aic-tool-lines {
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  color: var(--aic-faint);
+  font-variant-numeric: tabular-nums;
+}
+/* The head keeps its places when the row opens: the body is a new grid line
+   and the three head cells do not move, so the timing - often the reason the
+   row was opened - stays where the eye left it. */
 .aic-tool.is-expanded { align-items: start; }
 /* THE DOT BECOMES A RAIL WHEN THE ROW OPENS (Tom, 2026-09-01). A 6px dot
    centered beside a twelve-line command floats in the middle of the block,
-   attached to nothing - the screenshot that reported this shows it orphaned
-   mid-air beside a Python heredoc. Stretched into a 2px rail it does what the
-   decision blocks' rail already does: it BRACKETS the content it belongs to,
-   from first line to last. Same element, same tone token, same pulse while
-   running - the status has one carrier that changes shape, not a second
-   carrier. The failure glyph is exempt: an × is a verdict mark, and a verdict
-   stretched into a line stops being readable as one. */
-.aic-tool.is-expanded > .aic-tool-gutter { align-items: stretch; padding: 3px 0; }
+   attached to nothing. Stretched into a 2px rail it BRACKETS the content it
+   belongs to, from first line to last, the way the decision blocks' rail
+   does. Same element, same tone token, same pulse while running - the status
+   has one carrier that changes shape, not a second carrier. The gutter spans
+   both grid lines so the rail reaches the bottom of the body. */
+.aic-tool.is-expanded > .aic-tool-gutter { grid-row: 1 / span 2; align-items: stretch; padding: 3px 0; }
 .aic-tool.is-expanded > .aic-tool-gutter .aic-dot {
   width: 2px;
   height: auto;
@@ -658,13 +688,27 @@
      centring inside the 16px gutter column would leave it floating at 7px. */
   margin-left: 2px;
 }
-.aic-tool.is-expanded .aic-tool-main { align-items: baseline; flex-wrap: wrap; }
+.aic-tool.is-expanded .aic-tool-main { align-self: center; }
 .aic-tool-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: center;
   font-family: var(--aic-mono);
   font-size: 10px;
   color: var(--aic-faint);
   font-variant-numeric: tabular-nums;
 }
+/* The verdict mark: a check in the success ink, an × in the destructive one.
+   Small, because it answers a yes/no and the sentence already said what. */
+.aic-tool-mark { display: inline-flex; align-items: center; }
+.aic-tool-mark.is-ok { color: var(--aic-success-dot); }
+.aic-tool-mark .svg-icon { width: 12px; height: 12px; }
+/* The disclosure chevron: faint, one rung under the row's label, and it turns
+   when the row is open. It exists only on rows that have a body. */
+.aic-tool-chevron { display: inline-flex; color: var(--aic-faint); }
+.aic-tool-chevron .svg-icon { width: 12px; height: 12px; }
+.aic-tool.is-expanded .aic-tool-chevron { transform: rotate(90deg); }
 .aic-tool.is-approval {
   border-left: 2px solid var(--aic-warning);
   padding-left: 8px;

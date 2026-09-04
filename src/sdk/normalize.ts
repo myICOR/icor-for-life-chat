@@ -56,6 +56,140 @@ export function toolTarget(name: string, input: Record<string, unknown>): string
   }
 }
 
+/* THE PURPOSE LINE: what the call did, said once, in words a person reads.
+ *
+ * The row used to print the tool's raw argument, and for Bash that is the
+ * shell command. In this vault every command begins with `cd "/Users/tom/My
+ * Life Folder - TR" &&`, so a run of ten rows read identically for sixty
+ * characters and the part that differed was the part the pane cut off. A
+ * user scanning what the agent actually did learned nothing without opening
+ * every row. The CLI already carries the answer: every Bash call arrives with
+ * a `description` the model wrote for exactly this purpose, and every other
+ * tool's argument is a path, a pattern or a query that a verb turns into a
+ * sentence. Deterministic, therefore a script; the raw argument survives as
+ * `target` and is what the row opens onto. */
+
+/** `path` with the vault prefix removed, so a row reads the way the file tree does. */
+export function relativeTo(path: string, cwd: string): string {
+  if (!cwd) return path;
+  const root = cwd.endsWith('/') ? cwd : `${cwd}/`;
+  return path.startsWith(root) ? path.slice(root.length) : path;
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname || url;
+  } catch {
+    return url;
+  }
+}
+
+export function toolPurpose(name: string, input: Record<string, unknown>, cwd: string): string {
+  try {
+    const first = (...keys: string[]): string | null => {
+      for (const k of keys) {
+        const v = str(input[k]);
+        if (v && v.trim()) return v.trim();
+      }
+      return null;
+    };
+    const path = (): string | null => {
+      const p = first('file_path', 'notebook_path', 'path');
+      return p ? relativeTo(p, cwd) : null;
+    };
+    switch (name) {
+      case 'Bash':
+        return first('description') ?? 'Ran a command';
+      case 'Read':
+        return path() ? `Read ${path()}` : 'Read a file';
+      case 'Write':
+        return path() ? `Wrote ${path()}` : 'Wrote a file';
+      case 'Edit':
+      case 'MultiEdit':
+      case 'NotebookEdit':
+        return path() ? `Edited ${path()}` : 'Edited a file';
+      case 'Glob': {
+        const pattern = first('pattern');
+        return pattern ? `Searched files matching ${pattern}` : 'Searched files';
+      }
+      case 'Grep': {
+        const pattern = first('pattern');
+        const where = path();
+        if (!pattern) return 'Searched the vault';
+        return where ? `Searched for ${pattern} in ${where}` : `Searched for ${pattern}`;
+      }
+      case 'WebFetch': {
+        const url = first('url');
+        return url ? `Fetched ${hostOf(url)}` : 'Fetched a page';
+      }
+      case 'WebSearch': {
+        const query = first('query');
+        return query ? `Searched the web for ${query}` : 'Searched the web';
+      }
+      case 'Task':
+      case 'Agent': {
+        const who = first('subagent_type');
+        const what = first('description');
+        if (who && what) return `Sent ${who} to ${what}`;
+        if (who) return `Sent ${who} on a task`;
+        if (what) return `Sent a subagent to ${what}`;
+        return 'Sent a subagent on a task';
+      }
+      case 'TodoWrite':
+        return 'Updated the plan';
+      case 'AskUserQuestion':
+        return 'Asked a question';
+      default:
+        return first('description') ?? `Used ${name}`;
+    }
+  } catch {
+    return `Used ${name}`;
+  }
+}
+
+/**
+ * A purpose for a call that arrived WITHOUT one: a transcript stored by a
+ * build before 0.6, or an approval event a producer forgot to label. It is
+ * built from the row's target through the same table, so a Read still reads
+ * as "Read <path>"; a Bash target is the command, not a description, and
+ * stays "Ran a command" rather than pretending the command is prose.
+ */
+export function fallbackPurpose(name: string, target: string): string {
+  const key: Record<string, string> = {
+    Read: 'file_path', Write: 'file_path', Edit: 'file_path', MultiEdit: 'file_path',
+    NotebookEdit: 'notebook_path', Glob: 'pattern', Grep: 'pattern',
+    WebFetch: 'url', WebSearch: 'query', Task: 'description', Agent: 'description',
+  };
+  const field = key[name];
+  return toolPurpose(name, field && target ? { [field]: target } : {}, '');
+}
+
+/* The result body the opened row shows. Bounded, because a `cat` of a large
+ * file is a legitimate tool result and an unbounded copy of it in every
+ * transcript.json would be the archive growing by the size of the vault. The
+ * cut is announced in the text itself so a reader never mistakes the end of
+ * the cap for the end of the output. */
+export const RESULT_OUTPUT_CAP = 4000;
+
+export function resultOutput(content: unknown): string {
+  let text = '';
+  if (typeof content === 'string') {
+    text = content;
+  } else if (Array.isArray(content)) {
+    const parts: string[] = [];
+    for (const part of content) {
+      if (isRecord(part) && part.type === 'text') {
+        const t = str(part.text);
+        if (t) parts.push(t);
+      }
+    }
+    text = parts.join('\n');
+  }
+  if (text.length <= RESULT_OUTPUT_CAP) return text;
+  const more = text.length - RESULT_OUTPUT_CAP;
+  return `${text.slice(0, RESULT_OUTPUT_CAP)}\n[... ${more} more characters]`;
+}
+
 function usageFrom(msg: Record<string, unknown>): TurnUsage {
   const u = isRecord(msg.usage) ? msg.usage : {};
   const input = num(u.input_tokens);
@@ -106,6 +240,8 @@ export class Normalizer {
   private streamingMessageId: string | null = null;
   /** The session's own model, so modelUsage can be read for the main loop. */
   private sessionModel: string | null = null;
+  /** The working directory, so a purpose line can show a vault-relative path. */
+  private cwd = '';
   /** Tool-use ids known to be Task spawns, so their results close a subagent. */
   private readonly taskSpawns = new Set<string>();
   /**
@@ -161,6 +297,7 @@ export class Normalizer {
     if (raw.subtype === 'init') {
       const mode = str(raw.permissionMode);
       this.sessionModel = str(raw.model);
+      this.cwd = str(raw.cwd) ?? '';
       return [
         {
           kind: 'session',
@@ -285,7 +422,15 @@ export class Normalizer {
         const name = str(blockRaw.name) ?? 'tool';
         if (!id) return;
         const input = isRecord(blockRaw.input) ? blockRaw.input : {};
-        out.push({ kind: 'tool-call', toolUseId: id, name, target: toolTarget(name, input), input, stream });
+        out.push({
+          kind: 'tool-call',
+          toolUseId: id,
+          name,
+          target: toolTarget(name, input),
+          purpose: toolPurpose(name, input, this.cwd),
+          input,
+          stream,
+        });
         // Fallback for a CLI that does not publish task_started: open the
         // subagent from the spawn tool itself. Guarded so the first-party
         // event, when it arrives, does not open a second one.
@@ -316,7 +461,14 @@ export class Normalizer {
       const id = str(blockRaw.tool_use_id);
       if (!id) continue;
       const ok = blockRaw.is_error !== true;
-      out.push({ kind: 'tool-result', toolUseId: id, ok, detail: resultDetail(blockRaw.content), stream });
+      out.push({
+        kind: 'tool-result',
+        toolUseId: id,
+        ok,
+        detail: resultDetail(blockRaw.content),
+        output: resultOutput(blockRaw.content),
+        stream,
+      });
       if (this.taskSpawns.has(id)) {
         this.taskSpawns.delete(id);
         out.push({ kind: 'subagent-end', agentId: id, ok, stream });

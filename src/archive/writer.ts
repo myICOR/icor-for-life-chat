@@ -94,7 +94,9 @@ function renderSubagent(transcript: SubagentTranscript): string {
     if (event.kind === 'text-final' && event.text.trim()) {
       lines.push(event.text.trim(), '');
     } else if (event.kind === 'tool-call') {
-      lines.push(`- \`${event.name}\` ${event.target}`.trimEnd());
+      // What was done, in words, when the call carries it; the raw form
+      // otherwise, so a transcript from before 0.6 still renders.
+      lines.push(event.purpose ? `- ${event.purpose}` : `- \`${event.name}\` ${event.target}`.trimEnd());
     }
   }
   return lines.join('\n');

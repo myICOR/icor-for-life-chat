@@ -251,9 +251,9 @@ async function mount(): Promise<void> {
     (busyCol.querySelector('.aic-thinking-label')?.textContent ?? '').trim();
   busyStream.apply({ kind: 'user-turn', text: 'go', contextNote: null, contextPath: null, images: [], stream: null });
   const afterSend = busyLabel();
-  busyStream.apply({ kind: 'tool-call', toolUseId: 'bt1', name: 'Bash', target: 'ls', input: {}, stream: null });
+  busyStream.apply({ kind: 'tool-call', toolUseId: 'bt1', name: 'Bash', target: 'ls', purpose: 'List the vault', input: {}, stream: null });
   const duringTool = busyLabel();
-  busyStream.apply({ kind: 'tool-result', toolUseId: 'bt1', ok: true, detail: '', stream: null });
+  busyStream.apply({ kind: 'tool-result', toolUseId: 'bt1', ok: true, detail: '', output: '', stream: null });
   const afterResult = busyLabel();
   busyStream.apply({ kind: 'thinking-open', blockId: 'bth', stream: null });
   const whileThinking = busyLabel();

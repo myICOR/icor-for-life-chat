@@ -12,6 +12,7 @@ import { Component, MarkdownRenderer, setIcon, setTooltip } from 'obsidian';
 import type { App } from 'obsidian';
 import type { ChatEvent, ToolStatus, TurnImage } from '../../model/types';
 import { dot, kicker, shortAge, shortDuration } from '../dom';
+import { fallbackPurpose } from '../../sdk/normalize';
 import type { ApprovalChoice } from '../../sdk/permissions';
 import { parseStructured, decisionsOf } from '../../structured/parser';
 import { remeasureDecisionBodies, renderStructured } from '../../structured/render';
@@ -24,12 +25,22 @@ const COLLAPSE_AFTER = 3;
 interface ToolRow {
   el: HTMLElement;
   gutter: HTMLElement;
-  nameEl: HTMLElement;
-  /** The payload cell. Null when the call carried no target at all. */
-  targetEl: HTMLElement | null;
+  iconEl: HTMLElement;
+  /** The purpose sentence: what the call did. The one thing the closed row says. */
+  purposeEl: HTMLElement;
   rightEl: HTMLElement;
+  /** The opened row: command or input, then the result. Empty while closed. */
+  bodyEl: HTMLElement;
+  name: string;
+  purpose: string;
+  /** The raw argument. Empty when the call carried none. */
+  target: string;
+  /** The result body, once it has arrived. */
+  output: string;
   status: ToolStatus;
   startedAt: number;
+  /** Stamped by the result, so the duration stops being re-read on repaint. */
+  finishedAt: number | null;
   group: ToolGroup;
   /**
    * Survives every repaint, because a row is keyed by its tool-use id and
@@ -37,8 +48,6 @@ interface ToolRow {
    * opened, every time a later tool finished, would be unusable.
    */
   expanded: boolean;
-  /** Measured, never assumed: true only while the payload is actually cut. */
-  expandable: boolean;
 }
 
 /** The live "thinking / writing" row and the box it opens. */
@@ -105,16 +114,11 @@ export class StreamRenderer {
     // Any element in the right document will do; the Lightbox mounts on that
     // document's body so a popout window gets its own overlay.
     this.lightbox = new Lightbox(this.column);
-    /* Whether a payload is CUT is a function of the pane's width, so the answer
-       has to be re-taken when the pane changes width and not only when a tool
-       call arrives. Without this, narrowing a leaf leaves rows that are now
-       truncated with no way to open them, and widening it leaves rows carrying
-       a tab stop that reveals nothing. */
     if (typeof ResizeObserver !== 'undefined') {
       this.resize = new ResizeObserver(() => {
-        this.remeasureTools();
-        // The decision bodies' clamp is width-bound for the same reason the
-        // tool rows' cut is, and it answers the same resize.
+        // The decision bodies' clamp is width-bound, and it answers the resize.
+        // The tool rows no longer do: whether a row opens is a fact about its
+        // content, not about the pane's width.
         remeasureDecisionBodies(this.column);
       });
       this.resize.observe(this.column);
@@ -221,15 +225,20 @@ export class StreamRenderer {
       case 'thinking-final':
         this.setThinking(event.text);
         break;
-      case 'tool-call':
+      case 'tool-call': {
         // The running tool row's pulsing dot carries the busy signal now;
         // two pulses on screen would say "twice as busy" and mean nothing.
         this.hideWorking();
-        this.upsertTool(event.toolUseId, event.name, event.target).status = 'running';
+        /* A transcript stored before 0.6 carries no purpose. The row derives
+           one from the name and the target rather than showing a blank. */
+        const purpose = event.purpose || fallbackPurpose(event.name, event.target);
+        this.upsertTool(event.toolUseId, event.name, event.target, purpose).status = 'running';
         this.paintTool(event.toolUseId);
         break;
+      }
       case 'tool-approval': {
-        const row = this.upsertTool(event.toolUseId, event.name, event.target);
+        const purpose = event.purpose || fallbackPurpose(event.name, event.target);
+        const row = this.upsertTool(event.toolUseId, event.name, event.target, purpose);
         row.status = 'awaiting-approval';
         row.group.forcedOpen = true;
         this.paintTool(event.toolUseId);
@@ -246,9 +255,12 @@ export class StreamRenderer {
         break;
       }
       case 'tool-result': {
-        const row = this.upsertTool(event.toolUseId, 'tool', '');
+        const row = this.upsertTool(event.toolUseId, 'tool', '', '');
         row.status = event.ok ? 'done' : 'failed';
-        row.rightEl.setText(shortDuration(Date.now() - row.startedAt));
+        row.finishedAt = Date.now();
+        // A stored transcript from before 0.6 carries no body; the field is
+        // read defensively so a replay of one still paints the row.
+        row.output = (event as { output?: string }).output ?? '';
         if (!event.ok && event.detail) setTooltip(row.el, event.detail);
         this.paintTool(event.toolUseId);
         /* The OTHER quiet stretch: between a tool's result and the model's
@@ -639,64 +651,90 @@ export class StreamRenderer {
     this.group = null;
   }
 
-  private upsertTool(toolUseId: string, name: string, target: string): ToolRow {
+  private upsertTool(toolUseId: string, name: string, target: string, purpose: string): ToolRow {
     const existing = this.tools.get(toolUseId);
     if (existing) {
-      if (name !== 'tool' && existing.nameEl.getText() !== name) existing.nameEl.setText(name);
-      this.measureRow(existing);
+      // A result names its row with the placeholder name and no argument;
+      // only a real call is allowed to overwrite what the row already knows.
+      if (name !== 'tool') {
+        existing.name = name;
+        if (target) existing.target = target;
+        if (purpose) existing.purpose = purpose;
+        this.paintHead(existing);
+      }
       return existing;
     }
     const group = this.ensureGroup();
     const el = group.rowsEl.createDiv({ cls: 'aic-tool' });
     const gutter = el.createSpan({ cls: 'aic-tool-gutter' });
     const main = el.createSpan({ cls: 'aic-tool-main' });
-    const nameEl = main.createSpan({ cls: 'aic-kicker aic-tool-name', text: name });
-    const targetEl = target ? main.createSpan({ cls: 'aic-tool-target', text: target }) : null;
+    const iconEl = main.createSpan({ cls: 'aic-tool-icon' });
+    const purposeEl = main.createSpan({ cls: 'aic-tool-purpose' });
     const rightEl = el.createSpan({ cls: 'aic-tool-right' });
+    const bodyEl = el.createDiv({ cls: 'aic-tool-body' });
     const row: ToolRow = {
       el,
       gutter,
-      nameEl,
-      targetEl,
+      iconEl,
+      purposeEl,
       rightEl,
+      bodyEl,
+      name,
+      purpose,
+      target,
+      output: '',
       status: 'running',
       startedAt: Date.now(),
+      finishedAt: null,
       group,
       expanded: false,
-      expandable: false,
     };
     group.rows.push(row);
     this.tools.set(toolUseId, row);
+    this.paintHead(row);
     this.wireExpand(row);
     this.paintGroup(group);
-    this.measureRow(row);
+    this.paintExpand(row);
     return row;
   }
 
-  /* THE ROW OPENS. A Bash payload is cut at the width of the pane, and the cut
-   * lands after the `cd`, so every row in a session reads identically for its
-   * first sixty characters and the part that differs is always the part that
-   * is gone. A user scanning what the agent actually ran learns nothing.
+  /* THE ROW SAYS WHAT WAS DONE, and opens onto how.
    *
-   * The WHOLE ROW is the control, and there is no disclosure glyph: the
-   * pickers just lost theirs, and a stream that grows an arrow per row is
-   * chrome in the one region that is meant to be content. The affordance is the
-   * cursor and the hover ground.
+   * The closed row is an icon for the tool family and one sentence: "Read 04
+   * Inner World/Contacts/People/bernd-martin.md", "Ran Open the demo note in
+   * Obsidian". It used to be the tool's NAME in a kicker and the raw argument
+   * beside it, which for Bash is the shell command - every row in a session
+   * began with the same cd and the part that differed was the part the pane
+   * cut off, so a reader learned what the agent typed and never what it meant.
    *
-   * It wraps rather than scrolls. A horizontal scrollbar inside a chat row is
-   * the worse of the two: it hides the end of the string behind a gesture and
-   * takes the row out of the column's own reading rhythm. */
+   * The WHOLE ROW is the control. The right cell carries the duration, the
+   * verdict mark, and a chevron that exists only when there is a body to open:
+   * a row that carried no argument and produced no output has nothing behind
+   * it, and an affordance with nothing behind it is the same shape as a guard
+   * that cannot fail. Opened, the body shows the command (or the input) and
+   * the result, wrapping rather than scrolling sideways: a horizontal scrollbar
+   * inside a chat row hides the end of the string behind a gesture. */
+  private paintHead(row: ToolRow): void {
+    row.iconEl.empty();
+    setIcon(row.iconEl, toolIcon(row.name));
+    row.purposeEl.setText(row.purpose || row.name);
+    setTooltip(row.purposeEl, row.purpose || row.name);
+  }
+
   private wireExpand(row: ToolRow): void {
     const toggle = (): void => {
-      if (!row.expandable) return;
+      if (!this.hasBody(row)) return;
       row.expanded = !row.expanded;
       this.paintExpand(row);
     };
     row.el.addEventListener('click', (ev: MouseEvent) => {
       // A row carries approval buttons in its right cell. A click that landed
       // on one of those is an answer to a permission prompt, not a request to
-      // read the command, and swallowing it would open the row instead.
-      if ((ev.target as HTMLElement | null)?.closest('button')) return;
+      // read the command, and swallowing it would open the row instead. A
+      // click INSIDE the opened body is a reader selecting text, not a toggle.
+      const target = ev.target as HTMLElement | null;
+      if (target?.closest('button')) return;
+      if (target?.closest('.aic-tool-body')) return;
       toggle();
     });
     row.el.addEventListener('keydown', (ev: KeyboardEvent) => {
@@ -707,53 +745,61 @@ export class StreamRenderer {
     });
   }
 
-  /**
-   * MEASURED, never assumed. A row whose payload fits gets no tab stop and no
-   * pointer, because an expand affordance on a row with nothing to reveal is
-   * an empty promise - the same shape as a guard that cannot fail. Deterministic,
-   * therefore a script rather than a judgement.
-   */
-  private measureRow(row: ToolRow): void {
-    const el = row.targetEl;
-    if (!el) return;
-    // Measured in the COLLAPSED state, which is the only state the question
-    // means anything in: an expanded row wraps, so it never overflows.
-    const wasExpanded = row.el.hasClass('is-expanded');
-    if (wasExpanded) row.el.removeClass('is-expanded');
-    const cut = el.scrollWidth > el.clientWidth + 1;
-    if (wasExpanded) row.el.addClass('is-expanded');
-    // A row that has not been laid out yet measures zero and answers "not
-    // cut". It is re-measured on the next resize rather than guessed at here.
-    if (el.clientWidth === 0) return;
-    row.expandable = cut;
-    if (!cut) row.expanded = false;
-    this.paintExpand(row);
+  /** A row opens when it has something to show: a raw argument, or a result. */
+  private hasBody(row: ToolRow): boolean {
+    return row.target !== '' || row.output !== '';
   }
 
   private paintExpand(row: ToolRow): void {
-    row.el.toggleClass('is-expandable', row.expandable);
-    row.el.toggleClass('is-expanded', row.expandable && row.expanded);
-    if (!row.expandable) {
+    const openable = this.hasBody(row);
+    if (!openable) row.expanded = false;
+    row.el.toggleClass('is-expandable', openable);
+    row.el.toggleClass('is-expanded', openable && row.expanded);
+    if (!openable) {
       row.el.removeAttribute('role');
       row.el.removeAttribute('tabindex');
       row.el.removeAttribute('aria-expanded');
       row.el.removeAttribute('aria-label');
+      row.bodyEl.empty();
       return;
     }
     row.el.setAttr('role', 'button');
     row.el.setAttr('tabindex', '0');
     row.el.setAttr('aria-expanded', row.expanded ? 'true' : 'false');
     /* An explicit name, because a role="button" takes its name from its own
-       contents and the contents here are a 300-character shell command. The
-       command stays readable as the row's content; the NAME says what the
-       control does. */
-    const what = row.nameEl.getText() || 'tool';
-    row.el.setAttr('aria-label', row.expanded ? `Collapse the ${what} call` : `Show the full ${what} call`);
+       contents and the contents are the purpose sentence plus a duration. The
+       NAME says what the control does. */
+    const what = row.purpose || row.name;
+    row.el.setAttr('aria-label', row.expanded ? `Collapse ${what}` : `Show what happened: ${what}`);
+    this.paintBody(row);
   }
 
-  /** Re-measure every row. The cut is a function of the pane's width. */
+  /* The body is BUILT when the row opens and emptied when it closes. A closed
+     row that kept a 4000-character result in the DOM would be paying layout
+     for text nobody can see, on every row, for the whole conversation. */
+  private paintBody(row: ToolRow): void {
+    row.bodyEl.empty();
+    if (!row.expanded) return;
+    if (row.target) {
+      kicker(row.bodyEl, row.name === 'Bash' ? 'COMMAND' : 'INPUT', 'aic-tool-body-kicker');
+      row.bodyEl.createEl('pre', { cls: 'aic-tool-target', text: row.target });
+    }
+    if (row.output) {
+      kicker(row.bodyEl, 'RESULT', 'aic-tool-body-kicker');
+      row.bodyEl.createEl('pre', { cls: 'aic-tool-body-pre', text: row.output });
+      /* MEASURED, not estimated. A line count is a fact about the text on
+         screen; a token figure would be a guess wearing a number's clothes. */
+      const lines = row.output.split('\n').length;
+      row.bodyEl.createDiv({ cls: 'aic-tool-lines', text: `${lines} ${lines === 1 ? 'line' : 'lines'}` });
+    }
+  }
+
+  /**
+   * Kept as the name the resize path used to call. Whether a row opens is a
+   * property of its content now, so there is nothing to re-take on resize.
+   */
   remeasureTools(): void {
-    for (const row of this.tools.values()) this.measureRow(row);
+    for (const row of this.tools.values()) this.paintExpand(row);
   }
 
   private paintTool(toolUseId: string): void {
@@ -779,7 +825,32 @@ export class StreamRenderer {
         row.el.addClass('is-done');
         break;
     }
+    this.paintRight(row);
+    this.paintExpand(row);
     this.paintGroup(row.group);
+  }
+
+  /* The right cell, repainted whole: duration once finished, the verdict mark,
+     then the disclosure chevron. The approval buttons are added by
+     `renderApprovalControls` AFTER this, into the same cell, so a repaint
+     never wipes a pending prompt: the awaiting state paints no mark and the
+     buttons are the cell's whole content. */
+  private paintRight(row: ToolRow): void {
+    row.rightEl.empty();
+    if (row.finishedAt !== null && row.status !== 'awaiting-approval') {
+      row.rightEl.createSpan({ cls: 'aic-tool-time', text: shortDuration(row.finishedAt - row.startedAt) });
+    }
+    if (row.status === 'done') {
+      const mark = row.rightEl.createSpan({ cls: 'aic-tool-mark is-ok' });
+      setIcon(mark, 'check');
+      mark.setAttr('aria-label', 'done');
+    } else if (row.status === 'failed') {
+      row.rightEl.createSpan({ cls: 'aic-tool-mark is-fail aic-glyph-fail', text: '×' });
+    }
+    if (this.hasBody(row)) {
+      const chevron = row.rightEl.createSpan({ cls: 'aic-chevron aic-tool-chevron' });
+      setIcon(chevron, 'chevron-right');
+    }
   }
 
   private paintGroup(group: ToolGroup): void {
@@ -809,8 +880,9 @@ export class StreamRenderer {
   private renderApprovalControls(toolUseId: string): void {
     const row = this.tools.get(toolUseId);
     if (!row) return;
-    row.rightEl.empty();
+    // The buttons go FIRST in the cell, ahead of the chevron the repaint left.
     const controls = row.rightEl.createSpan({ cls: 'aic-approval' });
+    row.rightEl.prepend(controls);
     const choose = (choice: ApprovalChoice): void => {
       controls.remove();
       this.callbacks.onApproval(toolUseId, choice);
@@ -828,12 +900,12 @@ export class StreamRenderer {
   }
 
   private settleRunningRows(): void {
-    for (const [, row] of this.tools) {
+    for (const [id, row] of this.tools) {
       if (row.status === 'running') {
+        // No result ever arrived, so there is no duration to print: the
+        // finish is not stamped and the right cell carries the mark alone.
         row.status = 'done';
-        row.el.removeClass('is-running');
-        row.el.addClass('is-done');
-        row.gutter.empty();
+        this.paintTool(id);
       }
     }
     if (this.group) this.paintGroup(this.group);
@@ -886,5 +958,36 @@ export class StreamRenderer {
     this.working = null;
     this.thinkingText = '';
     this.heldBlockId = null;
+  }
+}
+
+/* One glyph per tool FAMILY, never per tool: the icon says what kind of thing
+   happened (a file was read, a command ran, a search was made) and the
+   sentence beside it says which. A new tool the table does not know gets the
+   wrench rather than nothing, so the column of icons never has a hole. */
+function toolIcon(name: string): string {
+  switch (name) {
+    case 'Read':
+      return 'file-text';
+    case 'Write':
+    case 'Edit':
+    case 'MultiEdit':
+    case 'NotebookEdit':
+      return 'pencil';
+    case 'Bash':
+      return 'terminal';
+    case 'Glob':
+    case 'Grep':
+      return 'search';
+    case 'WebFetch':
+    case 'WebSearch':
+      return 'globe';
+    case 'Task':
+    case 'Agent':
+      return 'bot';
+    case 'TodoWrite':
+      return 'list-checks';
+    default:
+      return 'wrench';
   }
 }
