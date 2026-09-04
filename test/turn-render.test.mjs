@@ -288,7 +288,7 @@ test('the lightbox can still read its own design tokens off the body', async () 
     // Moving it out of .aic-root moved it out of the selector that DEFINES
     // every --aic-* token. Without adding it back, each var() in the overlay
     // resolves to nothing and the failure is invisible in a diff.
-    assert.match(CSS_TEXT(), /\.aic-root, \.aic-settings, \.aic-menu, \.aic-lightbox \{/,
+    assert.match(CSS_TEXT(), /\.aic-root, \.aic-settings, \.aic-menu, \.aic-lightbox(, [^{]*)? \{/,
       'the lightbox left .aic-root and was not added to the token-defining selector');
   } finally {
     await chrome.close();
