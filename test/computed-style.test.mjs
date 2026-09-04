@@ -270,6 +270,7 @@ ${HELPERS}
        (No backticks in here: this map is inside a template literal.) */
     segActive: '.aic-seg-btn.is-active',
     textBtn: '.aic-text-btn',
+    providerBtn: '.aic-provider-btn',
     iconBtn: '.aic-icon-btn',
     textarea: 'textarea.aic-input',
     insight: '.aic-insight',
@@ -878,6 +879,7 @@ async function snapshot(chrome, room) {
   const HOVERED = ['.aic-thinking-probe .aic-thinking-head',
                    '.aic-send', '.aic-approve-always', '.aic-badge', '.aic-seg-btn',
                    '.aic-code-chip', '.aic-agent-chip', '.aic-icon-btn', '.aic-text-btn',
+                   '.aic-provider-btn',
                    '.aic-chip-x', '.aic-thumb-x',
                    /* The expandable tool row. `forcePseudos` THROWS on a selector
                       that matches nothing, so listing it here is itself a guard:
@@ -1717,10 +1719,12 @@ test('a fresh pane shows the ACTUAL model, and truth outranks the preset', () =>
        fact would be the substitution defect on a new surface. */
     assert.equal(f.late, 'claude-opus-4-6',
       `${room}: the preset overwrote the session's own model (face reads "${f.late}")`);
-    /* And the fallback stays: no resolve, no session, no plugin choice - the
-       trigger reads the label, which is the rare path, never a fresh-vault
-       default now that the resolver exists. */
-    assert.equal(f.bare, 'Model', `${room}: the unresolved fallback face changed`);
+    /* And the fallback: no resolve, no session, no plugin choice - the
+       trigger says WHOSE default will answer, which is true, where it used to
+       read the bare word "Model" (a placeholder wearing a control's clothes).
+       Still the rare path, never a fresh-vault default now that the resolver
+       exists. */
+    assert.equal(f.bare, 'Claude Code default model', `${room}: the unresolved fallback face changed`);
   });
 });
 

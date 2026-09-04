@@ -21,7 +21,7 @@ import { SubagentBus } from './state/subagents';
 import { ReplyActionRegistry } from './view/actions';
 import type { RenderHost } from './structured/render';
 import type { ItemView } from 'obsidian';
-import { availableProviders, providerFor } from './provider/registry';
+import { availableProviders, missingProviderMessage, providerFor, providerName } from './provider/registry';
 import { providerFromFrontmatter, resumableSessionId } from './archive/resume';
 import { shortAge } from './view/dom';
 import { ChatView } from './view/ChatView';
@@ -137,7 +137,7 @@ export default class IcorChatPlugin extends Plugin {
         const file = this.app.workspace.getActiveFile();
         const archived = file ? this.archivedSession(file) : null;
         if (!archived) return false;
-        if (!checking) void this.openChat(archived.sessionId, archived.provider);
+        if (!checking) void this.resumeArchived(archived.sessionId, archived.provider);
         return true;
       },
     });
@@ -147,16 +147,23 @@ export default class IcorChatPlugin extends Plugin {
         if (!(file instanceof TFile)) return;
         const archived = this.archivedSession(file);
         if (!archived) return;
-        const owner = providerFor(archived.provider);
         /* Resume is offered only by the runtime that had the session, and only
            when that runtime is on this machine. Existence is checked on click,
-           because a file menu is built synchronously and a store read is not. */
-        if (this.detections[archived.provider]?.found === true) {
+           because a file menu is built synchronously and a store read is not.
+           A runtime this build lacks, or one not found here, is named in a
+           disabled row rather than substituted. */
+        const owner = providerFor(archived.provider);
+        if (owner && this.detections[archived.provider]?.found === true) {
           menu.addItem((item) =>
             item
               .setTitle(`Resume with ${owner.displayName}`)
               .setIcon('bot')
               .onClick(() => void this.resumeArchived(archived.sessionId, archived.provider)),
+          );
+        }
+        if (!owner || this.detections[archived.provider]?.found !== true) {
+          menu.addItem((item) =>
+            item.setTitle(`Resume needs ${providerName(archived.provider)}, which is not here`).setIcon('bot').setDisabled(true),
           );
         }
         for (const other of this.detectedRuntimes()) {
@@ -244,6 +251,15 @@ export default class IcorChatPlugin extends Plugin {
   }
 
   /* ------------------------------------------------------------ runtimes */
+
+  /**
+   * The configured model for a runtime. The `model` setting predates the
+   * seam and names a Claude model; every other runtime starts on its own
+   * default until it has a setting of its own.
+   */
+  modelFor(provider: ProviderId): string {
+    return provider === 'claude' ? this.settings.model : '';
+  }
 
   /** The configured executable path for a runtime; empty means search. */
   pathFor(provider: ProviderId): string {
@@ -485,9 +501,13 @@ export default class IcorChatPlugin extends Plugin {
      pressing the robot twice reveals one pane instead of minting two. */
   /** Resume an archived session, saying so when its runtime no longer has it. */
   private async resumeArchived(sessionId: string, provider: ProviderId): Promise<void> {
-    const store = providerFor(provider).store;
-    if (store && !(await store.exists(sessionId, this.vaultPath))) {
-      new Notice(`${providerFor(provider).displayName} no longer has this session. Continue from the transcript instead.`);
+    const runtime = providerFor(provider);
+    if (!runtime || this.detections[provider]?.found !== true) {
+      new Notice(missingProviderMessage(provider));
+      return;
+    }
+    if (runtime.store && !(await runtime.store.exists(sessionId, this.vaultPath))) {
+      new Notice(`${runtime.displayName} no longer has this session. Continue from the transcript instead.`);
       return;
     }
     await this.openChat(sessionId, provider);
@@ -498,6 +518,15 @@ export default class IcorChatPlugin extends Plugin {
     provider?: ProviderId,
     opts: { handover?: string; continuedFrom?: string } = {},
   ): Promise<void> {
+    /* The runtime is checked HERE, before a leaf is minted: a pane that
+       opens and then says its runtime is missing is a pane the user has to
+       close. The settings default is a stored string and can name a runtime
+       the build no longer carries, so it is checked the same way. */
+    const wanted = provider ?? this.settings.defaultProvider;
+    if (!providerFor(wanted)) {
+      new Notice(missingProviderMessage(wanted));
+      return;
+    }
     const leaves = this.app.workspace
       .getLeavesOfType(VIEW_TYPE_CHAT)
       .map((leaf) => {

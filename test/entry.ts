@@ -40,3 +40,8 @@ export * from '../src/team/usage';
 export * from '../src/team/insights';
 export * from "../src/archive/agents";
 export * from '../src/wip/naming';
+export * from '../src/provider/codex/normalize';
+export * from '../src/provider/codex/modes';
+export { modelChoicesOf } from '../src/provider/codex/session';
+export { defaultModelFromConfig, signedInFrom } from '../src/provider/codex/index';
+export * from '../src/archive/handover';

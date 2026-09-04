@@ -33,7 +33,7 @@ import { renderPinTray } from './PinTray';
 import { isPinned, pinFirstPrompt, pinsFromState, pinsToState, togglePin, unpin } from '../model/pins';
 import type { PinnedPrompt } from '../model/pins';
 import type { TrayChip } from './composer/Composer';
-import { providerFor } from '../provider/registry';
+import { missingProviderMessage, providerFor } from '../provider/registry';
 import { isProviderId } from '../provider/types';
 import type { Provider, ProviderId, ProviderSession, SessionHooks, SessionStore } from '../provider/types';
 import { splitExtraPath } from '../provider/cli';
@@ -157,13 +157,21 @@ export class ChatView extends ItemView {
   }
 
   /** The runtime behind this tab. Never a Claude type: the seam is the whole contract. */
-  private get runtime(): Provider {
+  private get runtime(): Provider | null {
     return providerFor(this.provider);
   }
 
   /** The runtime's session record, or null for a protocol without one. */
   private get sessionStore(): SessionStore | null {
-    return this.runtime.store;
+    return this.runtime?.store ?? null;
+  }
+
+  /** The runtime this pane needs, or the words for why it cannot be had. */
+  private requireRuntime(): Provider | null {
+    const runtime = this.runtime;
+    if (runtime) return runtime;
+    this.store.apply({ kind: 'error', message: missingProviderMessage(this.provider), stream: null });
+    return null;
   }
 
   override getViewType(): string {
@@ -188,7 +196,10 @@ export class ChatView extends ItemView {
       composer: {
         streaming: false,
         mode: this.permissionMode,
-        model: this.plugin.settings.model,
+        // The model setting is Claude's: a Claude id handed to another runtime
+        // is a request it cannot honour and a label that lies (seen live as
+        // OPUS on a Codex pane, 2026-09-04).
+        model: this.plugin.modelFor(this.provider),
         effort: this.plugin.settings.effort,
         provider: this.provider,
         // A resumed pane is already a conversation; a fresh one may still choose.
@@ -245,7 +256,8 @@ export class ChatView extends ItemView {
     });
     this.registerBuiltInActions();
     this.composer?.setProviders(this.plugin.detectedProviders());
-    this.composer?.setModeDetail(this.runtime.modeLabel?.(this.permissionMode) ?? null);
+    this.composer?.setModeDetail(this.runtime?.modeLabel?.(this.permissionMode) ?? null);
+    if (!this.runtime) this.requireRuntime();
     this.roster = detectTeam(this.app);
     this.stream.renderEmptyState(this.emptyTeamBlock());
     this.renderPins();
@@ -263,7 +275,7 @@ export class ChatView extends ItemView {
        override, the name comes from the CLI's own settings cascade - the same
        files the session will read - so the face and the behaviour cannot
        disagree. The composer applies it only while nothing truer is known. */
-    if (!this.plugin.settings.model) {
+    if (!this.plugin.modelFor(this.provider) && this.runtime) {
       void this.runtime.defaultModel(this.plugin.vaultPath).then((model) => {
         if (model) this.composer?.presetModel(model);
       });
@@ -716,9 +728,10 @@ export class ChatView extends ItemView {
     if (this.session || this.resumeSessionId || this.store.state.sessionId) return;
     this.provider = provider;
     this.composer?.setProvider(provider);
-    this.composer?.setModeDetail(this.runtime.modeLabel?.(this.permissionMode) ?? null);
-    if (!this.plugin.settings.model) {
-      void this.runtime.defaultModel(this.plugin.vaultPath).then((model) => {
+    this.composer?.setModeDetail(this.runtime?.modeLabel?.(this.permissionMode) ?? null);
+    const runtime = this.runtime;
+    if (!this.plugin.modelFor(provider) && runtime) {
+      void runtime.defaultModel(this.plugin.vaultPath).then((model) => {
         if (model && this.provider === provider) this.composer?.presetModel(model);
       });
     }
@@ -1222,7 +1235,7 @@ export class ChatView extends ItemView {
         extra: splitExtraPath(settings.extraPath),
         configured: this.plugin.pathFor(this.provider),
       },
-      model: settings.model,
+      model: this.plugin.modelFor(this.provider),
       effort: settings.effort,
       // This tab's mode, which the composer may already have changed.
       permissionMode: this.permissionMode,
@@ -1254,8 +1267,10 @@ export class ChatView extends ItemView {
           new Notice(`Could not switch to ${mode}: ${message}`);
         },
       };
+    const runtime = this.requireRuntime();
+    if (!runtime) return null;
     try {
-      this.session = this.runtime.open(config, hooks);
+      this.session = runtime.open(config, hooks);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.store.apply({ kind: 'error', message, stream: null });
@@ -1357,7 +1372,7 @@ export class ChatView extends ItemView {
     if (!this.session) return;
     const ok = await this.session.setPermissionMode(mode);
     if (ok) {
-      this.composer?.setModeDetail(this.runtime.modeLabel?.(mode) ?? null);
+      this.composer?.setModeDetail(this.runtime?.modeLabel?.(mode) ?? null);
       return;
     }
     this.permissionMode = previous;

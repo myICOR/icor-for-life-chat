@@ -29,7 +29,7 @@ interface Client {
 
 let launch: RpcLaunch | null = null;
 let client: Client | null = null;
-let idle: ReturnType<typeof setTimeout> | null = null;
+let idle: number | null = null;
 
 /** Remember how to launch, from a detect or an open. */
 export function configureLaunch(next: RpcLaunch): void {
@@ -47,8 +47,8 @@ function resolveLaunch(cwd: string): RpcLaunch {
 }
 
 function touch(): void {
-  if (idle) clearTimeout(idle);
-  idle = setTimeout(stopService, IDLE_MS);
+  if (idle !== null) window.clearTimeout(idle);
+  idle = window.setTimeout(stopService, IDLE_MS);
 }
 
 async function ensure(cwd: string): Promise<CodexRpc> {
@@ -91,7 +91,7 @@ export async function withService<T>(cwd: string, fn: (rpc: CodexRpc) => Promise
 
 /** Stop the shared server. Called on plugin unload and on a changed launch. */
 export function stopService(): void {
-  if (idle) clearTimeout(idle);
+  if (idle !== null) window.clearTimeout(idle);
   idle = null;
   client?.rpc.kill();
   client = null;

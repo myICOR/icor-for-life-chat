@@ -280,7 +280,11 @@ export class Composer {
       if (this.menuOpen) this.closeMenu(true);
       else this.openMenu();
     });
-    this.providerBtn = action.createEl('button', { cls: 'aic-text-btn aic-provider-btn', type: 'button' });
+    /* Its own class, not `.aic-text-btn`: the three-picker census (mode,
+       model, effort) is a gate, and a fourth pill wearing the same class would
+       pass it by absence. The pill look is restated for this class in the
+       stylesheet's F2 region. */
+    this.providerBtn = action.createEl('button', { cls: 'aic-provider-btn', type: 'button' });
     this.providerBtn.addEventListener('click', (ev) => this.openProviderMenu(ev));
     this.providerBtn.setAttr('aria-haspopup', 'menu');
     /* The mode trigger keeps the segmented button's class and its tone pair.

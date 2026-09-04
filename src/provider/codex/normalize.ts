@@ -404,31 +404,34 @@ export class CodexNormalizer {
  * the completed items as the events a live turn would have produced. Pure, so
  * `thread/read` output recorded in a fixture can be asserted headless.
  */
-export function replayFromThread(thread: unknown, cwd: string): Array<{ spoken: string | null; events: ChatEvent[] }> {
+export function replayFromThread(thread: unknown, cwd: string): Array<{ spoken: string | null; messageId: string | null; events: ChatEvent[] }> {
   if (!isRecord(thread)) return [];
   const turns = Array.isArray(thread.turns) ? thread.turns.filter(isRecord) : [];
-  const out: Array<{ spoken: string | null; events: ChatEvent[] }> = [];
+  const out: Array<{ spoken: string | null; messageId: string | null; events: ChatEvent[] }> = [];
   for (const turn of turns) {
     const items = Array.isArray(turn.items) ? turn.items.filter(isRecord) : [];
     const normalizer = new CodexNormalizer(cwd);
     let spoken: string | null = null;
-    const events: ChatEvent[] = [];
+    let messageId: string | null = null;
+    let events: ChatEvent[] = [];
     for (const item of items) {
       if (item.type === 'userMessage') {
         const parts = Array.isArray(item.content) ? item.content.filter(isRecord) : [];
         const text = parts.map((c) => (c.type === 'text' ? str(c.text) ?? '' : '')).join('\n').trim();
         if (text) {
           if (spoken !== null || events.length > 0) {
-            out.push({ spoken, events });
-            spoken = null;
+            out.push({ spoken, messageId, events });
+            events = [];
           }
           spoken = text;
+          // The user message's own item id, so a fork "up to here" can name it.
+          messageId = str(item.id);
           continue;
         }
       }
       for (const event of normalizer.completedItem(item)) events.push(event);
     }
-    if (spoken !== null || events.length > 0) out.push({ spoken, events });
+    if (spoken !== null || events.length > 0) out.push({ spoken, messageId, events });
   }
   return out;
 }
