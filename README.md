@@ -239,7 +239,7 @@ Copy `main.js`, `manifest.json` and `styles.css` into
 ```
 npm install      # pins the Agent SDK exactly; it is pre-1.0
 npm run dev      # esbuild watch
-npm run gate     # typecheck, production build, tests
+npm run gate     # typecheck, production build, lint, tests
 ```
 
 `npm run gate` is the bar for a commit. The suite protects the behaviours that
