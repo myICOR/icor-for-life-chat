@@ -25,7 +25,6 @@ import { availableProviders, providerFor } from './provider/registry';
 import { providerFromFrontmatter, resumableSessionId } from './archive/resume';
 import { shortAge } from './view/dom';
 import { ChatView } from './view/ChatView';
-import { ReplyActionRegistry } from './view/actions';
 import { captureTaskAction, startDeliverableAction } from './wip/actions';
 import { openTaskCount } from './team/load';
 import { routeChatLeaf } from './view/leafRoute';
@@ -34,7 +33,6 @@ import { DEFAULT_SETTINGS, archiveRoot } from './model/settings';
 import type { ChatSettings } from './model/settings';
 import type { ModelChoice } from './model/types';
 import type { ProviderId } from './provider/types';
-import { ReplyActionRegistry } from './view/actions';
 import { installMemory } from './team/memory';
 
 /* The file-explorer BLOCK this plugin used to inject above the file tree - a
@@ -75,8 +73,6 @@ export default class IcorChatPlugin extends Plugin {
    * offer it and nothing in the build could notice. Empty stays EMPTY and the
    * tab says so; it is never backfilled with a guess. */
   modelCatalog: ModelChoice[] = [];
-  /** Actions any reply offers; streams register theirs here at load. */
-  readonly replyActions = new ReplyActionRegistry();
 
   override async onload(): Promise<void> {
     await this.loadSettings();
@@ -346,8 +342,8 @@ export default class IcorChatPlugin extends Plugin {
     return null;
   }
 
-  /** Open and in-progress task counts from the Tasks room, or null per folder when absent. */
-  openTaskCount(): { open: number | null; inProgress: number | null } {
+  /** Open and in-progress task counts from the Tasks room, or null when the room is absent. */
+  openTaskCount(): Promise<{ open: number; inProgress: number } | null> {
     return openTaskCount(this.app);
   }
 

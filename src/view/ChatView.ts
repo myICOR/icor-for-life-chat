@@ -52,7 +52,6 @@ import { setupSummary, setupTeam } from '../team/setup';
 import type { ActionTarget, EmptyTeamBlock } from './stream/StreamRenderer';
 import { bindActions } from './actions';
 import type { ReplyAction, ReplyActionContext } from './actions';
-import type { EmptyTeamBlock } from './stream/StreamRenderer';
 import { REMEMBER_PREFIX, newestOpenTask, recentSessionLogs } from '../team/memory';
 import { openTaskCount } from '../team/load';
 
@@ -526,6 +525,7 @@ export class ChatView extends ItemView {
   private clearFinishBadge(): void {
     this.badgedTab?.removeClass('aic-tab-done');
     this.badgedTab = null;
+  }
 
   /* ----------------------------------------------------------- the memory */
 
