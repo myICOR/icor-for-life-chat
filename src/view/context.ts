@@ -9,6 +9,8 @@
 import { MarkdownView, TFile, TFolder, getAllTags } from 'obsidian';
 import type { App, CachedMetadata } from 'obsidian';
 import type { NoteContext } from '../model/contextText';
+import { sortWipFolders, WIP_FOLDER } from '../wip/naming';
+import type { WipFolderInfo } from '../wip/naming';
 
 export { selectionRangeLabel, contextPreamble, withContext } from '../model/contextText';
 export type { NoteContext } from '../model/contextText';
@@ -212,4 +214,107 @@ export function listFolders(app: App): FolderCount[] {
 export function resolveWikilink(app: App, target: string, sourcePath: string): TFile | null {
   const file = app.metadataCache.getFirstLinkpathDest(target, sourcePath);
   return file instanceof TFile ? file : null;
+}
+
+/* ------------------------------------------------ the vault's other rooms */
+
+
+export const TASKS_OPEN = '06 AI Team/AI Team Knowledge/Tasks/open';
+export const TASKS_IN_PROGRESS = '06 AI Team/AI Team Knowledge/Tasks/in-progress';
+
+/** True when the vault has a `03 WiP` room at all. */
+export function hasWipRoom(app: App): boolean {
+  return app.vault.getAbstractFileByPath(WIP_FOLDER) instanceof TFolder;
+}
+
+/** True when the vault has a Tasks room with an `open` folder. */
+export function hasTasksRoom(app: App): boolean {
+  return app.vault.getAbstractFileByPath(TASKS_OPEN) instanceof TFolder;
+}
+
+/**
+ * The direct subfolders of `03 WiP`, newest first, each with its note count.
+ * The ordering rule is pure (`sortWipFolders`); this only measures.
+ */
+export function listWipFolders(app: App): WipFolderInfo[] {
+  const root = app.vault.getAbstractFileByPath(WIP_FOLDER);
+  if (!(root instanceof TFolder)) return [];
+  const out: WipFolderInfo[] = [];
+  for (const child of root.children) {
+    if (!(child instanceof TFolder)) continue;
+    const notes = markdownFilesUnder(child);
+    out.push({
+      path: child.path,
+      name: child.name,
+      mtime: notes.reduce((m, f) => Math.max(m, f.stat.mtime), 0),
+      notes: notes.length,
+    });
+  }
+  return sortWipFolders(out);
+}
+
+/** Every note in a WiP folder. The same walk a folder pick uses. */
+export function resolveWip(app: App, folder: string): string[] {
+  return resolveFolder(app, folder);
+}
+
+export interface OpenTask {
+  path: string;
+  title: string;
+  owner: string;
+  priority: string;
+  status: 'open' | 'in-progress';
+  created: string;
+  mtime: number;
+}
+
+function fmString(fm: Record<string, unknown> | undefined, key: string): string {
+  const v = fm?.[key];
+  return typeof v === 'string' ? v : typeof v === 'number' ? String(v) : '';
+}
+
+/** Open and in-progress tasks, newest first by `created`, then mtime. */
+export function listOpenTasks(app: App): OpenTask[] {
+  const out: OpenTask[] = [];
+  const read = (folder: string, status: OpenTask['status']): void => {
+    const root = app.vault.getAbstractFileByPath(folder);
+    if (!(root instanceof TFolder)) return;
+    for (const file of markdownFilesUnder(root)) {
+      if (file.basename.startsWith('_')) continue;
+      const fm = app.metadataCache.getFileCache(file)?.frontmatter;
+      out.push({
+        path: file.path,
+        title: fmString(fm, 'title') || file.basename,
+        owner: fmString(fm, 'owner') || fmString(fm, 'assignee'),
+        priority: fmString(fm, 'priority'),
+        status,
+        created: fmString(fm, 'created').slice(0, 10),
+        mtime: file.stat.mtime,
+      });
+    }
+  };
+  read(TASKS_OPEN, 'open');
+  read(TASKS_IN_PROGRESS, 'in-progress');
+  return out.sort((a, b) => b.created.localeCompare(a.created) || b.mtime - a.mtime || a.title.localeCompare(b.title));
+}
+
+/** Every open task's path: the `All open tasks` group. */
+export function resolveTasks(app: App): string[] {
+  return listOpenTasks(app).map((t) => t.path);
+}
+
+/** The notes a note links to, resolved through the cache. Notes only. */
+export function linkedFromNote(app: App, path: string): string[] {
+  const links = app.metadataCache.resolvedLinks[path] ?? {};
+  return Object.keys(links).filter((p) => p.endsWith('.md') && p !== path).sort();
+}
+
+/** Every note whose resolved links include this one. */
+export function linksToNote(app: App, path: string): string[] {
+  const out: string[] = [];
+  for (const [source, links] of Object.entries(app.metadataCache.resolvedLinks)) {
+    if (source === path || !source.endsWith('.md')) continue;
+    if (Object.prototype.hasOwnProperty.call(links, path)) out.push(source);
+  }
+  return out.sort();
 }

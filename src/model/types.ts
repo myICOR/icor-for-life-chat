@@ -39,7 +39,7 @@ export interface TurnImage {
 
 /** One context chip on a sent turn. The label is what the chip says. */
 export interface TurnContext {
-  kind: 'active' | 'note' | 'folder' | 'tag' | 'property';
+  kind: 'active' | 'note' | 'folder' | 'tag' | 'property' | 'wip' | 'tasks' | 'linked';
   label: string;
   count: number;
   /** For a single note, so the chip opens it. Null for a group. */

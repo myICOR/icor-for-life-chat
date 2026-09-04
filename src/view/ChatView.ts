@@ -21,10 +21,12 @@ import { SDK_VERSION } from '../constants';
 import {
   listFolders, listProperties, listTags, readContext, resolveFolder, resolveProperty, resolveTag,
   resolveWikilink, selectionRangeLabel, withContext,
+  hasTasksRoom, hasWipRoom, linkedFromNote, linksToNote, listOpenTasks, listWipFolders, resolveTasks, resolveWip, TASKS_OPEN,
 } from './context';
 import type { NoteContext } from './context';
 import { baseOf, contextPickId, folderOf, previewText } from '../model/context';
 import type { ContextPick, ContextRef } from '../model/context';
+import { linkedIdParts } from '../model/context';
 import { wikilinksIn } from './composer/mention';
 import { ContextModal, contextIcon } from './ContextModal';
 import { renderPinTray } from './PinTray';
@@ -117,6 +119,8 @@ export class ChatView extends ItemView {
   /* FOLLOW-UPS the CLI is holding. Pure bookkeeping in model/followups.ts,
      measured behaviour at the top of provider/claude/session.ts. */
   private followUps: FollowUpState = NO_FOLLOW_UPS;
+  /** WiP folders attached as context this conversation; the archive links back to them. */
+  private readonly wipTouched = new Set<string>();
   /** Repaints the status-bar clearance when the window or the bar changes size. */
   private clearanceObserver: ResizeObserver | null = null;
   /* THE TEAM, as this vault has it. Null in a bare vault. Re-detected when
@@ -253,6 +257,10 @@ export class ChatView extends ItemView {
       folders: () => listFolders(this.app),
       tags: () => listTags(this.app),
       properties: () => listProperties(this.app),
+      // The vault's other rooms, present only where the vault has them.
+      ...(hasWipRoom(this.app) ? { wip: () => listWipFolders(this.app) } : {}),
+      ...(hasTasksRoom(this.app) ? { tasks: () => listOpenTasks(this.app) } : {}),
+      linked: () => this.linkedNoteFacts(),
     });
     /* The vault changes under an open chat: a note created while the pane is
        up must be mentionable without reopening it. Rename and delete matter for
@@ -455,8 +463,35 @@ export class ChatView extends ItemView {
 
   /* ------------------------------------------------------ context refs */
 
-  /** A `+` menu pick, resolved into the notes it stands for. */
-  private addPick(pick: ContextPick): void {
+  /** The open note and its link counts, for the `Linked notes` rows. Null with no note open. */
+  private linkedNoteFacts(): { path: string; basename: string; from: number; to: number } | null {
+    const ctx = readContext(this.app, this.lastMarkdownView);
+    if (!ctx) return null;
+    return {
+      path: ctx.path,
+      basename: ctx.basename,
+      from: linkedFromNote(this.app, ctx.path).length,
+      to: linksToNote(this.app, ctx.path).length,
+    };
+  }
+
+  /** Put text at the caret and focus the field. The close-session command's whole job. */
+  insertIntoComposer(text: string): void {
+    this.composer?.insert(text);
+  }
+
+  /** Every provider session id this tab has held. A deliverable records them. */
+  sessionIdsHeld(): string[] {
+    return [...this.sessionIds];
+  }
+
+  /** The WiP folders the user attached this conversation, for the archive's link back. */
+  private wipAttached(): string[] {
+    return Array.from(this.wipTouched);
+  }
+
+  /** A `+` menu pick, resolved into the notes it stands for. Public: a reply action pins a folder through it. */
+  addPick(pick: ContextPick): void {
     if (pick.kind === 'active') {
       const ctx = readContext(this.app, this.lastMarkdownView);
       if (!ctx) {
@@ -485,6 +520,7 @@ export class ChatView extends ItemView {
       return;
     }
     this.refs.push(ref);
+    if (ref.kind === 'wip') this.wipTouched.add(ref.id);
     this.refreshContext();
   }
 
@@ -502,6 +538,21 @@ export class ChatView extends ItemView {
         return { kind: 'tag', id, label: id, detail: '', paths: resolveTag(this.app, pick.tag) };
       case 'property':
         return { kind: 'property', id, label: id, detail: pick.key, paths: resolveProperty(this.app, pick.key, pick.value) };
+      case 'wip':
+        return { kind: 'wip', id, label: baseOf(pick.path), detail: pick.path, paths: resolveWip(this.app, pick.path) };
+      case 'tasks':
+        return { kind: 'tasks', id, label: 'Open tasks', detail: TASKS_OPEN, paths: resolveTasks(this.app) };
+      case 'linked': {
+        const name = baseOf(pick.path);
+        const from = pick.direction === 'from';
+        return {
+          kind: 'linked',
+          id,
+          label: from ? `Linked from ${name}` : `Links to ${name}`,
+          detail: pick.path,
+          paths: from ? linkedFromNote(this.app, pick.path) : linksToNote(this.app, pick.path),
+        };
+      }
     }
   }
 
@@ -516,6 +567,15 @@ export class ChatView extends ItemView {
         const colon = ref.id.indexOf(': ');
         if (colon === -1) return ref;
         return { ...ref, paths: resolveProperty(this.app, ref.id.slice(0, colon), ref.id.slice(colon + 2)) };
+      }
+      case 'wip':
+        return { ...ref, paths: resolveWip(this.app, ref.id) };
+      case 'tasks':
+        return { ...ref, paths: resolveTasks(this.app) };
+      case 'linked': {
+        const parts = linkedIdParts(ref.id);
+        if (!parts) return ref;
+        return { ...ref, paths: parts.direction === 'from' ? linkedFromNote(this.app, parts.path) : linksToNote(this.app, parts.path) };
       }
       default:
         return ref;
@@ -1166,6 +1226,7 @@ export class ChatView extends ItemView {
         tokens: this.store.state.usage?.totalTokens ?? 0,
         pluginVersion: this.plugin.manifest.version,
         sdkVersion: SDK_VERSION,
+        wipAttached: this.wipAttached(),
       });
       await writer.sweep(this.plugin.settings.archiveRetentionDays);
     } catch (error) {

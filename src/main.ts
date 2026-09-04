@@ -24,6 +24,9 @@ import { availableProviders, providerFor } from './provider/registry';
 import { providerFromFrontmatter, resumableSessionId } from './archive/resume';
 import { shortAge } from './view/dom';
 import { ChatView } from './view/ChatView';
+import { ReplyActionRegistry } from './view/actions';
+import { captureTaskAction, startDeliverableAction } from './wip/actions';
+import { openTaskCount } from './team/load';
 import { routeChatLeaf } from './view/leafRoute';
 import { ChatSettingsTab } from './settings/SettingsTab';
 import { DEFAULT_SETTINGS, archiveRoot } from './model/settings';
@@ -53,6 +56,8 @@ export default class IcorChatPlugin extends Plugin {
   override settings: ChatSettings = { ...DEFAULT_SETTINGS };
   /** One bus per vault: a subagent transcript outlives the chip that opened it. */
   readonly subagents = new SubagentBus();
+  /** What a reply can be turned into. Rooms register here; the bar lists it. */
+  readonly replyActions = new ReplyActionRegistry();
 
   /* THE PROVIDER'S OWN MODEL CATALOGUE, cached the first time a session
    * reports it, and empty until then.
@@ -86,6 +91,25 @@ export default class IcorChatPlugin extends Plugin {
       id: 'open-insights',
       name: 'Open AI team insights',
       callback: () => void this.openInsights(),
+    });
+
+    /* THE WIP ROOM'S TWO REPLY ACTIONS (R1, R5), registered rather than
+       built into the bar, so the next room is a registration too. */
+    this.replyActions.register(startDeliverableAction());
+    this.replyActions.register(captureTaskAction());
+
+    /* Closing a session is a slash command the CLI already exposes; this
+       puts it in the composer of the active chat and hands over the caret,
+       so the ritual is one command away from the palette (R5). */
+    this.addCommand({
+      id: 'close-session',
+      name: 'Close session with the AI team',
+      checkCallback: (checking) => {
+        const view = this.activeChatView();
+        if (!view) return false;
+        if (!checking) view.insertIntoComposer('/close-session ');
+        return true;
+      },
     });
 
     /* Resuming from the archive. The conversation note carries every session id
@@ -302,6 +326,21 @@ export default class IcorChatPlugin extends Plugin {
     }).require?.('electron')?.shell;
     if (shell?.showItemInFolder) shell.showItemInFolder(path);
     else new Notice(`Could not reveal ${path}`);
+  }
+
+  /** The chat view that is active, or the first open one. Null with none open. */
+  activeChatView(): ChatView | null {
+    const active = this.app.workspace.getActiveViewOfType(ChatView);
+    if (active) return active;
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_CHAT)) {
+      if (leaf.view instanceof ChatView) return leaf.view;
+    }
+    return null;
+  }
+
+  /** Open and in-progress task counts from the Tasks room, or null per folder when absent. */
+  openTaskCount(): { open: number | null; inProgress: number | null } {
+    return openTaskCount(this.app);
   }
 
   /** The vault's absolute path: the working directory every session runs in. */

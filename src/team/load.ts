@@ -84,8 +84,14 @@ async function recordOf(app: App, folder: string, manifest: ArchiveManifest): Pr
     endedAt,
     tokens,
     model: manifest.resume?.model ?? null,
+    wip: Array.isArray(manifest.wip) ? manifest.wip.filter((w): w is string => typeof w === 'string') : [],
     ...counts,
   };
+}
+
+/** The open and in-progress task counts, or null per folder when the room is absent. */
+export function openTaskCount(app: App): { open: number | null; inProgress: number | null } {
+  return { open: countNotes(app, `${TASKS}/open`), inProgress: countNotes(app, `${TASKS}/in-progress`) };
 }
 
 export async function loadInsights(app: App, archiveRoot: string, rosterCount: number | null): Promise<InsightsData> {

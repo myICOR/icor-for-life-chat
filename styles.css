@@ -2922,6 +2922,49 @@
 
 /* ==== REGION G1: vault sources (WiP, tasks, linked notes) ==== */
 
+/* G1.1 a disabled menu row: a measured zero, shown and not offered. The row
+   keeps its count so the user learns the fact; it loses the pointer and the
+   wash so it never reads as a choice. */
+.aic-root.aic-root .aic-ctx-row.is-disabled {
+  cursor: default;
+  color: var(--aic-faint);
+}
+.aic-root.aic-root .aic-ctx-row.is-disabled.is-active { background: transparent; color: var(--aic-faint); }
+.aic-root.aic-root .aic-ctx-row.is-disabled .aic-ctx-row-icon { color: var(--aic-faint); }
+
+/* G1.2 the deliverables a session touched, one button per WiP folder, under
+   the session row in the Insights list. Quiet by design: the folder name in
+   the kicker voice, the briefcase in the faint ink, the marker only on hover. */
+.aic-root.aic-root .aic-ins-session-wip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 0 12px 8px 12px;
+}
+.aic-root.aic-root .aic-ins-wip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--aic-hairline-subtle);
+  border-radius: var(--aic-r-pill);
+  background: transparent;
+  box-shadow: none;
+  color: var(--aic-dim);
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  cursor: pointer;
+  transition: border-color 140ms var(--aic-ease), color 140ms var(--aic-ease);
+}
+.aic-root.aic-root .aic-ins-wip:hover { border-color: var(--aic-marker); color: var(--aic-paper); }
+.aic-root.aic-root .aic-ins-wip-icon { display: inline-flex; color: var(--aic-faint); }
+.aic-root.aic-root .aic-ins-wip-icon .svg-icon { width: 12px; height: 12px; }
+.aic-root.aic-root .aic-ins-wip:hover .aic-ins-wip-icon { color: var(--aic-marker); }
+
 /* ==== END REGION G1 ==== */
 
 /* ==== REGION G2: reply surface (activity sentence, message actions, finish signals) ==== */

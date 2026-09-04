@@ -29,6 +29,9 @@ const CONTEXT_ICON: Record<TurnContext['kind'], string> = {
   folder: 'folder',
   tag: 'tag',
   property: 'sliders-horizontal',
+  wip: 'briefcase',
+  tasks: 'list-checks',
+  linked: 'link',
 };
 
 interface ToolRow {

@@ -36,3 +36,4 @@ export * from '../src/settings/definitions';
 export * from '../src/team/usage';
 export * from '../src/team/insights';
 export * from "../src/archive/agents";
+export * from '../src/wip/naming';
