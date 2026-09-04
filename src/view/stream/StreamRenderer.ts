@@ -71,6 +71,19 @@ export interface StreamCallbacks {
   onDecisions: (decisions: DecisionBlock[], blockId: string) => void;
 }
 
+/* THE EMPTY STATE'S TEAM BLOCK, supplied by the view.
+ *
+ * `detected` carries the roster count and where "insights" goes; null means
+ * the vault has no `06 AI Team/Agents` and the block offers to make one. The
+ * renderer never decides which case it is in - it draws what it is handed,
+ * and the view re-hands it after a setup so the block repaints without the
+ * rest of the empty state being rebuilt. */
+export interface EmptyTeamBlock {
+  detected: { count: number; onInsights: () => void } | null;
+  /** Resolves when the team has been written; the view repaints afterwards. */
+  onSetup: () => Promise<void>;
+}
+
 export class StreamRenderer {
   private readonly blocks = new Map<string, HTMLElement>();
   private readonly blockText = new Map<string, string>();
@@ -128,7 +141,7 @@ export class StreamRenderer {
   }
 
   /** The empty state is typography: kicker, display line, one hand note. */
-  renderEmptyState(): void {
+  renderEmptyState(team?: EmptyTeamBlock): void {
     if (this.emptyEl) return;
     const wrap = this.column.createDiv({ cls: 'aic-empty' });
     const k = wrap.createDiv({ cls: 'aic-kicker aic-kicker-wide' });
@@ -138,6 +151,48 @@ export class StreamRenderer {
     wrap.createDiv({ cls: 'aic-empty-display', text: 'What are we working on?' });
     wrap.createDiv({ cls: 'aic-empty-hand', text: 'the team reads this vault' });
     this.emptyEl = wrap;
+    if (team) this.renderEmptyTeam(team);
+  }
+
+  /**
+   * Repaint only the team block of the empty state. A setup that just wrote
+   * eight agents changes exactly one thing on this screen, and rebuilding the
+   * whole empty state would also throw away the resume rows under it.
+   */
+  renderEmptyTeam(team: EmptyTeamBlock): void {
+    if (!this.emptyEl) return;
+    this.emptyEl.querySelector('.aic-empty-team')?.remove();
+    const block = this.emptyEl.createDiv({ cls: 'aic-empty-team' });
+    /* Placed right under the hand note, ahead of the resume rows: the resume
+       block is appended later by the view, and a query-then-insert keeps the
+       order stable whichever arrives first. */
+    const sessions = this.emptyEl.querySelector('.aic-sessions');
+    if (sessions) this.emptyEl.insertBefore(block, sessions);
+    if (team.detected) {
+      const { count, onInsights } = team.detected;
+      block.createSpan({
+        cls: 'aic-empty-team-line',
+        text: `${count} agent${count === 1 ? '' : 's'} on the team`,
+      });
+      const open = block.createEl('button', { cls: 'aic-text-btn aic-insights-btn', type: 'button', text: 'Open AI team insights' });
+      open.setAttr('aria-label', 'Open AI team insights');
+      open.addEventListener('click', onInsights);
+      return;
+    }
+    block.addClass('is-setup');
+    block.createDiv({ cls: 'aic-kicker', text: 'AI TEAM' });
+    block.createDiv({ cls: 'aic-empty-team-line', text: 'No AI team in this vault yet.' });
+    const btn = block.createEl('button', { cls: 'aic-setup-btn', type: 'button', text: 'Set up the ICOR AI team' });
+    btn.setAttr('aria-label', 'Set up the ICOR AI team in this vault');
+    btn.addEventListener('click', () => {
+      /* Disabled for the duration, and never re-enabled here: the view repaints
+         this block when the setup resolves, in whichever state the vault is
+         then in. A failed setup leaves the vault without a team and the
+         repaint offers the button again. */
+      btn.disabled = true;
+      btn.setText('Setting up the team');
+      void team.onSetup();
+    });
   }
 
   /** At most three resume rows, and only when there is history to resume. */

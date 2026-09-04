@@ -38,6 +38,12 @@ export interface ChatSettings {
   factAgents: boolean;
   factSessionStart: boolean;
   factSessionUpdated: boolean;
+  /**
+   * The team strip: who on the AI team did the work in this conversation, as a
+   * share of activity, with their faces. Only ever shown when the vault has a
+   * team folder, so in a bare vault the switch changes nothing on screen.
+   */
+  factTeamStrip: boolean;
 }
 
 export const DEFAULT_SETTINGS: ChatSettings = {
@@ -73,6 +79,7 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   factAgents: false,
   factSessionStart: false,
   factSessionUpdated: false,
+  factTeamStrip: true,
 };
 
 /* THE STATUSLINE SECTION'S TWO PROSE STRINGS.

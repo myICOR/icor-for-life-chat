@@ -17,6 +17,11 @@ import { StreamRenderer } from '../src/view/stream/StreamRenderer';
 import { Statusline } from '../src/view/composer/Statusline';
 import { buildPane } from '../src/view/pane';
 import { renderChipTray } from '../src/view/SubagentView';
+import { renderTeamStrip } from '../src/view/TeamStrip';
+import { renderInsights } from '../src/view/InsightsRender';
+import { aggregate } from '../src/team/insights';
+import type { SessionRecord } from '../src/team/insights';
+import { agentShares } from '../src/team/usage';
 import type { SubagentTranscript } from '../src/state/subagents';
 import { renderStructured } from '../src/structured/render';
 import { dot } from '../src/view/dom';
@@ -284,6 +289,25 @@ async function mount(): Promise<void> {
     events: [], openedAt: null, sessionId: null, tokens: 0, toolCalls: 0,
   } as SubagentTranscript], () => {});
 
+  /* THE TEAM STRIP, painted by the shipped `renderTeamStrip` from shares the
+     shipped `agentShares` computed: one face from a portrait, one from an
+     initial, so both treatments of an avatar are measured. The image is the
+     1x1 probe PNG as a data URL; the gate measures the disc, never the pixels
+     inside it. */
+  const roster = [
+    { name: 'Larry', slug: 'larry', folder: '06 AI Team/Agents/Larry', role: 'Orchestrator', bioPath: '06 AI Team/Agents/Larry/Larry.md', avatarPath: '06 AI Team/Agents/Larry/avatar.png' },
+    { name: 'Pax', slug: 'pax', folder: '06 AI Team/Agents/Pax', role: 'Researcher', bioPath: null, avatarPath: null },
+  ];
+  const shares = agentShares({
+    main: { toolCalls: 5, textBlocks: 2 },
+    subagents: [
+      { agentType: 'pax', toolCalls: 2, textBlocks: 1, durationMs: 42_000, status: 'done' },
+      { agentType: 'general-purpose', toolCalls: 1, textBlocks: 0, durationMs: 3_000, status: 'done' },
+    ],
+    roster,
+  });
+  renderTeamStrip(pane.teamStrip, shares, roster, () => PROBE_PNG_URL, () => {});
+
   const composer = pane.composer;
   pane.badge.render(TRACKED);
   /* Rung 4, mounted by `buildPane`: the pane's last child, outside the composer
@@ -306,14 +330,73 @@ async function mount(): Promise<void> {
   await composer.attachFiles([probeImage()]);
 
   await mountStates(root);
+  mountTeamStates();
   mountSettings();
+}
+
+/* THE EMPTY STATE'S TEAM BLOCK in both of its states, and the insights page
+ * with recorded data, each under its own `.aic-root` so the text, cascade and
+ * focus sweeps walk them. The setup button and the filter chips are controls
+ * the host theme's button skin competes for, and a control the fixture never
+ * mounts is a control the sweep never sees. */
+function mountTeamStates(): void {
+  const noHost = {
+    onApproval: () => {}, structured: () => false,
+    renderHost: { home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {}, openUrl: () => {}, copy: () => {}, decisionState: () => null },
+    onDecisions: () => {},
+  };
+  const bare = document.body.createDiv({ cls: 'aic-root aic-team-setup-probe' });
+  new StreamRenderer({} as App, new Component() as never, bare.createDiv({ cls: 'aic-column' }), '', noHost)
+    .renderEmptyState({ detected: null, onSetup: () => Promise.resolve() });
+  const found = document.body.createDiv({ cls: 'aic-root aic-team-found-probe' });
+  new StreamRenderer({} as App, new Component() as never, found.createDiv({ cls: 'aic-column' }), '', noHost)
+    .renderEmptyState({ detected: { count: 8, onInsights: () => {} }, onSetup: () => Promise.resolve() });
+
+  const now = new Date(2026, 8, 4, 12).getTime();
+  const at = (daysAgo: number): number => new Date(2026, 8, 4 - daysAgo, 10).getTime();
+  const sessions: SessionRecord[] = [
+    { folder: 'a', title: 'The specificity sweep', startedAt: at(0), endedAt: at(0) + 60_000, tokens: 875_753, model: 'claude-opus-5',
+      agents: [{ agentType: 'pax', toolCalls: 4, textBlocks: 1, durationMs: 40_000, status: 'done' }], tools: { Read: 3, Bash: 5 }, mainToolCalls: 8, mainTextBlocks: 2 },
+    { folder: 'b', title: 'A quiet one', startedAt: at(3), endedAt: at(3) + 9_000, tokens: null, model: 'claude-opus-5',
+      agents: [], tools: { Read: 1 }, mainToolCalls: 1, mainTextBlocks: 1 },
+    { folder: 'c', title: 'Hire a specialist', startedAt: at(6), endedAt: at(6) + 120_000, tokens: 1_200_000, model: 'claude-sonnet-5',
+      agents: [{ agentType: 'general-purpose', toolCalls: 2, textBlocks: 0, durationMs: 9_000, status: 'done' }], tools: { Grep: 4 }, mainToolCalls: 4, mainTextBlocks: 3 },
+  ];
+  const rosterRefs = [{ name: 'Larry', slug: 'larry' }, { name: 'Pax', slug: 'pax' }];
+  const state = { range: '7d' as const, filters: { agent: 'pax', model: null } };
+  const insights = document.body.createDiv({ cls: 'aic-root aic-insights aic-insights-probe' });
+  renderInsights(
+    insights.createDiv({ cls: 'aic-column aic-ins-column' }),
+    {
+      agg: aggregate(sessions, state.range, { agent: null, model: null }, rosterRefs, now),
+      vault: { agents: 8, sessionLogs: 1855, tasksOpen: 551, tasksInProgress: 10, tasksDone: 125 },
+      totalSessions: sessions.length,
+      archiveRoot: '06 AI Team/AI Sessions',
+    },
+    state,
+    {
+      resolveAvatar: () => PROBE_PNG_URL,
+      avatarFor: (key) => (key === 'larry' ? 'x.png' : null),
+      openSession: () => {}, onRange: () => {}, onAgent: () => {}, onModel: () => {},
+    },
+  );
+  /* The two honest empties, so their strings are measured too. */
+  const empty = document.body.createDiv({ cls: 'aic-root aic-insights aic-insights-empty-probe' });
+  renderInsights(
+    empty.createDiv({ cls: 'aic-column aic-ins-column' }),
+    { agg: aggregate([], '7d', { agent: null, model: null }, rosterRefs, now), vault: { agents: null, sessionLogs: null, tasksOpen: null, tasksInProgress: null, tasksDone: null }, totalSessions: 0, archiveRoot: 'AI Sessions' },
+    { range: '7d', filters: { agent: null, model: null } },
+    { resolveAvatar: () => '', avatarFor: () => null, openSession: () => {}, onRange: () => {}, onAgent: () => {}, onModel: () => {} },
+  );
 }
 
 /* A 1x1 PNG, which is the smallest thing the attach path accepts as real. The
    gate measures the CELL and its control, never the pixels inside. */
+const PROBE_PNG_B64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const PROBE_PNG_URL = `data:image/png;base64,${PROBE_PNG_B64}`;
 function probeImage(): File {
-  const b64 =
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const b64 = PROBE_PNG_B64;
   const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
   return new File([bytes], 'probe.png', { type: 'image/png' });
 }

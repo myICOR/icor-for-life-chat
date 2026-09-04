@@ -154,6 +154,7 @@ export function settingDefinitions(input: DefinitionInput): GroupDefinition[] {
       items: [
         { name: 'Context awareness', desc: 'Send the note you have open and the text you have selected.', control: { type: 'toggle', key: 'contextAwareness' } },
         { name: 'Structured replies', desc: 'Ask for the ICOR card format and render it natively. On by default; turn it off for plain chat.', control: { type: 'toggle', key: 'structuredReplies' } },
+        { name: 'Team strip', desc: 'Show who on the AI team did the work in this conversation, with their share of activity (tool calls and messages). Appears only in a vault with a 06 AI Team folder.', control: { type: 'toggle', key: 'factTeamStrip' } },
       ],
     },
     { index: '03', heading: 'Statusline', items: facts },

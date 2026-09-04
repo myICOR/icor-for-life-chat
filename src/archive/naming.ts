@@ -90,6 +90,25 @@ export interface ArchiveManifest {
     subagents: number;
     tokens: number;
   };
+  /* WHO DID WHAT, written from 0.6.0 so the insights view can read a session
+   * without opening its transcript. Every field is optional because 0.5.x
+   * folders do not carry them, and `isOurManifest` must keep accepting those:
+   * the loader derives the same counts from `transcript.json` for them, with
+   * the same function the writer uses here. */
+  agents?: ManifestAgentRecord[];
+  /** Main-thread tool calls by tool name. */
+  tools?: Record<string, number>;
+  mainToolCalls?: number;
+  mainTextBlocks?: number;
+}
+
+export interface ManifestAgentRecord {
+  agentType: string;
+  toolCalls: number;
+  textBlocks: number;
+  /** Null when the record cannot say. Never a zero standing in for unknown. */
+  durationMs: number | null;
+  status: string;
 }
 
 export function isOurManifest(value: unknown): value is ArchiveManifest {
