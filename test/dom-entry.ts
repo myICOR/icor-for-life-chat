@@ -237,10 +237,25 @@ async function mount(): Promise<void> {
         openUrl: () => {}, copy: () => {}, decisionState: () => null,
       },
       onDecisions: () => {},
+      /* THE ACTION BAR, drawn by the shipped renderer from a bound list the
+         way the view hands it one: two primary buttons and one behind the
+         dots, on replies and on the user's own well alike. */
+      actionsFor: (target) => [
+        { id: 'copy', icon: 'copy', label: 'Copy', section: 'primary', run: () => {} },
+        ...(target.role === 'assistant'
+          ? [{ id: 'save', icon: 'file-plus', label: 'Save as note', section: 'primary' as const, run: () => {} },
+             { id: 'regen', icon: 'refresh-cw', label: 'Regenerate', section: 'more' as const, run: () => {} }]
+          : [{ id: 'edit', icon: 'pencil-line', label: 'Edit and resend', section: 'primary' as const, run: () => {} }]),
+      ],
     },
   );
   const ev = <T extends Record<string, unknown>>(body: T): never =>
     ({ ...body, stream: 'main' }) as never;
+  /* A FINISHED PROSE REPLY, so the bar exists under a block the sweep can
+     hover. Plain mode, so the shim's MarkdownRenderer paints it and no card
+     parser is involved. */
+  stream2.apply(ev({ kind: 'text-open', blockId: 'reply-1' }));
+  stream2.apply(ev({ kind: 'text-final', blockId: 'reply-1', text: 'The sweep found nine selectors under the host theme.' }));
   stream2.apply(ev({ kind: 'tool-call', toolUseId: 't1', name: 'Read', target: 'note.md', purpose: 'Read note.md', input: {} }));
   stream2.apply(ev({ kind: 'tool-call', toolUseId: 't2', name: 'Bash', target: 'ls', purpose: 'List the vault root', input: {} }));
   stream2.apply(ev({ kind: 'tool-result', toolUseId: 't2', ok: true, detail: '', output: '' }));
