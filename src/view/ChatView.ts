@@ -2,9 +2,10 @@
  * else; it never imports a provider SDK, only the Provider seam that wraps
  * whichever runtime answers. */
 
-import { ItemView, MarkdownView, Notice, Platform, TFile, normalizePath } from 'obsidian';
+import { ItemView, MarkdownView, Notice, Platform, TFile, normalizePath, setTooltip } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 import { VIEW_TYPE_CHAT } from '../constants';
+import { TERMINAL_VIEW_TYPE, handoffUnavailableReason, terminalHoldsSession, terminalInstalled, terminalLeafFor, terminalState } from './handoff';
 import { ChatStore } from '../state/store';
 import { StreamRenderer } from './stream/StreamRenderer';
 import type { Composer } from './composer/Composer';
@@ -113,6 +114,12 @@ export class ChatView extends ItemView {
   private handover: string | null = null;
   /** The archive folder this conversation continued from, for the manifest. */
   private continuedFrom: string | null = null;
+  /* THE HAND-OFF TO THE TERMINAL. One header action, repainted whenever the
+     answer to "can this pane be handed over" changes; one in-flight resume,
+     so the swap back and the launcher can both ask for the same thread
+     without starting it twice. */
+  private handoffAction: HTMLElement | null = null;
+  private resuming: { id: string; done: Promise<void> } | null = null;
   /** Every provider session id this tab has held, oldest first. */
   private readonly sessionIds: string[] = [];
   private readonly events: ChatEvent[] = [];
@@ -263,6 +270,18 @@ export class ChatView extends ItemView {
     this.renderPins();
     void this.fillResumeRows().then(() => this.fillMemory());
     this.addAction('bar-chart-3', 'Open AI team insights', () => void this.plugin.openInsights());
+    this.handoffAction = this.addAction('terminal', 'Continue in the terminal', () => void this.continueInTerminal());
+    this.paintHandoffAction();
+    /* LANDING BACK FROM THE TERMINAL. `Back to chat` swaps the leaf with
+       `{ resumeSessionId, provider }` and nothing else, and the pane used to
+       land on its home screen with the id stored and nothing replayed. A swap
+       that arrives after the layout is ready is a hand-off (or the launcher,
+       which resumes again and finds the same thread in flight); a pane
+       restored at Obsidian start is not, and it waits for a click, because a
+       CLI process is started by the user and never by a restore. */
+    if (this.resumeSessionId && !this.session && this.app.workspace.layoutReady) {
+      void this.resume(this.resumeSessionId);
+    }
     /* A CONTINUATION sends its handover as the first message, once, and only
        into an empty pane: a runtime that never saw the thread gets the words
        of it, never its session id. */
@@ -561,6 +580,79 @@ export class ChatView extends ItemView {
     this.badgedTab = null;
   }
 
+  /* ------------------------------------------------------- the terminal */
+
+  /** Why the hand-off is off right now, or null when it is on. */
+  handoffReason(): string | null {
+    return handoffUnavailableReason(this.provider, this.heldSessionId, terminalInstalled(this.app));
+  }
+
+  private paintHandoffAction(): void {
+    const el = this.handoffAction;
+    if (!el) return;
+    const reason = this.handoffReason();
+    const label = reason ?? 'Continue in the terminal';
+    el.setAttr('aria-label', label);
+    el.setAttr('aria-disabled', reason ? 'true' : 'false');
+    el.toggleClass('aic-handoff-off', reason !== null);
+    setTooltip(el, label);
+  }
+
+  /**
+   * Wait for the running turn to settle, with a ceiling. Resolves true when
+   * the pane is idle, false when the ceiling passed with the turn still
+   * running (the swap is then refused; a live SDK writer must never overlap
+   * the CLI's).
+   */
+  private awaitIdle(ceilingMs: number): Promise<boolean> {
+    if (this.store.state.status !== 'streaming') return Promise.resolve(true);
+    return new Promise((resolve) => {
+      const timer = window.setTimeout(() => {
+        unsubscribe();
+        resolve(false);
+      }, ceilingMs);
+      const unsubscribe = this.store.subscribe((event) => {
+        if (event.kind !== 'turn-end' && event.kind !== 'aborted' && event.kind !== 'error') return;
+        window.clearTimeout(timer);
+        unsubscribe();
+        resolve(true);
+      });
+    });
+  }
+
+  /**
+   * Contract section 2. The SDK writer is gone before the CLI writer starts:
+   * interrupt, wait, dispose, archive once so the record is current, then
+   * swap this leaf to the terminal with the way back in its state.
+   */
+  async continueInTerminal(): Promise<void> {
+    const reason = this.handoffReason();
+    if (reason) {
+      new Notice(reason === 'Install ICOR for Life - Terminal'
+        ? 'Install and enable ICOR for Life - Terminal to continue a conversation in a terminal pane.'
+        : reason);
+      return;
+    }
+    const sessionId = this.heldSessionId;
+    if (!sessionId) return;
+    if (this.store.state.status === 'streaming') {
+      await this.session?.interrupt();
+      const idle = await this.awaitIdle(10_000);
+      if (!idle) {
+        new Notice('The turn is still running; try again once it has stopped.');
+        return;
+      }
+    }
+    this.session?.dispose();
+    this.session = null;
+    await this.archive();
+    await this.leaf.setViewState({
+      type: TERMINAL_VIEW_TYPE,
+      active: true,
+      state: terminalState(sessionId, this.plugin.vaultPath, this.provider) as unknown as Record<string, unknown>,
+    });
+  }
+
   /* ----------------------------------------------------------- the memory */
 
   /**
@@ -739,9 +831,13 @@ export class ChatView extends ItemView {
   }
 
   override async setState(state: unknown, result: unknown): Promise<void> {
+    let arrivedId: string | null = null;
     if (state && typeof state === 'object' && 'resumeSessionId' in state) {
       const id = (state as { resumeSessionId?: unknown }).resumeSessionId;
-      if (typeof id === 'string' && id) this.resumeSessionId = id;
+      if (typeof id === 'string' && id) {
+        this.resumeSessionId = id;
+        arrivedId = id;
+      }
     }
     if (state && typeof state === 'object' && 'provider' in state) {
       // Read before any resume: a session id only means something to the
@@ -765,6 +861,11 @@ export class ChatView extends ItemView {
       this.renderPins();
     }
     await super.setState(state, result as Parameters<ItemView['setState']>[1]);
+    // The view is already open (the stream exists) and a thread arrived by
+    // state: the hand-off's way back. See the note in onOpen for the rule.
+    if (arrivedId && this.stream && !this.session && this.app.workspace.layoutReady) {
+      await this.resume(arrivedId);
+    }
   }
 
   override async onClose(): Promise<void> {
@@ -971,10 +1072,23 @@ export class ChatView extends ItemView {
 
   /** Resume a prior session. A session id that no longer exists says so. */
   async resume(sessionId: string): Promise<void> {
+    // The same thread asked for twice (the hand-off's setState and the
+    // launcher's own call) is one resume, never a Notice.
+    if (this.resuming && this.resuming.id === sessionId) return this.resuming.done;
     if (this.session) {
+      if (this.heldSessionId === sessionId) return;
       new Notice('This tab already has a conversation. Open a new tab to resume another.');
       return;
     }
+    /* THE GUARD (contract section 4): an id a terminal pane holds is never
+       resumed here. Two live writers fork the session file silently. */
+    if (this.provider === 'claude' && terminalHoldsSession(this.app, sessionId)) {
+      const held = terminalLeafFor(this.app, sessionId);
+      if (held) await this.app.workspace.revealLeaf(held);
+      new Notice('This session is open in a terminal pane');
+      return;
+    }
+    const done = (async (): Promise<void> => {
     const store = this.sessionStore;
     if (!store || !(await store.exists(sessionId, this.plugin.vaultPath))) {
       this.store.apply({
@@ -999,6 +1113,13 @@ export class ChatView extends ItemView {
     const session = this.ensureSession();
     if (session) {
       session.start();
+    }
+    })();
+    this.resuming = { id: sessionId, done };
+    try {
+      await done;
+    } finally {
+      if (this.resuming?.id === sessionId) this.resuming = null;
     }
   }
 
@@ -1431,6 +1552,7 @@ export class ChatView extends ItemView {
     ) {
       this.turnSignal();
     }
+    if (event.kind === 'session') this.paintHandoffAction();
     if (event.kind === 'session') {
       // The provider's own command list. The composer's placeholder has always
       // promised "/ runs commands"; this is what finally keeps the promise.

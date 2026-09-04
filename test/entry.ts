@@ -50,3 +50,4 @@ export * from '../src/provider/acp/recipes';
 export * from '../src/provider/acp/store';
 export { resolveAcpExecutable } from '../src/provider/acp/index';
 export * from '../src/archive/entries';
+export * from '../src/view/handoff';

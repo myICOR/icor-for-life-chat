@@ -28,6 +28,7 @@ import { ChatView } from './view/ChatView';
 import { captureTaskAction, startDeliverableAction } from './wip/actions';
 import { openTaskCount } from './team/load';
 import { routeChatLeaf } from './view/leafRoute';
+import { terminalHoldsSession, terminalLeafFor } from './view/handoff';
 import { ChatSettingsTab } from './settings/SettingsTab';
 import { DEFAULT_SETTINGS, archiveRoot, pathSettingKey } from './model/settings';
 import { offerInstall } from './provider/install';
@@ -105,6 +106,20 @@ export default class IcorChatPlugin extends Plugin {
       id: 'open-chat',
       name: 'New conversation with the AI team',
       callback: () => void this.openChat(),
+    });
+
+    /* THE HAND-OFF TO THE TERMINAL (contract: icor-terminal/docs/handoff.md).
+       Enabled only when the active chat can be handed over; the reason it
+       cannot is on the header action's own label. */
+    this.addCommand({
+      id: 'continue-in-terminal',
+      name: 'Continue this conversation in the terminal',
+      checkCallback: (checking) => {
+        const view = this.handoffCandidate();
+        if (!view) return false;
+        if (!checking) void view.continueInTerminal();
+        return true;
+      },
     });
 
     this.addCommand({
@@ -490,6 +505,22 @@ export default class IcorChatPlugin extends Plugin {
   }
 
   /** The chat view that is active, or the first open one. Null with none open. */
+  /**
+   * The chat pane a hand-off command acts on: the active one when it can be
+   * handed over, else the ONE open pane that can. Two candidates and no
+   * active one is ambiguous, and an ambiguous command does nothing rather
+   * than guessing which conversation leaves the panel.
+   */
+  handoffCandidate(): ChatView | null {
+    const active = this.app.workspace.getActiveViewOfType(ChatView);
+    if (active) return active.handoffReason() === null ? active : null;
+    const able: ChatView[] = [];
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_CHAT)) {
+      if (leaf.view instanceof ChatView && leaf.view.handoffReason() === null) able.push(leaf.view);
+    }
+    return able.length === 1 ? able[0] ?? null : null;
+  }
+
   activeChatView(): ChatView | null {
     const active = this.app.workspace.getActiveViewOfType(ChatView);
     if (active) return active;
@@ -559,6 +590,14 @@ export default class IcorChatPlugin extends Plugin {
     const wanted = provider ?? this.settings.defaultProvider;
     if (!providerFor(wanted)) {
       new Notice(missingProviderMessage(wanted));
+      return;
+    }
+    /* THE GUARD before any resume: an id a terminal pane holds is revealed
+       there, never resumed here (two writers fork the session file). */
+    if (resumeSessionId && wanted === 'claude' && terminalHoldsSession(this.app, resumeSessionId)) {
+      const held = terminalLeafFor(this.app, resumeSessionId);
+      if (held) await this.app.workspace.revealLeaf(held);
+      new Notice('This session is open in a terminal pane');
       return;
     }
     const leaves = this.app.workspace
