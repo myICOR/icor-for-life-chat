@@ -1,26 +1,30 @@
 /* Headless end-to-end check: a real CLI, a real turn, our own normalizer.
  * Not part of `npm test` - it spends a token budget and needs a logged-in CLI. */
-import { ChatSession } from '../src/sdk/session';
-import { buildChildEnv, resolveCliPath } from '../src/sdk/cli';
+import { ChatSession } from '../src/provider/claude/session';
+import { buildChildEnv, resolveCliPath } from '../src/provider/cli';
 import type { ChatEvent } from '../src/model/types';
 
 const cwd = process.argv[2] ?? process.cwd();
 const env = { platform: 'darwin' as const, home: process.env.HOME ?? '', path: '/usr/bin:/bin' };
 const cliPath = resolveCliPath('', env);
+const launch = { cliPath, env: buildChildEnv(process.env, env) };
+const detect = { ...env, extra: [], configured: '' };
 process.stdout.write(`cli: ${cliPath}\n`);
 
 const seen: ChatEvent[] = [];
 const session = new ChatSession(
   {
-    cliPath,
+    provider: 'claude' as const,
+    cliPath: '',
     cwd,
-    env: buildChildEnv(process.env, env),
+    detect,
     model: 'haiku',
     effort: 'low',
     permissionMode: 'default',
     structuredReplies: false,
     resumeSessionId: null,
   },
+  launch,
   {
     onEvent: (e) => {
       seen.push(e);

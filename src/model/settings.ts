@@ -3,12 +3,15 @@
  * from cwd. The plugin is a window, not a second brain. */
 
 import type { EffortName, PermissionModeName } from './types';
+import type { ProviderId } from '../provider/types';
 import type { FactId } from './facts';
 import { ARCHIVE_FOLDER_SCAFFOLD, ARCHIVE_FOLDER_STANDALONE } from '../constants';
 
 export type VaultMode = 'auto' | 'scaffold' | 'standalone';
 
 export interface ChatSettings {
+  /** The runtime new conversations open with. A conversation keeps its provider for life. */
+  defaultProvider: ProviderId;
   /** Absolute path to the Claude Code executable. Empty = resolve automatically. */
   cliPath: string;
   /** Model id passed to the CLI. Empty = whatever the CLI is configured to use. */
@@ -47,6 +50,7 @@ export interface ChatSettings {
 }
 
 export const DEFAULT_SETTINGS: ChatSettings = {
+  defaultProvider: 'claude',
   cliPath: '',
   model: '',
   effort: 'medium',

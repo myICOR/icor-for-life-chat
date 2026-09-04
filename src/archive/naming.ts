@@ -3,7 +3,17 @@
  * The rule it enforces: we only ever delete a folder whose NAME matches our own
  * shape AND which carries our own manifest. */
 
-export const ARCHIVE_SCHEMA = 'icor-chat/session-archive@1';
+import { isProviderId } from '../provider/types';
+import type { ProviderId } from '../provider/types';
+
+/* SCHEMA @2 (0.7.0): the manifest names its PROVIDER. Every @1 folder on disk
+ * was written by a build that only ever spoke to Claude Code, so a reader
+ * treats a missing provider as `claude` - a fact about history, not a guess
+ * about the future. `isOurManifest` accepts both, because the retention sweep
+ * deletes what it recognises and must keep recognising the old shape. */
+export const ARCHIVE_SCHEMA = 'icor-chat/session-archive@2';
+export const ARCHIVE_SCHEMA_V1 = 'icor-chat/session-archive@1';
+export const ARCHIVE_SCHEMAS: readonly string[] = [ARCHIVE_SCHEMA_V1, ARCHIVE_SCHEMA];
 export const MANIFEST_FILE = 'session-manifest.json';
 export const LEGACY_MANIFEST_FILE = 'manifest.json';
 
@@ -60,9 +70,11 @@ export function looksLikeOurArchive(name: string): boolean {
 }
 
 export interface ArchiveManifest {
-  schema: typeof ARCHIVE_SCHEMA;
+  schema: typeof ARCHIVE_SCHEMA | typeof ARCHIVE_SCHEMA_V1;
   pluginVersion: string;
   sdkVersion: string;
+  /** The runtime that had this conversation. Absent on @1 folders, which were all Claude. */
+  provider?: ProviderId;
   title: string;
   startedAt: string;
   endedAt: string;
@@ -78,6 +90,8 @@ export interface ArchiveManifest {
     cwd: string;
     model: string | null;
     permissionMode: string;
+    /** Absent on @1 folders; read as `claude`. */
+    provider?: ProviderId;
   };
   files: {
     transcript: string;
@@ -114,7 +128,13 @@ export interface ManifestAgentRecord {
 export function isOurManifest(value: unknown): value is ArchiveManifest {
   if (typeof value !== 'object' || value === null) return false;
   const schema = (value as { schema?: unknown }).schema;
-  return schema === ARCHIVE_SCHEMA;
+  return typeof schema === 'string' && ARCHIVE_SCHEMAS.includes(schema);
+}
+
+/** The provider a manifest names, with every pre-@2 folder read as Claude. */
+export function manifestProvider(manifest: ArchiveManifest): ProviderId {
+  const named = manifest.resume?.provider ?? manifest.provider;
+  return isProviderId(named) ? named : 'claude';
 }
 
 /** Folders older than the cut, by their own recorded end time. */

@@ -123,12 +123,18 @@ test('the production default probe is the real filesystem, stated once', () => {
      omit the probe and get the real fs. Pinned at the source, because a
      hermetic suite cannot assert on the real filesystem without becoming the
      defect it just fixed. */
-  const src = readFileSync(resolve(repoRoot, 'src/sdk/cli.ts'), 'utf8');
+  const src = readFileSync(resolve(repoRoot, 'src/provider/cli.ts'), 'utf8');
   assert.match(src, /probe: FileProbe = isExecutableFile/,
     'resolveCliPath no longer defaults to the real filesystem probe');
+  /* The production call site moved from the view into the Claude provider
+     with the seam (0.7.0): resolving the executable is a fact about THIS
+     provider. It passes its own real-filesystem probe by name, which is the
+     same default under a name the provider owns. */
+  const provider = readFileSync(resolve(repoRoot, 'src/provider/claude/index.ts'), 'utf8');
+  assert.match(provider, /resolveCliPath\(config\.cliPath, pathEnv, isExecutableFile\)/,
+    'the production call site no longer resolves with the real filesystem probe');
   const view = readFileSync(resolve(repoRoot, 'src/view/ChatView.ts'), 'utf8');
-  assert.match(view, /resolveCliPath\(settings\.cliPath, env\)/,
-    'the production call site passes a probe - if that is deliberate, it needs its own justification');
+  assert.doesNotMatch(view, /resolveCliPath\(/, 'the view resolves the executable itself again; that is the provider\'s job');
 });
 
 test('extra PATH parsing tolerates blank lines and CRLF', () => {

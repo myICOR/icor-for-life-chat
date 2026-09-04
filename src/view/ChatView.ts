@@ -1,5 +1,6 @@
 /* One tab, one conversation. The view owns its DOM and its session and nothing
- * else; it never imports the Agent SDK, only the ChatSession that wraps it. */
+ * else; it never imports a provider SDK, only the Provider seam that wraps
+ * whichever runtime answers. */
 
 import { ItemView, MarkdownView, Notice, Platform, TFile } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
@@ -8,7 +9,6 @@ import { ChatStore } from '../state/store';
 import { StreamRenderer } from './stream/StreamRenderer';
 import type { Composer } from './composer/Composer';
 import type { Statusline } from './composer/Statusline';
-import { listVaultSessions, readSessionMessages, resolvedDefaultModel, sessionCreatedAt, sessionExists } from '../sdk/sessions';
 import type { DecisionBadge } from './composer/DecisionBadge';
 import { buildPane } from './pane';
 import { trackDecisions, openDecisions, mentionsCode } from '../structured/decisions';
@@ -31,10 +31,10 @@ import { renderPinTray } from './PinTray';
 import { isPinned, pinFirstPrompt, pinsFromState, pinsToState, togglePin, unpin } from '../model/pins';
 import type { PinnedPrompt } from '../model/pins';
 import type { TrayChip } from './composer/Composer';
-import { ChatSession } from '../sdk/session';
-import { Normalizer, userTextOf } from '../sdk/normalize';
-import { buildChildEnv, resolveCliPath, splitExtraPath } from '../sdk/cli';
-import type { PathEnvironment } from '../sdk/cli';
+import { providerFor } from '../provider/registry';
+import { isProviderId } from '../provider/types';
+import type { Provider, ProviderId, ProviderSession, SessionHooks, SessionStore } from '../provider/types';
+import { splitExtraPath } from '../provider/cli';
 import type { ChatEvent, EffortName, PermissionModeName, TurnContext, TurnImage } from '../model/types';
 import { NO_FOLLOW_UPS, followUpSent, selfStartedTurn, turnAborted, turnEnded } from '../model/followups';
 import type { FollowUpState } from '../model/followups';
@@ -49,11 +49,22 @@ import { renderTeamStrip } from './TeamStrip';
 import { setupSummary, setupTeam } from '../team/setup';
 import type { EmptyTeamBlock } from './stream/StreamRenderer';
 
+/** The newest slice of a stored conversation painted on resume. */
+const REPLAY_CAP = 400;
+/** How much of the session file the archive reads back. */
+const ARCHIVE_READ_CAP = 5000;
+
 export class ChatView extends ItemView {
   private readonly store = new ChatStore();
   private stream: StreamRenderer | null = null;
   private composer: Composer | null = null;
-  private session: ChatSession | null = null;
+  private session: ProviderSession | null = null;
+  /* WHICH RUNTIME THIS TAB TALKS TO. Fixed for the life of the conversation:
+   * the session id, the store and the mode vocabulary all belong to the
+   * provider, so a mid-conversation switch would be a resume into a runtime
+   * that never had the session. Chosen from settings at construction, read
+   * back from leaf state on a reopen. */
+  private provider: ProviderId;
   private column: HTMLElement | null = null;
   private scroller: HTMLElement | null = null;
   private statusline: Statusline | null = null;
@@ -104,7 +115,7 @@ export class ChatView extends ItemView {
    * Bypass does not bypass". The picker writes here; the launcher reads here. */
   private permissionMode: PermissionModeName;
   /* FOLLOW-UPS the CLI is holding. Pure bookkeeping in model/followups.ts,
-     measured behaviour at the top of sdk/session.ts. */
+     measured behaviour at the top of provider/claude/session.ts. */
   private followUps: FollowUpState = NO_FOLLOW_UPS;
   /** Repaints the status-bar clearance when the window or the bar changes size. */
   private clearanceObserver: ResizeObserver | null = null;
@@ -122,6 +133,17 @@ export class ChatView extends ItemView {
   constructor(leaf: WorkspaceLeaf, private readonly plugin: IcorChatPlugin) {
     super(leaf);
     this.permissionMode = plugin.settings.defaultPermissionMode;
+    this.provider = plugin.settings.defaultProvider;
+  }
+
+  /** The runtime behind this tab. Never a Claude type: the seam is the whole contract. */
+  private get runtime(): Provider {
+    return providerFor(this.provider);
+  }
+
+  /** The runtime's session record, or null for a protocol without one. */
+  private get sessionStore(): SessionStore | null {
+    return this.runtime.store;
   }
 
   override getViewType(): string {
@@ -206,7 +228,7 @@ export class ChatView extends ItemView {
        files the session will read - so the face and the behaviour cannot
        disagree. The composer applies it only while nothing truer is known. */
     if (!this.plugin.settings.model) {
-      void resolvedDefaultModel(this.plugin.vaultPath).then((model) => {
+      void this.runtime.defaultModel(this.plugin.vaultPath).then((model) => {
         if (model) this.composer?.presetModel(model);
       });
     }
@@ -364,6 +386,7 @@ export class ChatView extends ItemView {
   override getState(): Record<string, unknown> {
     return {
       resumeSessionId: this.store.state.sessionId ?? this.resumeSessionId,
+      provider: this.provider,
       pins: pinsToState(this.pins),
     };
   }
@@ -372,6 +395,12 @@ export class ChatView extends ItemView {
     if (state && typeof state === 'object' && 'resumeSessionId' in state) {
       const id = (state as { resumeSessionId?: unknown }).resumeSessionId;
       if (typeof id === 'string' && id) this.resumeSessionId = id;
+    }
+    if (state && typeof state === 'object' && 'provider' in state) {
+      // Read before any resume: a session id only means something to the
+      // runtime that minted it.
+      const id = (state as { provider?: unknown }).provider;
+      if (isProviderId(id)) this.provider = id;
     }
     if (state && typeof state === 'object' && 'pins' in state) {
       /* Read back before the replay runs, so the replay finds pins already
@@ -527,7 +556,7 @@ export class ChatView extends ItemView {
 
   /** Recent conversations for THIS vault only. Never machine-wide. */
   private async fillResumeRows(): Promise<void> {
-    const sessions = await listVaultSessions(this.plugin.vaultPath, 6);
+    const sessions = (await this.sessionStore?.list(this.plugin.vaultPath, 6)) ?? [];
     if (!this.stream || !this.stream.isEmpty) return;
     this.stream.renderResumeRows(sessions, (sessionId) => void this.resume(sessionId));
   }
@@ -538,7 +567,8 @@ export class ChatView extends ItemView {
       new Notice('This tab already has a conversation. Open a new tab to resume another.');
       return;
     }
-    if (!(await sessionExists(sessionId, this.plugin.vaultPath))) {
+    const store = this.sessionStore;
+    if (!store || !(await store.exists(sessionId, this.plugin.vaultPath))) {
       this.store.apply({
         kind: 'error',
         message: 'That conversation is no longer on disk. It may have been deleted or archived.',
@@ -554,7 +584,7 @@ export class ChatView extends ItemView {
        record that carries no creation time leaves the readout absent. */
     this.store.apply({
       kind: 'session-restored',
-      startedAt: await sessionCreatedAt(sessionId, this.plugin.vaultPath),
+      startedAt: await store.createdAt(sessionId, this.plugin.vaultPath),
       stream: null,
     });
     await this.replay(sessionId);
@@ -567,24 +597,26 @@ export class ChatView extends ItemView {
   /**
    * Paint a resumed conversation's own history before the live session opens.
    *
-   * The stored messages arrive in the same shape the live stream uses, so they
-   * run through the same Normalizer and the same renderer: one grammar, one
-   * code path, no second implementation to drift. A separate Normalizer is used
-   * so the replay's tool pairing and subagent bookkeeping cannot collide with
-   * the live one that takes over afterwards.
+   * The provider hands the stored messages back already translated into the
+   * plugin's own events, through the same normaliser the live stream uses:
+   * one grammar, one code path, no second implementation to drift. The
+   * provider uses a fresh normaliser per read, so the replay's tool pairing
+   * and subagent bookkeeping cannot collide with the live session after.
    */
   private async replay(sessionId: string): Promise<void> {
-    const { messages, omitted } = await readSessionMessages(sessionId, this.plugin.vaultPath);
-    if (messages.length === 0) {
+    const store = this.sessionStore;
+    const { entries, omitted } = store
+      ? await store.read(sessionId, this.plugin.vaultPath, REPLAY_CAP)
+      : { entries: [], omitted: 0 };
+    if (entries.length === 0) {
       this.stream?.note('This conversation has no stored history. Send a message to continue it.');
       return;
     }
     if (omitted > 0) {
-      this.stream?.note(`Showing the last ${messages.length} messages. ${omitted} earlier ones are in the session file.`);
+      this.stream?.note(`Showing the last ${entries.length} messages. ${omitted} earlier ones are in the session file.`);
     }
-    const normalizer = new Normalizer();
-    for (const raw of messages) {
-      const spoken = userTextOf(raw);
+    for (const entry of entries) {
+      const spoken = entry.spoken;
       if (spoken !== null) {
         const key = String(this.turnCounter);
         this.stream?.appendUserWell(spoken, null, [], null, [], key);
@@ -594,7 +626,7 @@ export class ChatView extends ItemView {
         this.pins = pinFirstPrompt(this.pins, { key, text: spoken, index: this.turnCounter });
         this.turnCounter += 1;
       }
-      for (const event of normalizer.normalize(raw)) {
+      for (const event of entry.events) {
         this.events.push(event);
         this.routeSubagent(event);
         if (event.kind === 'text-final' && event.stream === null && event.text.trim()) {
@@ -777,38 +809,32 @@ export class ChatView extends ItemView {
 
   /* -------------------------------------------------------------- turning */
 
-  private ensureSession(): ChatSession | null {
+  private ensureSession(): ProviderSession | null {
     if (this.session) return this.session;
     const settings = this.plugin.settings;
-    // Typed at the declaration, so the platform ternary is checked against
-    // the union instead of being widened to string and cast back.
-    const env: PathEnvironment = {
-      platform: Platform.isWin ? 'win32' : Platform.isMacOS ? 'darwin' : 'linux',
-      home: this.plugin.homeDir,
-      path: process.env.PATH ?? '',
-      extra: splitExtraPath(settings.extraPath),
-    };
-    let cliPath: string;
-    try {
-      cliPath = resolveCliPath(settings.cliPath, env);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.store.apply({ kind: 'error', message, stream: null });
-      return null;
-    }
-    this.session = new ChatSession(
-      {
-        cliPath,
-        cwd: this.plugin.vaultPath,
-        env: buildChildEnv(process.env, env),
-        model: settings.model,
-        effort: settings.effort,
-        // This tab's mode, which the composer may already have changed.
-        permissionMode: this.permissionMode,
-        structuredReplies: settings.structuredReplies,
-        resumeSessionId: this.resumeSessionId,
+    /* The provider finds its own runtime. The view hands over where to look
+       and what the child should inherit; a launch that cannot find the
+       executable throws a message the user can act on, shown as an error
+       event rather than swallowed into a pane stuck on Stop. */
+    const config = {
+      provider: this.provider,
+      cliPath: settings.cliPath,
+      cwd: this.plugin.vaultPath,
+      detect: {
+        platform: Platform.isWin ? 'win32' as const : Platform.isMacOS ? 'darwin' as const : 'linux' as const,
+        home: this.plugin.homeDir,
+        path: process.env.PATH ?? '',
+        extra: splitExtraPath(settings.extraPath),
+        configured: settings.cliPath,
       },
-      {
+      model: settings.model,
+      effort: settings.effort,
+      // This tab's mode, which the composer may already have changed.
+      permissionMode: this.permissionMode,
+      structuredReplies: settings.structuredReplies,
+      resumeSessionId: this.resumeSessionId,
+    };
+    const hooks: SessionHooks = {
         onEvent: (event) => this.store.apply(event),
         onApprovalRequest: (request) =>
           this.store.apply({
@@ -826,13 +852,19 @@ export class ChatView extends ItemView {
             allowed: choice !== 'deny',
             stream: null,
           }),
-        onModeRefused: (mode, message) => {
+        onModeRefused: (mode: PermissionModeName, message: string) => {
           // The provider's own words. A refusal the user cannot see is a
           // control that lies, which is what this replaced.
           new Notice(`Could not switch to ${mode}: ${message}`);
         },
-      },
-    );
+      };
+    try {
+      this.session = this.runtime.open(config, hooks);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.store.apply({ kind: 'error', message, stream: null });
+      return null;
+    }
     return this.session;
   }
 
@@ -1083,22 +1115,21 @@ export class ChatView extends ItemView {
     events: ChatEvent[];
   }> {
     const sessionId = this.sessionIds[this.sessionIds.length - 1];
-    if (!sessionId) return { turns: [], events: [] };
-    const { messages } = await readSessionMessages(sessionId, this.plugin.vaultPath, 5000);
-    if (messages.length === 0) {
+    const store = this.sessionStore;
+    if (!sessionId || !store) return { turns: [], events: [] };
+    const { entries } = await store.read(sessionId, this.plugin.vaultPath, ARCHIVE_READ_CAP);
+    if (entries.length === 0) {
       return {
         turns: this.transcript.map((t) => ({ role: t.role, text: t.text, at: t.at })),
         events: this.events,
       };
     }
-    const normalizer = new Normalizer();
     const turns: Array<{ role: 'user' | 'assistant'; text: string; at: number }> = [];
     const events: ChatEvent[] = [];
     const at = Date.now();
-    for (const raw of messages) {
-      const spoken = userTextOf(raw);
-      if (spoken !== null) turns.push({ role: 'user', text: spoken, at });
-      for (const event of normalizer.normalize(raw)) {
+    for (const entry of entries) {
+      if (entry.spoken !== null) turns.push({ role: 'user', text: entry.spoken, at });
+      for (const event of entry.events) {
         events.push(event);
         if (event.kind === 'text-final' && event.stream === null && event.text.trim()) {
           turns.push({ role: 'assistant', text: event.text, at });
@@ -1126,6 +1157,7 @@ export class ChatView extends ItemView {
         startedAt: this.startedAt,
         sessionIds: this.sessionIds,
         cwd: this.plugin.vaultPath,
+        provider: this.provider,
         model: this.store.state.model,
         permissionMode: this.store.state.permissionMode,
         turns: record.turns,

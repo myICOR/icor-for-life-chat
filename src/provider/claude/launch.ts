@@ -26,7 +26,7 @@
  * the real CLI before this shape was chosen.
  */
 
-import type { PermissionModeName } from '../model/types';
+import type { PermissionModeName } from '../../model/types';
 
 export interface LaunchPermissions {
   /** The mode the session starts in. Exactly what the user chose, never widened. */

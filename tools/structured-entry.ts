@@ -1,19 +1,22 @@
 /* Does the model actually emit what the parser claims? The only way to know. */
-import { ChatSession } from '../src/sdk/session';
-import { buildChildEnv, resolveCliPath } from '../src/sdk/cli';
+import { ChatSession } from '../src/provider/claude/session';
+import { buildChildEnv, resolveCliPath } from '../src/provider/cli';
 import { parseStructured, decisionsOf } from '../src/structured/parser';
 
 const cwd = process.argv[2] ?? process.cwd();
 const env = { platform: 'darwin' as const, home: process.env.HOME ?? '', path: '/usr/bin:/bin' };
 const cliPath = resolveCliPath('', env);
+const launch = { cliPath, env: buildChildEnv(process.env, env) };
+const detect = { ...env, extra: [], configured: '' };
 let final = '';
 
 const session = new ChatSession(
   {
-    cliPath, cwd, env: buildChildEnv(process.env, env),
+    provider: 'claude' as const, cliPath: '', cwd, detect,
     model: 'sonnet', effort: 'low', permissionMode: 'default',
     structuredReplies: true, resumeSessionId: null,
   },
+  launch,
   {
     onEvent: (e) => {
       if (e.kind === 'text-final') final += `${e.text}\n`;

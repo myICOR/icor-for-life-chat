@@ -1,5 +1,8 @@
-/* The plugin's own vocabulary. Nothing here imports the Agent SDK: this is the
- * shape the view consumes, and `sdk/normalize.ts` is the only translator. */
+/* The plugin's own vocabulary. Nothing here imports any provider SDK: this is
+ * the shape the view consumes, and each provider's normaliser is a translator
+ * INTO it. `provider/types.ts` is the seam those translators sit behind. */
+
+import type { ProviderId } from '../provider/types';
 
 export type PermissionModeName =
   | 'default'
@@ -67,6 +70,8 @@ export type ToolStatus = 'running' | 'done' | 'failed' | 'awaiting-approval';
 export type ChatEventBody =
   | {
       kind: 'session';
+      /** Which runtime answered. Named by the provider's own normaliser, never inferred. */
+      provider: ProviderId;
       sessionId: string;
       model: string;
       cwd: string;

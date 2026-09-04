@@ -1,8 +1,9 @@
 /* ICOR for Life - AI Chat - the ICOR AI team inside the vault.
  *
- * The plugin is a window, not a second brain: it hosts a Claude Code session
- * whose working directory is the vault, so the vault's own CLAUDE.md, AGENTS.md
- * and .claude/ are what the team reads. The plugin contributes no system prompt
+ * The plugin is a window, not a second brain: it hosts an agent runtime's
+ * session (Claude Code today, behind the Provider seam) whose working
+ * directory is the vault, so the vault's own CLAUDE.md, AGENTS.md and .claude/
+ * are what the team reads. The plugin contributes no system prompt
  * of its own beyond one opt-in, plugin-owned format instruction.
  *
  * Independent implementation from a behavioural specification; no code is
@@ -17,11 +18,10 @@ import { InsightsView } from './view/InsightsView';
 import { detectTeam } from './team/detect';
 import type { TeamRoster } from './team/detect';
 import { SubagentBus } from './state/subagents';
-import { installRendererCompat } from './sdk/renderer-compat';
 import type { RenderHost } from './structured/render';
 import type { ItemView } from 'obsidian';
-import { listVaultSessions } from './sdk/sessions';
-import { resumableSessionId } from './archive/resume';
+import { availableProviders, providerFor } from './provider/registry';
+import { providerFromFrontmatter, resumableSessionId } from './archive/resume';
 import { shortAge } from './view/dom';
 import { ChatView } from './view/ChatView';
 import { routeChatLeaf } from './view/leafRoute';
@@ -29,6 +29,7 @@ import { ChatSettingsTab } from './settings/SettingsTab';
 import { DEFAULT_SETTINGS, archiveRoot } from './model/settings';
 import type { ChatSettings } from './model/settings';
 import type { ModelChoice } from './model/types';
+import type { ProviderId } from './provider/types';
 
 /* The file-explorer BLOCK this plugin used to inject above the file tree - a
  * whole panel section, not an icon. It is gone for good; the name survives
@@ -66,9 +67,10 @@ export default class IcorChatPlugin extends Plugin {
   modelCatalog: ModelChoice[] = [];
 
   override async onload(): Promise<void> {
-    // Before anything can launch a query. See renderer-compat.ts for why.
-    installRendererCompat();
     await this.loadSettings();
+    // Each runtime prepares the host once, before anything can launch a query
+    // (the Claude provider installs the renderer AbortSignal shim here).
+    for (const provider of availableProviders()) provider.install?.();
 
     this.registerView(VIEW_TYPE_CHAT, (leaf) => new ChatView(leaf, this));
     this.registerView(VIEW_TYPE_SUBAGENT, (leaf) => new SubagentView(leaf, this));
@@ -94,9 +96,9 @@ export default class IcorChatPlugin extends Plugin {
       name: 'Resume this conversation with the AI team',
       checkCallback: (checking) => {
         const file = this.app.workspace.getActiveFile();
-        const sessionId = file ? this.archivedSessionId(file) : null;
-        if (!sessionId) return false;
-        if (!checking) void this.openChat(sessionId);
+        const archived = file ? this.archivedSession(file) : null;
+        if (!archived) return false;
+        if (!checking) void this.openChat(archived.sessionId, archived.provider);
         return true;
       },
     });
@@ -104,13 +106,13 @@ export default class IcorChatPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on('file-menu', (menu, file) => {
         if (!(file instanceof TFile)) return;
-        const sessionId = this.archivedSessionId(file);
-        if (!sessionId) return;
+        const archived = this.archivedSession(file);
+        if (!archived) return;
         menu.addItem((item) =>
           item
             .setTitle('Resume this conversation with the AI team')
             .setIcon('bot')
-            .onClick(() => void this.openChat(sessionId)),
+            .onClick(() => void this.openChat(archived.sessionId, archived.provider)),
         );
       }),
     );
@@ -185,12 +187,14 @@ export default class IcorChatPlugin extends Plugin {
     }
   }
 
-  /** The session this note says it archived, or null when it is not one of ours. */
-  private archivedSessionId(file: TFile): string | null {
+  /** The session AND the runtime that had it: an id only resumes in its own provider. */
+  private archivedSession(file: TFile): { sessionId: string; provider: ProviderId } | null {
     const cache = this.app.metadataCache.getFileCache(file);
     const frontmatter = cache?.frontmatter;
     if (!frontmatter || frontmatter.source !== 'icor-chat') return null;
-    return resumableSessionId(frontmatter.session_ids);
+    const sessionId = resumableSessionId(frontmatter.session_ids);
+    if (!sessionId) return null;
+    return { sessionId, provider: providerFromFrontmatter(frontmatter.provider) };
   }
 
   /* The launcher menu: start a conversation, or pick up one of the recent
@@ -211,7 +215,9 @@ export default class IcorChatPlugin extends Plugin {
         .onClick(() => void this.openChat()),
     );
 
-    const sessions = await listVaultSessions(this.vaultPath, RIBBON_SESSION_LIMIT);
+    // The default provider's own record; a protocol without a store offers nothing here.
+    const store = providerFor(this.settings.defaultProvider).store;
+    const sessions = (await store?.list(this.vaultPath, RIBBON_SESSION_LIMIT)) ?? [];
     for (const session of sessions) {
       menu.addItem((item) =>
         item
@@ -327,7 +333,7 @@ export default class IcorChatPlugin extends Plugin {
      existing pane / resume into an unoccupied one / create on the right) is a
      pure function in view/leafRoute.ts, decided on the views' own facts, so
      pressing the robot twice reveals one pane instead of minting two. */
-  async openChat(resumeSessionId?: string): Promise<void> {
+  async openChat(resumeSessionId?: string, provider?: ProviderId): Promise<void> {
     const leaves = this.app.workspace
       .getLeavesOfType(VIEW_TYPE_CHAT)
       .map((leaf) => {
@@ -347,10 +353,14 @@ export default class IcorChatPlugin extends Plugin {
          click, because an open that silently does nothing is worse than one
          that lands in the wrong place. */
       leaf = this.app.workspace.getRightLeaf(false) ?? this.app.workspace.getLeaf('split');
+      /* The provider rides the state with the id: a stored session belongs to
+         the runtime that minted it, and a fresh tab takes the settings default. */
       await leaf.setViewState({
         type: VIEW_TYPE_CHAT,
         active: true,
-        state: resumeSessionId ? { resumeSessionId } : {},
+        state: resumeSessionId
+          ? { resumeSessionId, provider: provider ?? this.settings.defaultProvider }
+          : { provider: this.settings.defaultProvider },
       });
     } else {
       leaf = route.leaf;

@@ -1,13 +1,15 @@
 /* Headless measurement: what the CLI does with a SECOND user message pushed
  * while a turn is still running. Not part of `npm test` - it spends tokens and
  * needs a logged-in CLI. The dated finding lives at the top of session.ts. */
-import { ChatSession } from '../src/sdk/session';
-import { buildChildEnv, resolveCliPath } from '../src/sdk/cli';
+import { ChatSession } from '../src/provider/claude/session';
+import { buildChildEnv, resolveCliPath } from '../src/provider/cli';
 import type { ChatEvent } from '../src/model/types';
 
 const cwd = process.argv[2] ?? process.cwd();
 const env = { platform: 'darwin' as const, home: process.env.HOME ?? '', path: '/usr/bin:/bin' };
 const cliPath = resolveCliPath('', env);
+const launch = { cliPath, env: buildChildEnv(process.env, env) };
+const detect = { ...env, extra: [], configured: '' };
 const t0 = Date.now();
 const log = (line: string): void => { process.stdout.write(`${String(Date.now() - t0).padStart(6)}ms ${line}\n`); };
 
@@ -15,8 +17,9 @@ const seen: ChatEvent[] = [];
 let turnEnds = 0;
 let secondSent = false;
 const session = new ChatSession(
-  { cliPath, cwd, env: buildChildEnv(process.env, env), model: 'haiku', effort: 'low',
+  { provider: 'claude' as const, cliPath: '', cwd, detect, model: 'haiku', effort: 'low',
     permissionMode: 'default', structuredReplies: false, resumeSessionId: null },
+  launch,
   {
     onEvent: (e) => {
       seen.push(e);

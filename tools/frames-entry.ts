@@ -6,7 +6,7 @@
  * CLI actually produced rather than by a shape somebody assumed. */
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { writeFileSync } from 'node:fs';
-import { buildChildEnv, resolveCliPath } from '../src/sdk/cli';
+import { buildChildEnv, resolveCliPath } from '../src/provider/cli';
 import { STRUCTURED_REPLY_PROMPT } from '../src/constants';
 
 const cwd = process.argv[2] ?? process.cwd();

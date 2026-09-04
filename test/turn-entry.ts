@@ -16,7 +16,7 @@ import { Component } from 'obsidian';
 import type { App } from 'obsidian';
 import { buildPane } from '../src/view/pane';
 import { StreamRenderer } from '../src/view/stream/StreamRenderer';
-import { Normalizer } from '../src/sdk/normalize';
+import { Normalizer } from '../src/provider/claude/normalize';
 import RECORDED from './fixtures/recorded-turn.json';
 
 declare global {

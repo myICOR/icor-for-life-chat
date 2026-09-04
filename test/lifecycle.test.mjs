@@ -202,7 +202,7 @@ import { dirname, resolve } from 'node:path';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const chatView = readFileSync(resolve(repoRoot, 'src/view/ChatView.ts'), 'utf8');
-const sessionSrc = readFileSync(resolve(repoRoot, 'src/sdk/session.ts'), 'utf8');
+const sessionSrc = readFileSync(resolve(repoRoot, 'src/provider/claude/session.ts'), 'utf8');
 
 /** Comments blanked, line count preserved: the prose here discusses the code. */
 const strip = (src) => src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))

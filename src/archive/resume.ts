@@ -8,6 +8,9 @@
  * written across several lines are all the same fact wearing different clothes.
  */
 
+import { isProviderId } from '../provider/types';
+import type { ProviderId } from '../provider/types';
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Every session id in a frontmatter value, in order, ids only. */
@@ -35,4 +38,12 @@ export function sessionIdsFromFrontmatter(value: unknown): string[] {
 export function resumableSessionId(value: unknown): string | null {
   const ids = sessionIdsFromFrontmatter(value);
   return ids.length > 0 ? (ids[ids.length - 1] ?? null) : null;
+}
+
+/**
+ * The provider an archived note names, with an unnamed one read as Claude:
+ * every note written before 0.7.0 came from a build that only spoke to it.
+ */
+export function providerFromFrontmatter(value: unknown): ProviderId {
+  return isProviderId(value) ? value : 'claude';
 }

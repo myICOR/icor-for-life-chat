@@ -37,17 +37,16 @@
 
 import { query, AbortError } from '@anthropic-ai/claude-agent-sdk';
 import type { Options, Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
-import { Normalizer, toolPurpose, toolTarget } from './normalize';
+import { Normalizer } from './normalize';
+import { toolPurpose, toolTarget } from '../tooling';
 import { launchPermissions } from './launch';
 import { ApprovalBroker, toPermissionAnswer } from './permissions';
-import type { ApprovalChoice, PendingApproval } from './permissions';
-import type { ChatEvent, EffortName, ModelChoice, PermissionModeName } from '../model/types';
+import type {
+  ApprovalChoice, ProviderSession, SessionConfig, SessionHooks, SessionImage,
+} from '../types';
+import type { EffortName, ModelChoice, PermissionModeName } from '../../model/types';
 
-/** One image on its way to the model, already base64 and already type-checked. */
-export interface SessionImage {
-  mediaType: string;
-  data: string;
-}
+export type { SessionConfig, SessionHooks, SessionImage } from '../types';
 
 /** The message body: a bare string without images, blocks with them. */
 function userContent(text: string, images: SessionImage[]): unknown {
@@ -59,28 +58,17 @@ function userContent(text: string, images: SessionImage[]): unknown {
   if (text) blocks.push({ type: 'text', text });
   return blocks;
 }
-import { STRUCTURED_REPLY_PROMPT } from '../constants';
+import { STRUCTURED_REPLY_PROMPT } from '../../constants';
 
-export interface SessionConfig {
+/**
+ * What the Claude session launches with: the executable the provider found
+ * and the environment the child inherits. Resolved by `claudeProvider.open`
+ * from the neutral `SessionConfig`, never by the view, because which file is
+ * the runtime is a fact about THIS provider.
+ */
+export interface ClaudeLaunch {
   cliPath: string;
-  cwd: string;
   env: Record<string, string>;
-  model: string;
-  effort: EffortName;
-  permissionMode: PermissionModeName;
-  structuredReplies: boolean;
-  resumeSessionId: string | null;
-}
-
-export interface SessionHooks {
-  onEvent: (event: ChatEvent) => void;
-  onApprovalRequest: (request: PendingApproval) => void;
-  onApprovalSettled: (toolUseId: string, choice: ApprovalChoice) => void;
-  onStderr?: (line: string) => void;
-  /** Every wire frame before normalisation. Measurement tools only. */
-  onRawMessage?: (raw: unknown) => void;
-  /** The provider refused a mid-session mode switch, in its own words. */
-  onModeRefused?: (mode: PermissionModeName, message: string) => void;
 }
 
 /** A push queue the SDK can consume as the prompt stream. */
@@ -128,7 +116,7 @@ class InputQueue implements AsyncIterable<SDKUserMessage> {
   }
 }
 
-export class ChatSession {
+export class ChatSession implements ProviderSession {
   /* Deliberately NOT an Options.abortController.
    *
    * Obsidian runs the plugin in a renderer, where AbortController is the DOM
@@ -150,6 +138,7 @@ export class ChatSession {
 
   constructor(
     private readonly config: SessionConfig,
+    private readonly launch: ClaudeLaunch,
     private readonly hooks: SessionHooks,
   ) {
     this.broker = new ApprovalBroker(hooks.onApprovalRequest, hooks.onApprovalSettled);
@@ -331,11 +320,11 @@ export class ChatSession {
   }
 
   private buildOptions(): Options {
-    const { config } = this;
+    const { config, launch } = this;
     const options: Options = {
       cwd: config.cwd,
-      env: config.env,
-      pathToClaudeCodeExecutable: config.cliPath,
+      env: launch.env,
+      pathToClaudeCodeExecutable: launch.cliPath,
       includePartialMessages: true,
       forwardSubagentText: true,
       // No system prompt of our own. The CLI preset plus the vault's own

@@ -13,6 +13,7 @@
 import { normalizePath } from 'obsidian';
 import type { App } from 'obsidian';
 import type { ChatEvent } from '../model/types';
+import type { ProviderId } from '../provider/types';
 import type { SubagentTranscript } from '../state/subagents';
 import {
   ARCHIVE_SCHEMA, MANIFEST_FILE, LEGACY_MANIFEST_FILE, expiredFolders, folderName,
@@ -27,6 +28,7 @@ export interface ArchiveInput {
   startedAt: number;
   sessionIds: string[];
   cwd: string;
+  provider: ProviderId;
   model: string | null;
   permissionMode: string;
   turns: Array<{ role: 'user' | 'assistant'; text: string; at: number }>;
@@ -52,6 +54,7 @@ function renderConversation(input: ArchiveInput, folder: string): string {
     `title: ${JSON.stringify(input.title)}`,
     `date: ${iso(input.startedAt).slice(0, 10)}`,
     'source: icor-chat',
+    `provider: ${input.provider}`,
     `session_ids: [${input.sessionIds.map((id) => `"${id}"`).join(', ')}]`,
     '---',
     '',
@@ -174,6 +177,7 @@ export class ArchiveWriter {
       schema: ARCHIVE_SCHEMA,
       pluginVersion: input.pluginVersion,
       sdkVersion: input.sdkVersion,
+      provider: input.provider,
       title: input.title,
       startedAt: iso(input.startedAt),
       endedAt: iso(Date.now()),
@@ -184,6 +188,7 @@ export class ArchiveWriter {
         cwd: input.cwd,
         model: input.model,
         permissionMode: input.permissionMode,
+        provider: input.provider,
       },
       files: {
         transcript: 'transcript.json',

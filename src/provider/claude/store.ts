@@ -11,12 +11,10 @@ import {
   resolveSettings,
 } from '@anthropic-ai/claude-agent-sdk';
 
-export interface SessionSummary {
-  sessionId: string;
-  title: string;
-  lastModified: number;
-  createdAt: number | null;
-}
+import { Normalizer, userTextOf } from './normalize';
+import type { SessionReplay, SessionStore, SessionSummary } from '../types';
+
+export type { SessionSummary } from '../types';
 
 function titleOf(info: {
   customTitle?: string;
@@ -146,7 +144,7 @@ export async function deleteVaultSession(sessionId: string, dir: string): Promis
  * unbounded DOM, and a replay that silently drops the beginning would be the
  * same lie in a smaller size, so the caller is told what it did not get.
  */
-export interface SessionReplay {
+export interface RawSessionReplay {
   messages: unknown[];
   /** Messages that existed before the slice we returned. */
   omitted: number;
@@ -156,7 +154,7 @@ export async function readSessionMessages(
   sessionId: string,
   dir: string,
   cap = 400,
-): Promise<SessionReplay> {
+): Promise<RawSessionReplay> {
   try {
     const all = await getSessionMessages(sessionId, {
       dir,
@@ -170,3 +168,28 @@ export async function readSessionMessages(
     return { messages: [], omitted: 0 };
   }
 }
+
+/**
+ * The same messages, already translated: the view never learns the wire
+ * shape. One Normalizer per read, so replayed tool pairing and subagent
+ * bookkeeping cannot collide with the live session that takes over after.
+ */
+export async function readSessionReplay(sessionId: string, dir: string, cap = 400): Promise<SessionReplay> {
+  const { messages, omitted } = await readSessionMessages(sessionId, dir, cap);
+  const normalizer = new Normalizer();
+  return {
+    entries: messages.map((raw) => ({ spoken: userTextOf(raw), events: normalizer.normalize(raw) })),
+    omitted,
+  };
+}
+
+/** The Claude provider's session store, scoped to a directory on every call. */
+export const claudeStore: SessionStore = {
+  list: (cwd, limit) => listVaultSessions(cwd, limit),
+  createdAt: (sessionId, cwd) => sessionCreatedAt(sessionId, cwd),
+  exists: (sessionId, cwd) => sessionExists(sessionId, cwd),
+  read: (sessionId, cwd, cap) => readSessionReplay(sessionId, cwd, cap),
+  fork: (sessionId, cwd, upToMessageId) => forkVaultSession(sessionId, cwd, upToMessageId),
+  rename: (sessionId, cwd, title) => renameVaultSession(sessionId, cwd, title),
+  delete: (sessionId, cwd) => deleteVaultSession(sessionId, cwd),
+};

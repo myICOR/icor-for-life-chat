@@ -283,7 +283,7 @@ test('ABSENCE LAW: no readout is ever computed from another readout data', () =>
 
 test('ABSENCE LAW: START has one writer, and a reopen is not it', () => {
   const session = (extra = {}) => ({
-    kind: 'session', sessionId: 's', model: 'm', cwd: '/', permissionMode: 'default',
+    kind: 'session', provider: 'claude', sessionId: 's', model: 'm', cwd: '/', permissionMode: 'default',
     slashCommands: [], contextWindow: 200_000, stream: null, ...extra,
   });
   // A FRESH session stamps its own start from the event.

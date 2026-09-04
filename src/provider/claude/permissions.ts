@@ -7,17 +7,9 @@
  * pending request resolves to a denial, so an abort during approval is a
  * closed promise, never a hung one. */
 
-export type ApprovalChoice = 'deny' | 'allow-once' | 'allow-always';
+import type { ApprovalChoice, PendingApproval } from '../types';
 
-export interface PendingApproval {
-  toolUseId: string;
-  toolName: string;
-  target: string;
-  /** What the call would DO, in one sentence. See `toolPurpose`. */
-  purpose?: string;
-  title: string;
-  resolve: (choice: ApprovalChoice) => void;
-}
+export type { ApprovalChoice, PendingApproval } from '../types';
 
 export interface PermissionResultAllow<S> {
   behavior: 'allow';

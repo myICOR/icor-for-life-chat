@@ -1,19 +1,22 @@
 /* Abort gate: stop a live turn and prove no claude process is left behind. */
-import { ChatSession } from '../src/sdk/session';
-import { buildChildEnv, resolveCliPath } from '../src/sdk/cli';
+import { ChatSession } from '../src/provider/claude/session';
+import { buildChildEnv, resolveCliPath } from '../src/provider/cli';
 
 const cwd = process.argv[2] ?? process.cwd();
 const env = { platform: 'darwin' as const, home: process.env.HOME ?? '', path: '/usr/bin:/bin' };
 const cliPath = resolveCliPath('', env);
+const launch = { cliPath, env: buildChildEnv(process.env, env) };
+const detect = { ...env, extra: [], configured: '' };
 
 let deltas = 0;
 let aborted = false;
 const session = new ChatSession(
   {
-    cliPath, cwd, env: buildChildEnv(process.env, env),
+    provider: 'claude' as const, cliPath: '', cwd, detect,
     model: 'haiku', effort: 'low', permissionMode: 'default',
     structuredReplies: false, resumeSessionId: null,
   },
+  launch,
   {
     onEvent: (e) => {
       if (e.kind === 'text-delta') {

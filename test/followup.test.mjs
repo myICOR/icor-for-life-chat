@@ -1,7 +1,7 @@
 /* Follow-ups: a message sent mid-turn is queued, never a stop.
  *
  * The CLI's behaviour was measured on 2026-09-04 (the finding is at the top of
- * src/sdk/session.ts, twice): a second user message pushed while a turn runs
+ * src/provider/claude/session.ts, twice): a second user message pushed while a turn runs
  * is answered either inside the running turn or as its own turn after it,
  * and the plugin cannot tell which at the boundary. These tests hold the
  * bookkeeping that dictates, and the one contract the old composer broke:

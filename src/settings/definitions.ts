@@ -110,8 +110,15 @@ export function settingDefinitions(input: DefinitionInput): GroupDefinition[] {
 
   return [
     {
-      index: '01', heading: 'Provider',
+      index: '01', heading: 'Providers',
       items: [
+        {
+          name: 'Runtime for new conversations',
+          desc: 'The agent runtime a new conversation opens with. A conversation keeps its runtime for life; more arrive as they are built.',
+          /* One entry today. The list is the registry's, so a second provider
+             appears here the day it is registered and never before. */
+          control: { type: 'dropdown', key: 'defaultProvider', options: { claude: 'Claude Code' } },
+        },
         {
           name: 'Claude Code location',
           desc: 'Leave empty to find it automatically. Obsidian launched from the Dock does not inherit a login shell, so the plugin repairs PATH before looking.',

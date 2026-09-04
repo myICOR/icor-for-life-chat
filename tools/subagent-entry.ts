@@ -1,6 +1,6 @@
 /* Does forwardSubagentText actually tag the nested transcript? */
-import { ChatSession } from '../src/sdk/session';
-import { buildChildEnv, resolveCliPath } from '../src/sdk/cli';
+import { ChatSession } from '../src/provider/claude/session';
+import { buildChildEnv, resolveCliPath } from '../src/provider/cli';
 
 const cwd = process.argv[2] ?? process.cwd();
 const env = { platform: 'darwin' as const, home: process.env.HOME ?? '', path: '/usr/bin:/bin' };
@@ -8,12 +8,15 @@ const streams = new Map<string, number>();
 let spawns = 0;
 let ends = 0;
 
+const launch = { cliPath: resolveCliPath('', env), env: buildChildEnv(process.env, env) };
+const detect = { ...env, extra: [], configured: '' };
 const session = new ChatSession(
   {
-    cliPath: resolveCliPath('', env), cwd, env: buildChildEnv(process.env, env),
+    provider: 'claude' as const, cliPath: '', cwd, detect,
     model: 'sonnet', effort: 'low', permissionMode: 'acceptEdits',
     structuredReplies: false, resumeSessionId: null,
   },
+  launch,
   {
     onEvent: (e) => {
       if (e.stream) streams.set(e.stream, (streams.get(e.stream) ?? 0) + 1);

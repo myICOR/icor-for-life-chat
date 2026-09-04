@@ -8,7 +8,7 @@
  * directory carrying all three. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import {
@@ -137,4 +137,45 @@ test('retention accepts whole non-negative days and refuses the rest', () => {
   assert.ok(validateRetention(-1), 'negative days accepted');
   assert.ok(validateRetention(1.5), 'fractional days accepted');
   assert.ok(validateRetention(Number.NaN), 'NaN accepted');
+});
+
+/* ------------------------------------------------ the Provider seam (0.7.0) */
+
+/** Every .ts file under a directory, repo-relative, sorted. */
+function tsFilesUnder(dir) {
+  const out = [];
+  const walk = (d) => {
+    for (const name of readdirSync(resolve(repo, d))) {
+      const rel = `${d}/${name}`;
+      if (statSync(resolve(repo, rel)).isDirectory()) walk(rel);
+      else if (name.endsWith('.ts')) out.push(rel);
+    }
+  };
+  walk(dir);
+  return out.sort();
+}
+
+test('the Agent SDK is imported under src/provider/claude/ and nowhere else', () => {
+  /* The seam is only a seam while it is the ONLY door. A second provider is
+     a second folder; a view that reached for the SDK by name would make it a
+     second view, which is the tax Copilot pays and this plugin refuses. */
+  const offenders = tsFilesUnder('src')
+    .filter((f) => !f.startsWith('src/provider/claude/'))
+    .filter((f) => /@anthropic-ai\/claude-agent-sdk/.test(read(f)));
+  assert.deepEqual(offenders, [], `the SDK leaked past the seam:\n  ${offenders.join('\n  ')}`);
+});
+
+test('the view and main.ts reach a provider through the registry only', () => {
+  const offenders = [...tsFilesUnder('src/view'), 'src/main.ts', ...tsFilesUnder('src/state'), ...tsFilesUnder('src/model')]
+    .filter((f) => /from '[^']*provider\/claude[^']*'/.test(read(f)));
+  assert.deepEqual(offenders, [], `a Claude type crossed the seam:\n  ${offenders.join('\n  ')}`);
+});
+
+test('the seam declares every provider id, and the registry answers each one', () => {
+  const src = read('src/provider/types.ts');
+  assert.match(src, /'claude' \| 'codex' \| 'acp'/, 'the ProviderId union changed shape');
+  const registry = read('src/provider/registry.ts');
+  for (const id of ['claude', 'codex', 'acp']) {
+    assert.match(registry, new RegExp(`\\b${id}:`), `the registry has no entry for ${id}`);
+  }
 });

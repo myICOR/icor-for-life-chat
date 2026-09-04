@@ -1,8 +1,11 @@
 /* The pure surface under test, bundled once so node:test can import it without
  * an Obsidian runtime. Only modules with no Obsidian import belong here. */
-export * from '../src/sdk/normalize';
-export * from '../src/sdk/cli';
-export * from '../src/sdk/permissions';
+export * from '../src/provider/claude/normalize';
+export * from '../src/provider/tooling';
+export * from '../src/provider/types';
+export * from '../src/provider/registry';
+export * from '../src/provider/cli';
+export * from '../src/provider/claude/permissions';
 export * from '../src/state/store';
 export * from '../src/model/types';
 export * from '../src/model/settings';
@@ -20,15 +23,15 @@ export * from '../src/structured/rails';
 export * from '../src/structured/icons';
 export * from '../src/archive/naming';
 export * from '../src/archive/resume';
-export * from '../src/sdk/renderer-compat';
+export * from '../src/provider/claude/renderer-compat';
 export * from '../src/state/subagents';
 export * from '../src/view/leafRoute';
-export { userTextOf } from '../src/sdk/normalize';
+export { userTextOf } from '../src/provider/claude/normalize';
 export * from '../src/view/composer/slash';
 export * from '../src/view/composer/mention';
 export * from '../src/view/statusbar';
 export * from '../src/archive/redact';
-export * from '../src/sdk/launch';
+export * from '../src/provider/claude/launch';
 export * from '../src/settings/definitions';
 export * from '../src/team/usage';
 export * from '../src/team/insights';

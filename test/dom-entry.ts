@@ -30,7 +30,7 @@ import type { StructuredDoc } from '../src/structured/model';
 import type { TrackedDecision } from '../src/structured/decisions';
 import type { ChatState } from '../src/model/types';
 import { emptyState } from '../src/model/types';
-import { Normalizer } from '../src/sdk/normalize';
+import { Normalizer } from '../src/provider/claude/normalize';
 import { DEFAULT_SETTINGS, MEASURED_NOTE, factVisibility } from '../src/model/settings';
 
 import { reduce } from '../src/state/store';
