@@ -16,6 +16,12 @@ export interface ChatSettings {
   cliPath: string;
   /** Absolute path to the Codex CLI. Empty = resolve automatically. */
   codexPath: string;
+  /* The ACP runtimes' executables. One string per runtime rather than a map,
+     so the settings table's one-row-per-key gate covers each of them. */
+  geminiPath: string;
+  copilotPath: string;
+  opencodePath: string;
+  qwenPath: string;
   /** Model id passed to the CLI. Empty = whatever the CLI is configured to use. */
   model: string;
   effort: EffortName;
@@ -61,6 +67,10 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   defaultProvider: 'claude',
   cliPath: '',
   codexPath: '',
+  geminiPath: '',
+  copilotPath: '',
+  opencodePath: '',
+  qwenPath: '',
   model: '',
   effort: 'medium',
   defaultPermissionMode: 'default',
@@ -153,4 +163,17 @@ export function archiveRoot(settings: ChatSettings, scaffoldDetected: boolean): 
 /** Only ever true when the user is explicitly in Bypass. */
 export function skipPermissions(mode: PermissionModeName): boolean {
   return mode === 'bypassPermissions';
+}
+
+/** The settings key that holds a runtime's executable path. */
+export function pathSettingKey(provider: ProviderId): keyof ChatSettings {
+  switch (provider) {
+    case 'claude': return 'cliPath';
+    case 'codex': return 'codexPath';
+    case 'gemini': return 'geminiPath';
+    case 'copilot': return 'copilotPath';
+    case 'opencode': return 'opencodePath';
+    case 'qwen': return 'qwenPath';
+    default: return 'cliPath';
+  }
 }

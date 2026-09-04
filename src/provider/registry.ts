@@ -1,21 +1,41 @@
 /* Every provider the build knows, by id. The only file outside `provider/`
  * that a view is allowed to reach a provider through, which is what makes the
- * hygiene gate's rule ("the view imports nothing from provider/claude")
+ * hygiene gate's rule ("the view imports nothing from provider/claude") 
  * checkable by grep rather than by review.
  *
- * Codex joined on 2026-09-04 through OpenAI's App Server (provider/codex). */
+ * Codex joined on 2026-09-04 through OpenAI's App Server (provider/codex).
+ * The ACP runtimes (Gemini CLI, Copilot CLI, OpenCode, Qwen Code) joined the
+ * same day through one Agent Client Protocol client (provider/acp), each
+ * with its own id so a manifest names the runtime that had the session. */
 
 import { claudeProvider } from './claude';
 import { codexProvider } from './codex';
+import { acpProviders } from './acp';
+
+/* The one ACP hook a host must set: where the archive is, because the ACP
+ * runtimes' session record IS the vault's archive. Re-exported here so
+ * main.ts reaches it through the registry, the only door the hygiene gate
+ * allows. */
+export { configureArchiveIndex } from './acp';
+export type { ArchiveIndex, ArchivedSession, AcpProviderId } from './acp';
 import type { Provider, ProviderId } from './types';
 
-/* `acp` is declared and null: the id exists so a manifest or a setting can
- * already name it, and a null answers "not in this build" rather than
- * "unknown provider", which are different failures. */
 export const providers: Record<ProviderId, Provider | null> = {
   claude: claudeProvider,
   codex: codexProvider,
-  acp: null,
+  gemini: acpProviders.gemini,
+  copilot: acpProviders.copilot,
+  opencode: acpProviders.opencode,
+  qwen: acpProviders.qwen,
+};
+
+const NAMES: Record<ProviderId, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+  gemini: 'Gemini CLI',
+  copilot: 'Copilot CLI',
+  opencode: 'OpenCode',
+  qwen: 'Qwen Code',
 };
 
 /**
@@ -30,7 +50,7 @@ export function providerFor(id: ProviderId): Provider | null {
 
 /** The display name for an id, for a Notice about a provider that is not here. */
 export function providerName(id: ProviderId): string {
-  return providers[id]?.displayName ?? (id === 'codex' ? 'Codex' : id === 'acp' ? 'an ACP agent' : 'Claude Code');
+  return providers[id]?.displayName ?? NAMES[id] ?? id;
 }
 
 /** One sentence a Notice can print when a runtime is missing. */

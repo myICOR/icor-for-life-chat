@@ -48,7 +48,22 @@ export interface NoteDefinition {
   note: true;
 }
 
-export type ItemDefinition = ControlDefinition | NoteDefinition;
+/* A ROW OF BUTTONS, nothing persisted. `install` hands the vendor's one-line
+   install to the member (a terminal pane or the clipboard, never run by the
+   plugin: Obsidian forbids a plugin installing its own dependencies, and the
+   vault's rule is that a runtime is started by the user); `recheck` reruns
+   detection after the member has. */
+export interface ActionDefinition {
+  name: string;
+  desc: string;
+  actions: Array<{ label: string; icon: string; run: 'install' | 'recheck' | 'page'; provider: ProviderId }>;
+}
+
+export type ItemDefinition = ControlDefinition | NoteDefinition | ActionDefinition;
+
+export function isAction(item: ItemDefinition): item is ActionDefinition {
+  return 'actions' in item;
+}
 
 export interface GroupDefinition {
   /** Two-digit index, kept from the imperative tab so the sections still read as a numbered list. */
@@ -67,6 +82,8 @@ export interface DefinitionInput {
   providers?: ReadonlyArray<{ id: ProviderId; displayName: string }>;
   /** What detection found per runtime; absent while it has not run. */
   detections?: Partial<Record<ProviderId, Detection | null>>;
+  /** Each runtime's install line and page, for the rows of runtimes not found. */
+  installations?: Partial<Record<ProviderId, { command: string; page: string }>>;
 }
 
 /* THE RUNTIME DROPDOWN OFFERS ONLY WHAT WAS FOUND, plus the stored choice so
@@ -97,6 +114,34 @@ function detectionNote(input: DefinitionInput, id: ProviderId, displayName: stri
       ? `${displayName}: detection has not run.`
       : d.hint;
   return { name: displayName, desc, note: true };
+}
+
+/* THE INSTALL ROW, only for a runtime detection did not find. A runtime that
+   is here needs no install button; a runtime that is not here gets the
+   vendor's line, the vendor's page, and a way to check again once it is. */
+function installRow(input: DefinitionInput, id: ProviderId, displayName: string): ActionDefinition | null {
+  const d = input.detections?.[id];
+  if (!d || d.found) return null;
+  const install = input.installations?.[id];
+  return {
+    name: `Install ${displayName}`,
+    desc: install
+      ? `Not found on this machine. Install puts the vendor's one-line install (${install.command}) into a terminal pane or onto the clipboard and opens ${install.page}; nothing is installed by the plugin. Press Enter there, then Check again.`
+      : 'Not found on this machine. Install it, then Check again.',
+    actions: [
+      { label: 'Install', icon: 'download', run: 'install', provider: id },
+      { label: 'Check again', icon: 'refresh-cw', run: 'recheck', provider: id },
+    ],
+  };
+}
+
+/** The rows one runtime contributes to the Providers group: its note, its install row when missing, its path. */
+export function runtimeRows(input: DefinitionInput, id: ProviderId, displayName: string, pathKey: SettingKey, pathDesc: string, placeholder: string): ItemDefinition[] {
+  const rows: ItemDefinition[] = [detectionNote(input, id, displayName)];
+  const install = installRow(input, id, displayName);
+  if (install) rows.push(install);
+  rows.push({ name: `${displayName} location`, desc: pathDesc, control: { type: 'text', key: pathKey, placeholder } });
+  return rows;
 }
 
 const DROPPABLE = new Set<FactId>(DROP_GROUPS.flat());
@@ -152,18 +197,24 @@ export function settingDefinitions(input: DefinitionInput): GroupDefinition[] {
           desc: 'The agent runtime a new conversation opens with. A conversation keeps its runtime for life. Only runtimes found on this machine are offered.',
           control: { type: 'dropdown', key: 'defaultProvider', options: providerOptions(input) },
         },
-        detectionNote(input, 'claude', 'Claude Code'),
-        {
-          name: 'Claude Code location',
-          desc: 'Leave empty to find it automatically. Obsidian launched from the Dock does not inherit a login shell, so the plugin repairs PATH before looking.',
-          control: { type: 'text', key: 'cliPath', placeholder: '/usr/local/bin/claude' },
-        },
-        detectionNote(input, 'codex', 'Codex'),
-        {
-          name: 'Codex location',
-          desc: 'The Codex CLI, signed in with `codex login` in a terminal. The plugin never signs in for you and holds no key. Leave empty to find it automatically.',
-          control: { type: 'text', key: 'codexPath', placeholder: '/usr/local/bin/codex' },
-        },
+        ...runtimeRows(input, 'claude', 'Claude Code', 'cliPath',
+          'Leave empty to find it automatically. Obsidian launched from the Dock does not inherit a login shell, so the plugin repairs PATH before looking.',
+          '/usr/local/bin/claude'),
+        ...runtimeRows(input, 'codex', 'Codex', 'codexPath',
+          'The Codex CLI, signed in with `codex login` in a terminal. The plugin never signs in for you and holds no key. Leave empty to find it automatically.',
+          '/usr/local/bin/codex'),
+        ...runtimeRows(input, 'gemini', 'Gemini CLI', 'geminiPath',
+          'Speaks the Agent Client Protocol (`gemini --acp`). Signs in inside the CLI with a Gemini API key, Vertex AI or Workspace Code Assist; the plugin holds no key. Leave empty to find it automatically.',
+          '/opt/homebrew/bin/gemini'),
+        ...runtimeRows(input, 'copilot', 'Copilot CLI', 'copilotPath',
+          'GitHub Copilot CLI over the Agent Client Protocol (`copilot --acp`). Signs in inside the CLI with your GitHub account. Leave empty to find it automatically.',
+          '/usr/local/bin/copilot'),
+        ...runtimeRows(input, 'opencode', 'OpenCode', 'opencodePath',
+          'OpenCode over the Agent Client Protocol (`opencode acp`), with its own provider catalogue configured inside OpenCode. Leave empty to find it automatically.',
+          '/usr/local/bin/opencode'),
+        ...runtimeRows(input, 'qwen', 'Qwen Code', 'qwenPath',
+          'Qwen Code over the Agent Client Protocol (`qwen --acp`). Signs in inside the CLI. Leave empty to find it automatically.',
+          '/usr/local/bin/qwen'),
         {
           name: 'Extra PATH entries',
           desc: 'One directory per line, searched after your own PATH.',
@@ -227,7 +278,7 @@ export function settingDefinitions(input: DefinitionInput): GroupDefinition[] {
 /** Every persisted key the table covers, in order. The coverage gate reads this. */
 export function controlKeys(groups: readonly GroupDefinition[]): SettingKey[] {
   const keys: SettingKey[] = [];
-  for (const g of groups) for (const item of g.items) if (!isNote(item)) keys.push(item.control.key);
+  for (const g of groups) for (const item of g.items) if (!isNote(item) && !isAction(item)) keys.push(item.control.key);
   return keys;
 }
 

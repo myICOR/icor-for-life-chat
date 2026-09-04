@@ -11,13 +11,14 @@
  * is never called there once definitions are returned; it is the fallback and
  * nothing else, which is exactly the case the deprecation notice carves out. */
 
-import { PluginSettingTab, Setting } from 'obsidian';
+import { Notice, PluginSettingTab, Setting } from 'obsidian';
 import type { App } from 'obsidian';
 import { INK_PLUGIN_ATTR, INK_PLUGIN_NAME } from '../constants';
 import type IcorChatPlugin from '../main';
 import { availableProviders } from '../provider/registry';
-import { controlKeys, isNote, settingDefinitions, validateRetention } from './definitions';
-import type { ControlSpec, DefinitionInput, GroupDefinition, ItemDefinition } from './definitions';
+import { controlKeys, isAction, isNote, settingDefinitions, validateRetention } from './definitions';
+import type { ActionDefinition, ControlSpec, DefinitionInput, GroupDefinition, ItemDefinition } from './definitions';
+import { offerInstall } from '../provider/install';
 
 /* The 1.13 shapes, derived from the class rather than imported by name.
    `SettingDefinitionItem` and friends are `@since 1.13.0`, and the manifest
@@ -44,6 +45,7 @@ export class ChatSettingsTab extends PluginSettingTab {
       defaultArchiveFolder: this.plugin.defaultArchiveFolder(),
       providers: availableProviders().map((p) => ({ id: p.id, displayName: p.displayName })),
       detections: this.plugin.detections,
+      installations: Object.fromEntries(availableProviders().map((p) => [p.id, p.installation])),
     };
   }
 
@@ -63,6 +65,13 @@ export class ChatSettingsTab extends PluginSettingTab {
   }
 
   private toItem(item: ItemDefinition): GroupItem {
+    if (isAction(item)) {
+      return {
+        name: item.name,
+        desc: item.desc,
+        render: (setting: Setting) => this.renderActions(setting, item),
+      };
+    }
     if (isNote(item)) {
       const text = item.desc;
       return {
@@ -130,9 +139,47 @@ export class ChatSettingsTab extends PluginSettingTab {
       parent.createDiv({ cls: 'aic-settings-note', text: item.desc });
       return;
     }
+    if (isAction(item)) {
+      this.renderActions(new Setting(parent).setName(item.name).setDesc(item.desc), item);
+      return;
+    }
     const row = new Setting(parent).setName(item.name);
     if (item.desc) row.setDesc(item.desc);
     this.bind(row, item.control);
+  }
+
+  /* The buttons of an install row. `install` never installs: it hands the
+     vendor's line over (see provider/install.ts); `recheck` reruns detection
+     and repaints, so a runtime installed a minute ago is found without a
+     restart. The 1.13 declarative path cannot repaint through `update()`
+     (below the floor), so the fallback tab is re-displayed and the 1.13 tab
+     asks the member to reopen it. */
+  private renderActions(setting: Setting, item: ActionDefinition): void {
+    setting.settingEl.addClass('aic-settings-actions');
+    for (const action of item.actions) {
+      setting.addButton((b) => {
+        b.setButtonText(action.label).setIcon(action.icon);
+        if (action.run === 'install') b.setCta();
+        b.onClick(() => void this.runAction(action));
+      });
+    }
+  }
+
+  private async runAction(action: ActionDefinition['actions'][number]): Promise<void> {
+    const provider = availableProviders().find((p) => p.id === action.provider);
+    if (!provider) return;
+    if (action.run === 'install') {
+      await offerInstall(this.app, provider);
+      return;
+    }
+    if (action.run === 'page') {
+      window.open(provider.installation.page, '_blank');
+      return;
+    }
+    await this.plugin.refreshDetections();
+    const found = this.plugin.detections[action.provider]?.found === true;
+    new Notice(found ? `${provider.displayName} found. Reopen the settings tab to see it.` : `${provider.displayName} is still not found.`);
+    this.display();
   }
 
   private bind(row: Setting, c: ControlSpec): void {
