@@ -154,6 +154,8 @@ export class Composer {
   private readonly modelBtn: HTMLButtonElement;
   private readonly effortBtn: HTMLButtonElement;
   private readonly sendBtn: HTMLButtonElement;
+  /** Click only. Never bound to Enter; see `fire`. */
+  private readonly stopBtn: HTMLButtonElement;
   /** Rung 4 lives INSIDE the card now; see the note over its creation. */
   readonly factsEl: HTMLElement;
   private readonly slashEl: HTMLElement;
@@ -263,6 +265,22 @@ export class Composer {
        drop are wired on the card itself and are what the placeholder and the
        toast were both pointing at, so nothing was lost with it. */
     action.createDiv({ cls: 'aic-action-spacer' });
+    /* STOP IS ITS OWN CONTROL, and Enter never reaches it (Tom, 2026-09-04).
+     *
+       The send pill used to BECOME Stop while a turn ran, so a follow-up typed
+       mid-turn and sent with Enter interrupted the very work it was about.
+       The CLI queues a mid-turn message and answers it after the running turn
+       (measured; the finding is at the top of sdk/session.ts), so Enter always
+       submits and this button, reachable by click or by focusing it, is the
+       only way to interrupt. It exists only while a turn is running: a Stop
+       with nothing to stop is a control that lies. */
+    this.stopBtn = action.createEl('button', { cls: 'aic-stop', type: 'button' });
+    const stopGlyph = this.stopBtn.createSpan({ cls: 'aic-stop-icon' });
+    setIcon(stopGlyph, 'square');
+    this.stopBtn.createSpan({ text: 'Stop' });
+    this.stopBtn.setAttr('aria-label', 'Stop the current turn');
+    setTooltip(this.stopBtn, 'Stop the current turn');
+    this.stopBtn.addEventListener('click', () => this.cb.onStop());
     this.sendBtn = action.createEl('button', { cls: 'aic-send', type: 'button' });
 
     /* RUNG 4, THE READOUT STRIP, inside the card and below the action row.
@@ -671,11 +689,9 @@ export class Composer {
     this.textarea.focus();
   }
 
+  /* Enter and the pill ALWAYS submit. While a turn runs the message is queued
+     by the CLI for the next turn; stopping is the click-only button beside. */
   private fire(): void {
-    if (this.state.streaming) {
-      this.cb.onStop();
-      return;
-    }
     const text = this.textarea.value.trim();
     // An image with no words is still a message: "what is this?" is the most
     // common thing a pasted screenshot means, so an empty prompt with an
@@ -849,7 +865,7 @@ export class Composer {
 
   /** Narrow enough to run on every keystroke: no DOM churn, one boolean. */
   private syncSend(): void {
-    if (this.state.streaming) return;
+    // Derived from the field in every state: a queued message is still a message.
     this.sendBtn.disabled = this.textarea.value.trim().length === 0 && this.attachments.length === 0;
   }
 
@@ -895,18 +911,20 @@ export class Composer {
     this.renderThumbs();
 
     this.sendBtn.empty();
-    if (this.state.streaming) {
-      this.sendBtn.addClass('is-stop');
-      this.sendBtn.setText('Stop');
-      this.sendBtn.disabled = false;
-      this.sendBtn.setAttr('aria-label', 'Stop the current turn');
-    } else {
-      this.sendBtn.removeClass('is-stop');
-      this.sendBtn.setText('Send');
-      this.sendBtn.disabled =
-        this.textarea.value.trim().length === 0 && this.attachments.length === 0;
-      this.sendBtn.setAttr('aria-label', 'Send the message');
-    }
+    /* The pill names what will happen, and it never turns into Stop. "Queue"
+       is the measured word: the CLI holds a mid-turn message and answers it
+       after the running turn. The disabled state is the field's, not the turn's. */
+    const queueing = this.state.streaming;
+    this.sendBtn.toggleClass('is-queue', queueing);
+    this.sendBtn.setText(queueing ? 'Queue' : 'Send');
+    this.sendBtn.disabled =
+      this.textarea.value.trim().length === 0 && this.attachments.length === 0;
+    this.sendBtn.setAttr(
+      'aria-label',
+      queueing ? 'Queue this message for the running turn' : 'Send the message',
+    );
+    // `hidden`, not a class: the property is the one thing no theme can restyle.
+    this.stopBtn.hidden = !this.state.streaming;
   }
 
   /** The awareness tray. Zero context renders nothing. */

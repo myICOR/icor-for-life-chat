@@ -92,6 +92,9 @@ export type ChatEventBody =
        * conversation was a dead end. Null when there was no context. */
       contextPath: string | null;
       images: TurnImage[];
+      /* True when this message was sent while a turn was running, so the CLI
+         holds it for the next turn. Optional: 0.5.x transcripts carry no flag. */
+      queued?: boolean;
       /* Everything ELSE the message carried: notes named with `[[`, notes and
          groups picked from the `+` menu. One chip each above the words. A
          single note keeps its path so its chip can open it; a group keeps a

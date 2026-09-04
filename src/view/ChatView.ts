@@ -36,6 +36,8 @@ import { Normalizer, userTextOf } from '../sdk/normalize';
 import { buildChildEnv, resolveCliPath, splitExtraPath } from '../sdk/cli';
 import type { PathEnvironment } from '../sdk/cli';
 import type { ChatEvent, EffortName, PermissionModeName, TurnContext, TurnImage } from '../model/types';
+import { NO_FOLLOW_UPS, followUpSent, queuedTurnBegan, turnAborted, turnEnded } from '../model/followups';
+import type { FollowUpState } from '../model/followups';
 import { applyStatusBarClearance } from './statusbar';
 import type { Attachment } from './composer/Composer';
 import type IcorChatPlugin from '../main';
@@ -101,6 +103,9 @@ export class ChatView extends ItemView {
    * bypass at runtime without the launch flag, that is the whole of "clicking
    * Bypass does not bypass". The picker writes here; the launcher reads here. */
   private permissionMode: PermissionModeName;
+  /* FOLLOW-UPS the CLI is holding. Pure bookkeeping in model/followups.ts,
+     measured behaviour at the top of sdk/session.ts. */
+  private followUps: FollowUpState = NO_FOLLOW_UPS;
   /** Repaints the status-bar clearance when the window or the bar changes size. */
   private clearanceObserver: ResizeObserver | null = null;
   /* THE TEAM, as this vault has it. Null in a bare vault. Re-detected when
@@ -866,6 +871,11 @@ export class ChatView extends ItemView {
         path: ref.kind === 'note' ? ref.id : null,
       });
     }
+    /* A SEND WHILE A TURN RUNS IS A FOLLOW-UP, never a stop (Tom, 2026-09-04).
+       The CLI queues it and answers it as the next turn, so it enters the
+       stream now, marked QUEUED, and the mark leaves when its turn begins. */
+    const queued = this.store.state.status === 'streaming';
+    if (queued) this.followUps = followUpSent(this.followUps);
     this.store.apply({
       kind: 'user-turn',
       text,
@@ -873,6 +883,7 @@ export class ChatView extends ItemView {
       contextPath: ctx ? ctx.path : null,
       images,
       contexts,
+      queued,
       key: String(index),
       stream: null,
     });
@@ -953,8 +964,16 @@ export class ChatView extends ItemView {
     }
     if (event.stream === null) this.stream?.apply(event);
     if (event.kind === 'user-turn') this.composer?.setStreaming(true);
-    if (event.kind === 'turn-end' || event.kind === 'aborted' || event.kind === 'error') {
+    /* THE TURN BOUNDARY IS NOT ALWAYS IDLE. With a follow-up pending the CLI
+       is about to start the next turn, and a composer that read Send for that
+       gap would let Enter mint a third message the user believed was a second. */
+    if (event.kind === 'turn-end') this.composer?.setStreaming(this.settleTurn());
+    if (event.kind === 'aborted' || event.kind === 'error') {
+      this.followUps = turnAborted();
       this.composer?.setStreaming(false);
+    }
+    if (event.kind === 'session' || event.kind === 'thinking-open' || event.kind === 'text-open' || event.kind === 'tool-call') {
+      this.queuedTurnBegins();
     }
     if (event.kind === 'session') {
       // The provider's own command list. The composer's placeholder has always
@@ -970,7 +989,9 @@ export class ChatView extends ItemView {
       void this.loadModelCatalog();
     }
     if (event.kind === 'user-turn') this.startTicking();
-    if (event.kind === 'turn-end' || event.kind === 'aborted' || event.kind === 'error') {
+    if (event.kind === 'aborted' || event.kind === 'error') this.stopTicking();
+    // A turn end with a follow-up pending keeps the clock: the session is still at work.
+    if (event.kind === 'turn-end' && this.followUps.pending === 0 && !this.followUps.awaitingNext) {
       this.stopTicking();
     }
     if (event.kind === 'session' && event.sessionId && !this.sessionIds.includes(event.sessionId)) {
@@ -983,6 +1004,22 @@ export class ChatView extends ItemView {
     }
     this.statusline?.render(this.store.state);
     this.scrollToBottom();
+  }
+
+  /* ----------------------------------------------------------- follow-ups */
+
+  /** A turn ended. True when a queued follow-up keeps the session busy. */
+  private settleTurn(): boolean {
+    const next = turnEnded(this.followUps);
+    this.followUps = next.state;
+    return next.stillBusy;
+  }
+
+  /** The first signal of a turn: if it answers a queued message, the mark comes off. */
+  private queuedTurnBegins(): void {
+    const next = queuedTurnBegan(this.followUps);
+    this.followUps = next.state;
+    if (next.clearOne) this.stream?.clearQueued();
   }
 
   /* --------------------------------------------------------- subagents */

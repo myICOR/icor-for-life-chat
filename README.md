@@ -34,6 +34,10 @@ this repo and it gets fixed fast.
 - **Context awareness.** The composer shows a chip for the note you have open
   and the range you have selected, so what the team receives is what you can
   see. Dismiss the chip and nothing is attached.
+- **Follow-ups ride the running turn.** Type while the team works and press
+  Enter: the message is queued and answered as the next turn, never an
+  interruption. The well shows QUEUED until its turn begins. Stop is its own
+  button, a click, and it only exists while a turn is running.
 - **Readable work.** Tool calls collapse into quiet hairline rows whose left
   gutter answers "does this need me". Approvals never hide behind a chevron.
 - **Structured replies.** Cards, verdict rows, decision blocks with click-to-

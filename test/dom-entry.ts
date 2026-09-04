@@ -192,7 +192,7 @@ async function mount(): Promise<void> {
    * It is the difference between preventing the tenth ELEMENT and
    * preventing the tenth STATE. The previous fixture hand-typed one approval
    * row, so the sweep walked every element that EXISTED and reported clean
-   * while `is-failed`, `is-running`, `.aic-send.is-stop` and three of the four
+   * while `is-failed`, `is-running`, the streaming composer and three of the four
    * mode chips were never built at all - and all three of the HIGH findings
    * lived in exactly those states. A gate bounded by what the fixture mounts
    * reads as exhaustive and is not.
@@ -492,9 +492,24 @@ async function mountStates(root: HTMLElement): Promise<void> {
   new Composer(bareHost, { streaming: false, mode: 'default', model: '', effort: 'medium' }, noop);
   bareHost.setAttr('data-face', face(bareHost));
 
-  /* The Stop pill: `.aic-send.is-stop`, which only exists mid-turn. */
+  /* The STREAMING composer: the click-only `.aic-stop` control, which only
+     exists mid-turn, and the pill reading Queue. A queued well beside it so
+     the QUEUED mark is measured too. */
   const stopHost = probe.createDiv({ cls: 'aic-stop-probe' });
-  new Composer(stopHost, { streaming: true, mode: 'default', model: 'opus', effort: 'medium' }, noop);
+  const streamingComposer = new Composer(stopHost, { streaming: true, mode: 'default', model: 'opus', effort: 'medium' }, noop);
+  (streamingComposer.el.querySelector('textarea.aic-input') as HTMLTextAreaElement).value = 'and then say the word';
+  streamingComposer.setStreaming(true);
+  const queuedColumn = stopHost.createDiv({ cls: 'aic-column' });
+  const queuedStream = new StreamRenderer({} as App, new Component() as never, queuedColumn, '', {
+    onApproval: () => {},
+    structured: () => false,
+    renderHost: {
+      home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
+      openUrl: () => {}, copy: () => {}, decisionState: () => null,
+    },
+    onDecisions: () => {},
+  });
+  queuedStream.apply({ kind: 'user-turn', text: 'and after that say PINEAPPLE', contextNote: null, contextPath: null, images: [], queued: true, stream: null });
 
   /* An escalated-to-DANGER statusline fact: `rejected` is the provider status
      that produces it, so the tone comes from facts.ts and not from a class. */

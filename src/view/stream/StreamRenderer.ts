@@ -256,6 +256,7 @@ export class StreamRenderer {
         this.appendUserWell(
           event.text, event.contextNote, event.images, event.contextPath, event.contexts ?? [], event.key ?? null,
         );
+        if (event.queued) this.markLastWellQueued();
         /* BUSY FROM THE FIRST MOMENT (Tom, 2026-09-01). The indicator used to
            appear only when the model's output began - thinking tokens or held
            text - which left the FIRST stretch of every turn, the seconds
@@ -1042,6 +1043,33 @@ export class StreamRenderer {
     this.commitThinking();
     this.flushHeld();
     this.settleRunningRows();
+  }
+
+  /* QUEUED, said on the well itself.
+   *
+   * A follow-up sent mid-turn lands in the stream at once, because it was
+   * sent, but the CLI will not read it until the running turn ends. Without a
+   * mark the well reads as a message the team is answering right now, which is
+   * exactly the misreading the old Stop-on-Enter behaviour came from. The mark
+   * is a kicker in the well's corner and it leaves when the queued turn begins. */
+  markLastWellQueued(): void {
+    // The column's own query answers in the column's own realm, so no
+    // cross-window check is needed here; the cast names what querySelector
+    // already guarantees for this selector.
+    const wells = this.column.querySelectorAll<HTMLElement>('.aic-user');
+    const last = wells[wells.length - 1];
+    if (!last || last.hasClass('is-queued')) return;
+    last.addClass('is-queued');
+    const mark = last.createSpan({ cls: 'aic-kicker aic-user-queued', text: 'QUEUED' });
+    mark.setAttr('aria-label', 'Queued for the next turn');
+  }
+
+  /** The oldest queued well is being answered now: its mark comes off. */
+  clearQueued(): void {
+    const first = this.column.querySelector<HTMLElement>('.aic-user.is-queued');
+    if (!first) return;
+    first.removeClass('is-queued');
+    first.querySelector('.aic-user-queued')?.remove();
   }
 
   /** A quiet line of plugin-voice narration. Never styled as the team talking. */
