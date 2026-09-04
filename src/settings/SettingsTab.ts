@@ -15,6 +15,7 @@ import { PluginSettingTab, Setting } from 'obsidian';
 import type { App } from 'obsidian';
 import { INK_PLUGIN_ATTR, INK_PLUGIN_NAME } from '../constants';
 import type IcorChatPlugin from '../main';
+import { availableProviders } from '../provider/registry';
 import { controlKeys, isNote, settingDefinitions, validateRetention } from './definitions';
 import type { ControlSpec, DefinitionInput, GroupDefinition, ItemDefinition } from './definitions';
 
@@ -41,6 +42,8 @@ export class ChatSettingsTab extends PluginSettingTab {
       settings: this.plugin.settings,
       catalog: this.plugin.modelCatalog,
       defaultArchiveFolder: this.plugin.defaultArchiveFolder(),
+      providers: availableProviders().map((p) => ({ id: p.id, displayName: p.displayName })),
+      detections: this.plugin.detections,
     };
   }
 

@@ -14,6 +14,8 @@ export interface ChatSettings {
   defaultProvider: ProviderId;
   /** Absolute path to the Claude Code executable. Empty = resolve automatically. */
   cliPath: string;
+  /** Absolute path to the Codex CLI. Empty = resolve automatically. */
+  codexPath: string;
   /** Model id passed to the CLI. Empty = whatever the CLI is configured to use. */
   model: string;
   effort: EffortName;
@@ -58,6 +60,7 @@ export interface ChatSettings {
 export const DEFAULT_SETTINGS: ChatSettings = {
   defaultProvider: 'claude',
   cliPath: '',
+  codexPath: '',
   model: '',
   effort: 'medium',
   defaultPermissionMode: 'default',

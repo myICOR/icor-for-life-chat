@@ -21,6 +21,7 @@
 
 import type { ChatSettings } from '../model/settings';
 import type { ModelChoice } from '../model/types';
+import type { Detection, ProviderId } from '../provider/types';
 import { FACT_SETTING_KEYS, MEASURED_NOTE, NARROW_NOTE } from '../model/settings';
 import { DROP_GROUPS, FACT_NAMES, FACT_TOOLTIPS, RENDER_ORDER } from '../model/facts';
 import type { FactId } from '../model/facts';
@@ -62,6 +63,40 @@ export interface DefinitionInput {
   catalog: readonly ModelChoice[];
   /** Where archives go when the folder setting is empty. */
   defaultArchiveFolder: string;
+  /** Every runtime this build knows, in registry order. */
+  providers?: ReadonlyArray<{ id: ProviderId; displayName: string }>;
+  /** What detection found per runtime; absent while it has not run. */
+  detections?: Partial<Record<ProviderId, Detection | null>>;
+}
+
+/* THE RUNTIME DROPDOWN OFFERS ONLY WHAT WAS FOUND, plus the stored choice so
+ * the picker can always show its own value. A runtime that detection has
+ * not seen is not offered: "not found" is a real answer (Axon's detection
+ * honesty gate, Lex's condition on 2026-09-04), and a dropdown naming a
+ * runtime that cannot launch is the same lie as an invented model list. */
+export function providerOptions(input: DefinitionInput): Record<string, string> {
+  const options: Record<string, string> = {};
+  for (const p of input.providers ?? [{ id: 'claude' as const, displayName: 'Claude Code' }]) {
+    const found = input.detections?.[p.id]?.found;
+    if (found === true || found === undefined && p.id === 'claude') options[p.id] = p.displayName;
+  }
+  const stored = input.settings.defaultProvider;
+  if (!(stored in options)) {
+    const named = (input.providers ?? []).find((p) => p.id === stored);
+    options[stored] = named ? named.displayName : stored;
+  }
+  return options;
+}
+
+/** One line per runtime saying what detection found, in the runtime's own words. */
+function detectionNote(input: DefinitionInput, id: ProviderId, displayName: string): NoteDefinition {
+  const d = input.detections?.[id];
+  const desc = d === undefined
+    ? `${displayName}: looking for it.`
+    : d === null
+      ? `${displayName}: detection has not run.`
+      : d.hint;
+  return { name: displayName, desc, note: true };
 }
 
 const DROPPABLE = new Set<FactId>(DROP_GROUPS.flat());
@@ -114,15 +149,20 @@ export function settingDefinitions(input: DefinitionInput): GroupDefinition[] {
       items: [
         {
           name: 'Runtime for new conversations',
-          desc: 'The agent runtime a new conversation opens with. A conversation keeps its runtime for life; more arrive as they are built.',
-          /* One entry today. The list is the registry's, so a second provider
-             appears here the day it is registered and never before. */
-          control: { type: 'dropdown', key: 'defaultProvider', options: { claude: 'Claude Code' } },
+          desc: 'The agent runtime a new conversation opens with. A conversation keeps its runtime for life. Only runtimes found on this machine are offered.',
+          control: { type: 'dropdown', key: 'defaultProvider', options: providerOptions(input) },
         },
+        detectionNote(input, 'claude', 'Claude Code'),
         {
           name: 'Claude Code location',
           desc: 'Leave empty to find it automatically. Obsidian launched from the Dock does not inherit a login shell, so the plugin repairs PATH before looking.',
           control: { type: 'text', key: 'cliPath', placeholder: '/usr/local/bin/claude' },
+        },
+        detectionNote(input, 'codex', 'Codex'),
+        {
+          name: 'Codex location',
+          desc: 'The Codex CLI, signed in with `codex login` in a terminal. The plugin never signs in for you and holds no key. Leave empty to find it automatically.',
+          control: { type: 'text', key: 'codexPath', placeholder: '/usr/local/bin/codex' },
         },
         {
           name: 'Extra PATH entries',

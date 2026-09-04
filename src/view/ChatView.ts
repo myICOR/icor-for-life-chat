@@ -105,6 +105,14 @@ export class ChatView extends ItemView {
   private readonly taskPrompts = new Map<string, string>();
   private chipTray: HTMLElement | null = null;
   private startedAt = Date.now();
+  /**
+   * A message to send the moment the pane is open: the handover text of a
+   * conversation CONTINUED from another runtime's archive. One shot; never
+   * persisted in the leaf state, or a reload would send it twice.
+   */
+  private handover: string | null = null;
+  /** The archive folder this conversation continued from, for the manifest. */
+  private continuedFrom: string | null = null;
   /** Every provider session id this tab has held, oldest first. */
   private readonly sessionIds: string[] = [];
   private readonly events: ChatEvent[] = [];
@@ -182,6 +190,9 @@ export class ChatView extends ItemView {
         mode: this.permissionMode,
         model: this.plugin.settings.model,
         effort: this.plugin.settings.effort,
+        provider: this.provider,
+        // A resumed pane is already a conversation; a fresh one may still choose.
+        providerLocked: this.resumeSessionId !== null,
       },
       callbacks: {
         onSubmit: (text, attachments) => void this.submit(text, attachments),
@@ -192,6 +203,7 @@ export class ChatView extends ItemView {
         onNotice: (message) => new Notice(message),
         readPreview: (path) => this.readPreview(path),
         onAddContext: (pick) => this.addPick(pick),
+        onProviderChange: (provider) => this.changeProvider(provider),
       },
       badge: {
         navigate: (code, mention) => this.navigateToMention(code, mention),
@@ -232,11 +244,21 @@ export class ChatView extends ItemView {
       onDecisions: (decisions, blockId) => this.recordDecisions(decisions, blockId),
     });
     this.registerBuiltInActions();
+    this.composer?.setProviders(this.plugin.detectedProviders());
+    this.composer?.setModeDetail(this.runtime.modeLabel?.(this.permissionMode) ?? null);
     this.roster = detectTeam(this.app);
     this.stream.renderEmptyState(this.emptyTeamBlock());
     this.renderPins();
     void this.fillResumeRows().then(() => this.fillMemory());
     this.addAction('bar-chart-3', 'Open AI team insights', () => void this.plugin.openInsights());
+    /* A CONTINUATION sends its handover as the first message, once, and only
+       into an empty pane: a runtime that never saw the thread gets the words
+       of it, never its session id. */
+    if (this.handover && !this.session && !this.resumeSessionId) {
+      const text = this.handover;
+      this.handover = null;
+      window.setTimeout(() => void this.submit(text), 0);
+    }
     /* The trigger shows the ACTUAL model from pane open. With no plugin
        override, the name comes from the CLI's own settings cascade - the same
        files the session will read - so the face and the behaviour cannot
@@ -683,7 +705,24 @@ export class ChatView extends ItemView {
       resumeSessionId: this.store.state.sessionId ?? this.resumeSessionId,
       provider: this.provider,
       pins: pinsToState(this.pins),
+      ...(this.continuedFrom ? { continuedFrom: this.continuedFrom } : {}),
     };
+  }
+
+  /* CHOOSING THE RUNTIME, allowed only while there is nothing to resume: a
+     session id means something to exactly one runtime, and the composer
+     trigger goes dark the moment a session exists. */
+  private changeProvider(provider: ProviderId): void {
+    if (this.session || this.resumeSessionId || this.store.state.sessionId) return;
+    this.provider = provider;
+    this.composer?.setProvider(provider);
+    this.composer?.setModeDetail(this.runtime.modeLabel?.(this.permissionMode) ?? null);
+    if (!this.plugin.settings.model) {
+      void this.runtime.defaultModel(this.plugin.vaultPath).then((model) => {
+        if (model && this.provider === provider) this.composer?.presetModel(model);
+      });
+    }
+    this.app.workspace.requestSaveLayout();
   }
 
   override async setState(state: unknown, result: unknown): Promise<void> {
@@ -696,6 +735,14 @@ export class ChatView extends ItemView {
       // runtime that minted it.
       const id = (state as { provider?: unknown }).provider;
       if (isProviderId(id)) this.provider = id;
+    }
+    if (state && typeof state === 'object' && 'handover' in state) {
+      const text = (state as { handover?: unknown }).handover;
+      if (typeof text === 'string' && text.trim()) this.handover = text;
+    }
+    if (state && typeof state === 'object' && 'continuedFrom' in state) {
+      const folder = (state as { continuedFrom?: unknown }).continuedFrom;
+      if (typeof folder === 'string' && folder) this.continuedFrom = folder;
     }
     if (state && typeof state === 'object' && 'pins' in state) {
       /* Read back before the replay runs, so the replay finds pins already
@@ -1166,14 +1213,14 @@ export class ChatView extends ItemView {
        event rather than swallowed into a pane stuck on Stop. */
     const config = {
       provider: this.provider,
-      cliPath: settings.cliPath,
+      cliPath: this.plugin.pathFor(this.provider),
       cwd: this.plugin.vaultPath,
       detect: {
         platform: Platform.isWin ? 'win32' as const : Platform.isMacOS ? 'darwin' as const : 'linux' as const,
         home: this.plugin.homeDir,
         path: process.env.PATH ?? '',
         extra: splitExtraPath(settings.extraPath),
-        configured: settings.cliPath,
+        configured: this.plugin.pathFor(this.provider),
       },
       model: settings.model,
       effort: settings.effort,
@@ -1181,6 +1228,7 @@ export class ChatView extends ItemView {
       permissionMode: this.permissionMode,
       structuredReplies: settings.structuredReplies,
       resumeSessionId: this.resumeSessionId,
+      pluginVersion: this.plugin.manifest.version,
     };
     const hooks: SessionHooks = {
         onEvent: (event) => this.store.apply(event),
@@ -1308,7 +1356,10 @@ export class ChatView extends ItemView {
     this.permissionMode = mode;
     if (!this.session) return;
     const ok = await this.session.setPermissionMode(mode);
-    if (ok) return;
+    if (ok) {
+      this.composer?.setModeDetail(this.runtime.modeLabel?.(mode) ?? null);
+      return;
+    }
     this.permissionMode = previous;
     this.composer?.setMode(previous);
   }
@@ -1369,6 +1420,8 @@ export class ChatView extends ItemView {
       // The provider's own command list. The composer's placeholder has always
       // promised "/ runs commands"; this is what finally keeps the promise.
       this.composer?.setSlashCommands(event.slashCommands);
+      // A session exists: the runtime is a fact now, and the trigger says so.
+      this.composer?.lockProvider();
     }
     if (event.kind === 'session' && event.model) {
       this.composer?.setModel(event.model);
@@ -1513,6 +1566,7 @@ export class ChatView extends ItemView {
         events: record.events,
         subagents: this.plugin.subagents.all(),
         tokens: this.store.state.usage?.totalTokens ?? 0,
+        ...(this.continuedFrom ? { continuedFrom: this.continuedFrom } : {}),
         pluginVersion: this.plugin.manifest.version,
         sdkVersion: SDK_VERSION,
         wipAttached: this.wipAttached(),

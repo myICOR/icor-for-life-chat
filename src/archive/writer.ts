@@ -40,6 +40,8 @@ export interface ArchiveInput {
   sdkVersion: string;
   /** WiP folders the user attached as context; the writer adds the ones the tools touched. */
   wipAttached?: string[];
+  /** The archive folder a cross-runtime continuation started from. */
+  continuedFrom?: string;
 }
 
 function iso(ms: number): string {
@@ -205,6 +207,7 @@ export class ArchiveWriter {
       },
       ...agentRecords(input.events, input.subagents),
       wip: wipFoldersTouched(input.events, input.wipAttached ?? []),
+      ...(input.continuedFrom ? { continued_from: input.continuedFrom } : {}),
     };
     await adapter.write(`${folder}/${MANIFEST_FILE}`, JSON.stringify(manifest, null, 2));
     /* THE LINK BACK. A WiP folder this session worked on gets one line under

@@ -9,7 +9,7 @@
  * Independent implementation from a behavioural specification; no code is
  * inherited from any other repository. */
 
-import { FileSystemAdapter, Menu, Notice, Plugin, TFile, setIcon } from 'obsidian';
+import { FileSystemAdapter, Menu, Notice, Platform, Plugin, TFile, setIcon } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 import { homedir } from 'node:os';
 import { INK_PLUGIN_ATTR, INK_PLUGIN_NAME, VIEW_TYPE_CHAT, VIEW_TYPE_INSIGHTS, VIEW_TYPE_SUBAGENT } from './constants';
@@ -32,7 +32,9 @@ import { ChatSettingsTab } from './settings/SettingsTab';
 import { DEFAULT_SETTINGS, archiveRoot } from './model/settings';
 import type { ChatSettings } from './model/settings';
 import type { ModelChoice } from './model/types';
-import type { ProviderId } from './provider/types';
+import type { DetectEnvironment, Detection, Provider, ProviderId } from './provider/types';
+import { splitExtraPath } from './provider/cli';
+import { handoverText } from './archive/handover';
 import { installMemory } from './team/memory';
 
 /* The file-explorer BLOCK this plugin used to inject above the file tree - a
@@ -62,6 +64,14 @@ export default class IcorChatPlugin extends Plugin {
      (WiP, tasks, memory) register theirs here and the bar draws them all alike. */
   readonly replyActions = new ReplyActionRegistry();
 
+  /* WHAT EACH RUNTIME'S DETECTION FOUND, refreshed at load and whenever a
+   * path setting changes. Cached because the settings tab and the launcher
+   * menu are synchronous surfaces and a detection runs a process. A runtime
+   * absent from this map has not been looked for yet; one mapped to
+   * `found: false` was looked for and is not there. The two are different
+   * answers and the settings tab prints them differently. */
+  detections: Partial<Record<ProviderId, Detection>> = {};
+
   /* THE PROVIDER'S OWN MODEL CATALOGUE, cached the first time a session
    * reports it, and empty until then.
    *
@@ -80,6 +90,7 @@ export default class IcorChatPlugin extends Plugin {
     // Each runtime prepares the host once, before anything can launch a query
     // (the Claude provider installs the renderer AbortSignal shim here).
     for (const provider of availableProviders()) provider.install?.();
+    void this.refreshDetections();
 
     this.registerView(VIEW_TYPE_CHAT, (leaf) => new ChatView(leaf, this));
     this.registerView(VIEW_TYPE_SUBAGENT, (leaf) => new SubagentView(leaf, this));
@@ -136,12 +147,27 @@ export default class IcorChatPlugin extends Plugin {
         if (!(file instanceof TFile)) return;
         const archived = this.archivedSession(file);
         if (!archived) return;
-        menu.addItem((item) =>
-          item
-            .setTitle('Resume this conversation with the AI team')
-            .setIcon('bot')
-            .onClick(() => void this.openChat(archived.sessionId, archived.provider)),
-        );
+        const owner = providerFor(archived.provider);
+        /* Resume is offered only by the runtime that had the session, and only
+           when that runtime is on this machine. Existence is checked on click,
+           because a file menu is built synchronously and a store read is not. */
+        if (this.detections[archived.provider]?.found === true) {
+          menu.addItem((item) =>
+            item
+              .setTitle(`Resume with ${owner.displayName}`)
+              .setIcon('bot')
+              .onClick(() => void this.resumeArchived(archived.sessionId, archived.provider)),
+          );
+        }
+        for (const other of this.detectedRuntimes()) {
+          if (other.id === archived.provider) continue;
+          menu.addItem((item) =>
+            item
+              .setTitle(`Continue with ${other.displayName} from this transcript`)
+              .setIcon('git-branch')
+              .onClick(() => void this.continueWith(file, other.id)),
+          );
+        }
       }),
     );
 
@@ -173,6 +199,8 @@ export default class IcorChatPlugin extends Plugin {
   }
 
   override onunload(): void {
+    // A runtime with a shared service process releases it here.
+    for (const provider of availableProviders()) provider.dispose?.();
     this.sweepRetiredLauncher();
     for (const el of Array.from(document.querySelectorAll(`.${TREE_LAUNCHER_CLASS}`))) el.remove();
     this.subagents.clear();
@@ -215,6 +243,68 @@ export default class IcorChatPlugin extends Plugin {
     }
   }
 
+  /* ------------------------------------------------------------ runtimes */
+
+  /** The configured executable path for a runtime; empty means search. */
+  pathFor(provider: ProviderId): string {
+    return provider === 'codex' ? this.settings.codexPath : provider === 'claude' ? this.settings.cliPath : '';
+  }
+
+  private detectEnvironment(provider: ProviderId): DetectEnvironment {
+    return {
+      platform: Platform.isWin ? 'win32' : Platform.isMacOS ? 'darwin' : 'linux',
+      home: this.homeDir,
+      path: process.env.PATH ?? '',
+      extra: splitExtraPath(this.settings.extraPath),
+      configured: this.pathFor(provider),
+    };
+  }
+
+  /** Run every runtime's detection and remember the answers. */
+  async refreshDetections(): Promise<void> {
+    await Promise.all(
+      availableProviders().map(async (provider) => {
+        try {
+          this.detections[provider.id] = await provider.detect(this.detectEnvironment(provider.id));
+        } catch (error) {
+          this.detections[provider.id] = {
+            found: false, path: null, version: null, signedIn: null,
+            hint: error instanceof Error ? error.message : String(error),
+          };
+        }
+      }),
+    );
+  }
+
+  /** The runtimes detection actually found, Claude first. Never a guess. */
+  detectedProviders(): Array<{ id: ProviderId; displayName: string }> {
+    return availableProviders()
+      .filter((p) => this.detections[p.id]?.found === true)
+      .map((p) => ({ id: p.id, displayName: p.displayName }));
+  }
+
+  private detectedRuntimes(): Provider[] {
+    return availableProviders().filter((p) => this.detections[p.id]?.found === true);
+  }
+
+  /**
+   * CONTINUE ON ANOTHER RUNTIME. The archived note's words become the first
+   * message of a NEW session on the chosen runtime, and the new archive
+   * records where it came from. Never labelled resume: full tool results,
+   * thinking, approvals and the session id chain stay with the runtime that
+   * had them (Axon, 2026-09-04).
+   */
+  private async continueWith(file: TFile, provider: ProviderId): Promise<void> {
+    const source = await this.app.vault.read(file);
+    const text = handoverText(source, file.basename);
+    if (!text) {
+      new Notice('This conversation note carries nothing to continue from.');
+      return;
+    }
+    const folder = file.parent?.path ?? file.path;
+    await this.openChat(undefined, provider, { handover: text, continuedFrom: folder });
+  }
+
   /** The session AND the runtime that had it: an id only resumes in its own provider. */
   private archivedSession(file: TFile): { sessionId: string; provider: ProviderId } | null {
     const cache = this.app.metadataCache.getFileCache(file);
@@ -236,23 +326,40 @@ export default class IcorChatPlugin extends Plugin {
    * this file has no standing to make. */
   private async openLauncherMenu(at: { x: number; y: number }): Promise<void> {
     const menu = new Menu();
-    menu.addItem((item) =>
-      item
-        .setTitle('Start new session')
-        .setIcon('message-square-plus')
-        .onClick(() => void this.openChat()),
-    );
-
-    // The default provider's own record; a protocol without a store offers nothing here.
-    const store = providerFor(this.settings.defaultProvider).store;
-    const sessions = (await store?.list(this.vaultPath, RIBBON_SESSION_LIMIT)) ?? [];
-    for (const session of sessions) {
+    /* One start entry per runtime detection found. With one runtime the entry
+       keeps its old name; with two, each names its runtime, and the settings
+       default is listed first. */
+    const runtimes = this.detectedRuntimes();
+    const ordered = [...runtimes].sort((a, b) => (a.id === this.settings.defaultProvider ? -1 : b.id === this.settings.defaultProvider ? 1 : 0));
+    if (ordered.length === 0) {
+      menu.addItem((item) =>
+        item.setTitle('Start new session').setIcon('message-square-plus').onClick(() => void this.openChat()),
+      );
+    }
+    for (const runtime of ordered) {
       menu.addItem((item) =>
         item
-          .setTitle(`${session.title}  ·  ${shortAge(Date.now() - session.lastModified)}`)
+          .setTitle(ordered.length === 1 ? 'Start new session' : `Start new session with ${runtime.displayName}`)
+          .setIcon('message-square-plus')
+          .onClick(() => void this.openChat(undefined, runtime.id)),
+      );
+    }
+
+    // Each detected runtime's own record; a protocol without a store offers nothing here.
+    const recent: Array<{ runtime: Provider; sessionId: string; title: string; lastModified: number }> = [];
+    for (const runtime of ordered) {
+      const sessions = (await runtime.store?.list(this.vaultPath, RIBBON_SESSION_LIMIT)) ?? [];
+      for (const s of sessions) recent.push({ runtime, sessionId: s.sessionId, title: s.title, lastModified: s.lastModified });
+    }
+    recent.sort((a, b) => b.lastModified - a.lastModified);
+    for (const session of recent.slice(0, RIBBON_SESSION_LIMIT)) {
+      const suffix = ordered.length > 1 ? `  ·  ${session.runtime.displayName}` : '';
+      menu.addItem((item) =>
+        item
+          .setTitle(`${session.title}  ·  ${shortAge(Date.now() - session.lastModified)}${suffix}`)
           .setIcon('messages-square')
           .setSection('recent')
-          .onClick(() => void this.openChat(session.sessionId)),
+          .onClick(() => void this.openChat(session.sessionId, session.runtime.id)),
       );
     }
 
@@ -376,7 +483,21 @@ export default class IcorChatPlugin extends Plugin {
      existing pane / resume into an unoccupied one / create on the right) is a
      pure function in view/leafRoute.ts, decided on the views' own facts, so
      pressing the robot twice reveals one pane instead of minting two. */
-  async openChat(resumeSessionId?: string, provider?: ProviderId): Promise<void> {
+  /** Resume an archived session, saying so when its runtime no longer has it. */
+  private async resumeArchived(sessionId: string, provider: ProviderId): Promise<void> {
+    const store = providerFor(provider).store;
+    if (store && !(await store.exists(sessionId, this.vaultPath))) {
+      new Notice(`${providerFor(provider).displayName} no longer has this session. Continue from the transcript instead.`);
+      return;
+    }
+    await this.openChat(sessionId, provider);
+  }
+
+  async openChat(
+    resumeSessionId?: string,
+    provider?: ProviderId,
+    opts: { handover?: string; continuedFrom?: string } = {},
+  ): Promise<void> {
     const leaves = this.app.workspace
       .getLeavesOfType(VIEW_TYPE_CHAT)
       .map((leaf) => {
@@ -403,7 +524,7 @@ export default class IcorChatPlugin extends Plugin {
         active: true,
         state: resumeSessionId
           ? { resumeSessionId, provider: provider ?? this.settings.defaultProvider }
-          : { provider: this.settings.defaultProvider },
+          : { provider: provider ?? this.settings.defaultProvider, ...opts },
       });
     } else {
       leaf = route.leaf;
@@ -445,6 +566,8 @@ export default class IcorChatPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+    // A changed path or PATH entry changes what detection finds.
+    void this.refreshDetections();
     /* The readout strip is repainted only on an event and on the one-second
        tick, and the tick runs ONLY while a turn is streaming. Without this a
        readout switched on from settings would not appear until the next
