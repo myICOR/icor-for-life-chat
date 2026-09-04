@@ -277,6 +277,10 @@ mind. The census counts nodes rather than hunting for the unstyled one: an
 assertion that no raw block is visible is satisfied by hiding a node, and a
 hidden node leaves the thing that produced it alive.
 
+## For developers
+
+`docs/architecture.md` is the map: the event spine, the Provider seam, context, the reply action registry, the AI team layer, the style contract, the stream discipline and the extension points.
+
 ## ICOR for Life Obsidian Edition
 
 ICOR for Life - AI Chat is the AI surface of the **ICOR for Life Obsidian Edition**: ICOR
