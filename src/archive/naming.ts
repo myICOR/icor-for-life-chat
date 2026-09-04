@@ -116,6 +116,12 @@ export interface ArchiveManifest {
   mainTextBlocks?: number;
   /** The `03 WiP/<folder>` paths this session wrote to or was given as context (R1). Absent before 0.7.x. */
   wip?: string[];
+  /**
+   * The archive folder this conversation CONTINUED from on another runtime,
+   * when it did. A continuation is a new session primed with the old
+   * transcript, never a resume; the lineage is kept so the record says which.
+   */
+  continued_from?: string;
 }
 
 export interface ManifestAgentRecord {

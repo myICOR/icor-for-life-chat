@@ -171,6 +171,16 @@ test('the view and main.ts reach a provider through the registry only', () => {
   assert.deepEqual(offenders, [], `a Claude type crossed the seam:\n  ${offenders.join('\n  ')}`);
 });
 
+test('an absent provider is null, never Claude in disguise', async () => {
+  const { providerFor, missingProviderMessage, providerName } = await import('./build/pure.mjs');
+  assert.equal(providerFor('acp'), null, 'the registry substituted a provider for an id this build lacks');
+  assert.equal(providerFor('claude')?.id, 'claude');
+  assert.equal(providerFor('codex')?.id, 'codex');
+  assert.match(missingProviderMessage('acp'), /not part of this build/);
+  assert.match(missingProviderMessage('codex'), /not found on this machine/);
+  assert.equal(providerName('acp'), 'an ACP agent');
+});
+
 test('the seam declares every provider id, and the registry answers each one', () => {
   const src = read('src/provider/types.ts');
   assert.match(src, /'claude' \| 'codex' \| 'acp'/, 'the ProviderId union changed shape');
@@ -178,4 +188,46 @@ test('the seam declares every provider id, and the registry answers each one', (
   for (const id of ['claude', 'codex', 'acp']) {
     assert.match(registry, new RegExp(`\\b${id}:`), `the registry has no entry for ${id}`);
   }
+});
+
+test('the view and main.ts reach Codex through the registry only, the same rule as for Claude', () => {
+  const offenders = [...tsFilesUnder('src/view'), 'src/main.ts', ...tsFilesUnder('src/state'), ...tsFilesUnder('src/model')]
+    .filter((f) => /from '[^']*provider\/codex[^']*'/.test(read(f)));
+  assert.deepEqual(offenders, [], `a Codex type crossed the seam:\n  ${offenders.join('\n  ')}`);
+});
+
+test('the Codex provider never calls a login method, and sends an honest client name', () => {
+  /* Lex, 2026-09-04: the plugin brokers no sign-in for any runtime. The one
+     account method it calls is account/read, to say "signed in" or not. And
+     the handshake names the plugin, never a first-party client. */
+  const files = tsFilesUnder('src/provider/codex').map((f) => read(f)).join('\n');
+  assert.doesNotMatch(files, /account\/login|account\/logout|CODEX_INTERNAL_ORIGINATOR_OVERRIDE|OPENAI_API_KEY/, 'a login method or a credential variable is named in the Codex provider');
+  assert.match(files, /name: 'icor-for-life-chat'/, 'the handshake does not name the plugin');
+});
+
+test('every bundled runtime dependency carries a permissive licence, and no copyleft one is bundled', () => {
+  /* Lex's notices condition, as a gate: `npm ls` for the runtime tree, then
+     each package's own licence field. A copyleft licence in the bundle would
+     change the plugin's own terms; a package with no licence field is a
+     question, not an answer. Dev dependencies are not bundled and not scanned. */
+  const pkg = JSON.parse(read('package.json'));
+  const deps = Object.keys(pkg.dependencies ?? {});
+  const copyleft = /\b(A?GPL|LGPL|MPL|EUPL|SSPL)\b/i;
+  const seen = new Set();
+  const walk = (name) => {
+    if (seen.has(name)) return;
+    seen.add(name);
+    let manifest;
+    try {
+      manifest = JSON.parse(read(`node_modules/${name}/package.json`));
+    } catch {
+      assert.fail(`${name} is a runtime dependency with no installed package.json`);
+    }
+    const licence = typeof manifest.license === 'string' ? manifest.license : manifest.license?.type ?? '';
+    assert.ok(licence, `${name} declares no licence field`);
+    assert.doesNotMatch(licence, copyleft, `${name} is ${licence}, a copyleft licence, and must not be bundled`);
+    for (const child of Object.keys(manifest.dependencies ?? {})) walk(child);
+  };
+  for (const name of deps) walk(name);
+  assert.ok(seen.size > 0, 'no runtime dependency was scanned');
 });

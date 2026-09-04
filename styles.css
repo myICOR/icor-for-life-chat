@@ -3183,4 +3183,61 @@
 
 /* ==== REGION F2: providers (picker, settings rows) ==== */
 
+/* F2.1 the runtime trigger: the text pill's reset, shape and ground, restated
+   for its own class (see Composer.ts for why it is not `.aic-text-btn`). The
+   host-cascade raise is the same (0,4,0) the other pills carry. */
+.aic-root.aic-root .aic-provider-btn {
+  appearance: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  opacity: 1;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+.aic-root.aic-root .aic-provider-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: var(--aic-r-pill);
+  color: var(--aic-dim);
+}
+.aic-root.aic-root.aic-root .aic-provider-btn {
+  box-shadow: none;
+  background-image: none;
+  font-family: var(--aic-mono);
+  border: none;
+  background-color: var(--aic-wash);
+}
+.aic-root.aic-root .aic-provider-btn:hover { color: var(--aic-paper); }
+/* It goes quiet once the conversation exists, in the faint voice, because the
+   value is a fact then and no longer a choice; the tooltip says so. */
+.aic-root.aic-root .aic-provider-btn.is-locked,
+.aic-root.aic-root .aic-provider-btn:disabled {
+  color: var(--aic-faint);
+  cursor: default;
+}
+/* F2.2 the runtime's own mode name beside ours, in the quiet ink so the
+   plugin's word stays the thing that reads. */
+.aic-root.aic-root .aic-seg-btn .aic-mode-detail {
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  color: var(--aic-dim);
+}
+.aic-root.aic-root .aic-seg-btn .aic-middot { color: var(--aic-faint); }
+
 /* ==== END REGION F2 ==== */

@@ -30,6 +30,7 @@
 
 import { Menu, setIcon, setTooltip } from 'obsidian';
 import type { EffortName, ModelChoice, PermissionModeName } from '../../model/types';
+import type { ProviderId } from '../../provider/types';
 import { applyCommand, filterCommands, normalizeCommands, slashQuery } from './slash';
 import { applyMention, applyWikilink, filterMentions, mentionQuery, wikilinkQuery } from './mention';
 import type { MentionFile } from './mention';
@@ -149,6 +150,14 @@ export interface ComposerCallbacks {
   readPreview?: (path: string) => Promise<string>;
   /** A `+` menu pick. The view resolves it into notes and owns the list. */
   onAddContext?: (pick: ContextPick) => void;
+  /** The runtime for this conversation, chosen before its first message. */
+  onProviderChange?: (provider: ProviderId) => void;
+}
+
+/** One runtime the provider trigger can offer: only ones detection found. */
+export interface ProviderOption {
+  id: ProviderId;
+  displayName: string;
 }
 
 export interface ComposerState {
@@ -156,6 +165,10 @@ export interface ComposerState {
   mode: PermissionModeName;
   model: string;
   effort: EffortName;
+  /** Absent means Claude: every pane before 0.8.0 was one. */
+  provider?: ProviderId;
+  /** True once the conversation exists: a conversation belongs to one runtime. */
+  providerLocked?: boolean;
 }
 
 export class Composer {
@@ -168,6 +181,15 @@ export class Composer {
   private readonly modeBtn: HTMLButtonElement;
   private readonly modelBtn: HTMLButtonElement;
   private readonly effortBtn: HTMLButtonElement;
+  /* THE RUNTIME TRIGGER, before the mode chip because it is the widest
+     decision in the row: the process behind everything to its right. It is
+     enabled only until the conversation has a session, because a session id
+     belongs to the runtime that minted it and a mid-conversation switch would
+     be a resume into a runtime that has never seen the thread. */
+  private readonly providerBtn: HTMLButtonElement;
+  private providerOptions: ProviderOption[] = [];
+  /** The runtime's own name for the mode, shown beside ours. Null when the names match. */
+  private modeDetail: string | null = null;
   private readonly sendBtn: HTMLButtonElement;
   /** Click only. Never bound to Enter; see `fire`. */
   private readonly stopBtn: HTMLButtonElement;
@@ -258,6 +280,13 @@ export class Composer {
       if (this.menuOpen) this.closeMenu(true);
       else this.openMenu();
     });
+    /* Its own class, not `.aic-text-btn`: the three-picker census (mode,
+       model, effort) is a gate, and a fourth pill wearing the same class would
+       pass it by absence. The pill look is restated for this class in the
+       stylesheet's F2 region. */
+    this.providerBtn = action.createEl('button', { cls: 'aic-provider-btn', type: 'button' });
+    this.providerBtn.addEventListener('click', (ev) => this.openProviderMenu(ev));
+    this.providerBtn.setAttr('aria-haspopup', 'menu');
     /* The mode trigger keeps the segmented button's class and its tone pair.
        The wrapper survives because the contrast gate reaches the chip through
        `.aic-seg-btn.is-active[data-tone=...]`, and because a picker that
@@ -530,6 +559,65 @@ export class Composer {
   setMode(mode: PermissionModeName): void {
     this.state.mode = mode;
     this.paint();
+  }
+
+  /** The runtimes detection found. The trigger offers nothing else. */
+  setProviders(options: ProviderOption[]): void {
+    this.providerOptions = options;
+    this.paint();
+  }
+
+  /** The runtime this pane is on, before any message. */
+  setProvider(provider: ProviderId): void {
+    this.state.provider = provider;
+    this.paint();
+  }
+
+  /** The conversation exists now: the runtime is a fact, not a choice. */
+  lockProvider(): void {
+    this.state.providerLocked = true;
+    this.paint();
+  }
+
+  /** The runtime's own words for the current mode, or null. */
+  setModeDetail(detail: string | null): void {
+    this.modeDetail = detail;
+    this.paint();
+  }
+
+  private providerName(): string {
+    const id = this.state.provider ?? 'claude';
+    return this.providerOptions.find((p) => p.id === id)?.displayName ?? (id === 'claude' ? 'Claude Code' : id);
+  }
+
+  private openProviderMenu(evt: MouseEvent): void {
+    const menu = new Menu();
+    if (this.state.providerLocked) {
+      menu.addItem((item) => item.setTitle('A conversation belongs to one runtime').setDisabled(true));
+      this.showMenu(menu, evt);
+      return;
+    }
+    if (this.providerOptions.length === 0) {
+      menu.addItem((item) => item.setTitle('No runtime found on this machine').setDisabled(true));
+      this.showMenu(menu, evt);
+      return;
+    }
+    for (const option of this.providerOptions) {
+      menu.addItem((item) =>
+        item
+          .setTitle(option.displayName)
+          .setChecked((this.state.provider ?? 'claude') === option.id)
+          .onClick(() => {
+            this.state.provider = option.id;
+            this.catalog = null;
+            this.resolvedModel = null;
+            this.state.model = '';
+            this.paint();
+            this.cb.onProviderChange?.(option.id);
+          }),
+      );
+    }
+    this.showMenu(menu, evt);
   }
 
   /** Every image currently attached, in attach order. */
@@ -920,9 +1008,27 @@ export class Composer {
   }
 
   private paint(): void {
+    const providerName = this.providerName();
+    this.providerBtn.empty();
+    this.providerBtn.createSpan({ text: providerName });
+    this.providerBtn.disabled = this.state.providerLocked === true;
+    this.providerBtn.toggleClass('is-locked', this.state.providerLocked === true);
+    setTooltip(
+      this.providerBtn,
+      this.state.providerLocked ? `Runtime: ${providerName}. A conversation belongs to one runtime.` : 'Runtime for this conversation',
+    );
+    this.providerBtn.setAttr('aria-label', `Runtime: ${providerName}`);
+
     const mode = MODES.find((m) => m.id === this.state.mode) ?? MODES[1];
     this.modeBtn.empty();
     this.modeBtn.createSpan({ text: mode?.label ?? 'Ask' });
+    /* The runtime's own name for the mode, beside ours, so the chip never
+       claims a name the process does not carry (Codex: approval policy and
+       sandbox, not one of our four words). */
+    if (this.modeDetail) {
+      this.modeBtn.createSpan({ cls: 'aic-middot', text: '·' });
+      this.modeBtn.createSpan({ cls: 'aic-mode-detail', text: this.modeDetail });
+    }
     this.modeBtn.addClass('is-active');
     this.modeBtn.dataset.mode = this.state.mode;
     this.modeBtn.dataset.tone = this.state.mode;
@@ -931,7 +1037,10 @@ export class Composer {
 
     const label = this.modelLabel();
     this.modelBtn.empty();
-    this.modelBtn.createSpan({ text: label ?? 'Model' });
+    /* With no catalogue and no reported model the trigger says whose default
+       will answer, which is true; "Model" alone was a placeholder wearing a
+       control's clothes. */
+    this.modelBtn.createSpan({ text: label ?? `${providerName} default model` });
     this.modelBtn.toggleClass('is-unset', label === null);
     setTooltip(
       this.modelBtn,
@@ -944,6 +1053,12 @@ export class Composer {
     this.modelBtn.setAttr('aria-label', label ? `Model: ${label}` : 'Model');
 
     const effort = EFFORTS.find((e) => e.id === this.state.effort) ?? EFFORTS[1];
+    /* Effort exists only where the catalogue says the model carries it. A
+       catalogue that has not arrived says nothing, so the control stays; a
+       catalogue row with no levels retires it rather than offering a rung
+       the runtime would silently ignore. */
+    const allowed = this.allowedEfforts();
+    this.effortBtn.hidden = this.catalog !== null && this.catalog.length > 0 && allowed !== null && allowed.length === 0;
     this.effortBtn.empty();
     this.effortBtn.createSpan({ text: effort?.label ?? 'Medium' });
     setTooltip(this.effortBtn, 'Reasoning effort');

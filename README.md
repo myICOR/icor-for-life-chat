@@ -73,6 +73,8 @@ this repo and it gets fixed fast.
   which mobile cannot do.
 - **The Claude Code command line tool**, installed and signed in on the same
   machine. This is the one that trips people up, so it has its own section.
+- **Optional: the Codex CLI**, installed and signed in with `codex login`,
+  if you want Codex as a second runtime. See "Which account does this use?".
 
 ### The Claude Code command line tool
 
@@ -173,12 +175,21 @@ Install commands and account requirements above were verified against
 Anthropic's published setup documentation on 30 August 2026. These change from
 time to time; the linked page is always the authority.
 
-## Which Claude account does this use?
+## Which account does this use?
 
 ICOR for Life - AI Chat has no login of its own. It never sees, stores or
-transmits a credential of any kind. It runs the Claude Code CLI
-already installed on your machine, and that CLI uses whatever
-authentication you set up yourself, directly with Anthropic.
+transmits a credential of any kind. It runs a command line tool that is
+already installed and signed in on your machine, and that tool uses whatever
+authentication you set up yourself, directly with its maker. The plugin
+neither knows nor cares which plan or key you picked.
+
+Today that tool can be one of two. You choose per conversation, and only
+tools the plugin actually found on your machine are offered. A conversation
+belongs to the tool that had it: its session can be resumed by that tool
+alone, and handed to the other one only as a transcript to continue from,
+never as a resume.
+
+### Claude Code
 
 A Claude subscription (Pro, Max) and an Anthropic API key
 both work, because that choice is made inside Claude Code and not
@@ -210,6 +221,35 @@ Two things stay yours:
 
 If you would rather be billed per token than against a plan,
 configure an API key in Claude Code itself. Nothing changes here.
+
+### Codex
+
+The plugin talks to the Codex CLI through the App Server that ships inside
+the `codex` binary, which OpenAI documents as the surface for third-party
+clients. Install the CLI, run `codex login` in a terminal (a ChatGPT plan or
+an API key, your choice, made inside Codex), and the plugin finds it. The
+settings tab says what it found: the path, the version, and whether Codex
+reports itself signed in. When it does not, the plugin says so and names the
+command; it never signs you in and has no field for a key or a token.
+
+What the plugin does with Codex: it spawns your own unmodified install with
+the vault as its working directory, identifies itself to it by its own name,
+streams the replies, shows every command and file change as a row, and puts
+the approvals Codex raises in front of you. What it never does: call a login
+method, read Codex's credential files, set an API key or identity variable
+for the process, pool or rotate accounts, or retry around a usage limit. A
+limit stops the turn and tells you.
+
+Codex reads your vault's `AGENTS.md` natively, so the team's rules carry
+over without a rewrite. The permission modes map onto Codex's own approval
+policy and sandbox, and the mode chip shows both names. Bypass means "never
+ask, full disk access" on Codex exactly as it does on Claude, and it is a
+per-conversation choice, never a saved default.
+
+Your data goes to OpenAI under your own ChatGPT or API terms, not through
+anything of ours. This reflects OpenAI's published Codex documentation and
+terms as of 4 September 2026; they can change without notice, so treat the
+date as the point this was checked.
 
 ## Safety
 

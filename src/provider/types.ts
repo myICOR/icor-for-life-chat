@@ -82,6 +82,8 @@ export interface SessionConfig {
   permissionMode: PermissionModeName;
   structuredReplies: boolean;
   resumeSessionId: string | null;
+  /** The plugin's own version, for a runtime that identifies its client on a handshake. */
+  pluginVersion?: string;
 }
 
 export interface SessionHooks {
@@ -174,4 +176,12 @@ export interface Provider {
   open(config: SessionConfig, hooks: SessionHooks): ProviderSession;
   /** Null for a provider whose protocol has no session list (ACP). */
   readonly store: SessionStore | null;
+  /**
+   * The runtime's own words for one of the plugin's four modes, shown beside
+   * ours so the mode chip never claims a name the process does not carry.
+   * Absent when the runtime uses the same four names (Claude).
+   */
+  modeLabel?(mode: PermissionModeName): string | null;
+  /** Release anything shared across sessions (a service process). Plugin unload. */
+  dispose?(): void;
 }
