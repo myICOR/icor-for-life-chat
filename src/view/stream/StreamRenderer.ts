@@ -1053,9 +1053,12 @@ export class StreamRenderer {
    * exactly the misreading the old Stop-on-Enter behaviour came from. The mark
    * is a kicker in the well's corner and it leaves when the queued turn begins. */
   markLastWellQueued(): void {
-    const wells = this.column.querySelectorAll('.aic-user');
+    // The column's own query answers in the column's own realm, so no
+    // cross-window check is needed here; the cast names what querySelector
+    // already guarantees for this selector.
+    const wells = this.column.querySelectorAll<HTMLElement>('.aic-user');
     const last = wells[wells.length - 1];
-    if (!last || !last.instanceOf(HTMLElement) || last.hasClass('is-queued')) return;
+    if (!last || last.hasClass('is-queued')) return;
     last.addClass('is-queued');
     const mark = last.createSpan({ cls: 'aic-kicker aic-user-queued', text: 'QUEUED' });
     mark.setAttr('aria-label', 'Queued for the next turn');
@@ -1063,8 +1066,8 @@ export class StreamRenderer {
 
   /** The oldest queued well is being answered now: its mark comes off. */
   clearQueued(): void {
-    const first = this.column.querySelector('.aic-user.is-queued');
-    if (!first || !first.instanceOf(HTMLElement)) return;
+    const first = this.column.querySelector<HTMLElement>('.aic-user.is-queued');
+    if (!first) return;
     first.removeClass('is-queued');
     first.querySelector('.aic-user-queued')?.remove();
   }
