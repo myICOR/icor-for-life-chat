@@ -27,6 +27,10 @@ any of them.
   JSON-RPC surface over stdio. No OpenAI package is bundled; the community
   `@agentclientprotocol/codex-acp` adapter is deliberately not used because it
   bundles `@openai/codex`.
+- Gemini CLI (Google, Apache-2.0), Copilot CLI (GitHub, proprietary, install
+  and run only), OpenCode (MIT) and Qwen Code (Apache-2.0), each through its
+  own Agent Client Protocol mode over stdio. The plugin speaks the protocol
+  directly; no `@agentclientprotocol` package is bundled.
 
 Everything else in this plugin is written for it: no other runtime dependency
 is bundled, and the plugin is an independent implementation from a behavioural

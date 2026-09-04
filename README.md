@@ -187,8 +187,13 @@ already installed and signed in on your machine, and that tool uses whatever
 authentication you set up yourself, directly with its maker. The plugin
 neither knows nor cares which plan or key you picked.
 
-Today that tool can be one of two. You choose per conversation, and only
-tools the plugin actually found on your machine are offered. A conversation
+Today that tool can be Claude Code, Codex, or any of four agents that speak
+the Agent Client Protocol. You choose per conversation, and only tools the
+plugin actually found on your machine are offered. A tool that is not found
+gets an `Install` button in settings and in the launcher: it puts the
+vendor's one-line install into a terminal pane (with the ICOR for Life -
+Terminal plugin) or onto the clipboard and opens the vendor's page. The
+plugin installs nothing itself; you press Enter, then `Check again`. A conversation
 belongs to the tool that had it: its session can be resumed by that tool
 alone, and handed to the other one only as a transcript to continue from,
 never as a resume.
@@ -262,6 +267,43 @@ Your data goes to OpenAI under your own ChatGPT or API terms, not through
 anything of ours. This reflects OpenAI's published Codex documentation and
 terms as of 4 September 2026; they can change without notice, so treat the
 date as the point this was checked.
+
+### ACP runtimes
+
+Four more agents reach the panel through the Agent Client Protocol, one
+client written once and a launch recipe each. The plugin spawns your own
+install of the agent with the vault as its working directory, identifies
+itself by its own name on the handshake, advertises no filesystem or
+terminal capability (the agent has the vault through its own tools), never
+calls the protocol's `authenticate` method, and holds no key. The agent's
+own permission prompts appear as rows you answer; its own modes are matched
+to the plugin's four by name, and a mode the agent does not have is refused
+in words rather than approximated. Token counts are not part of the
+protocol, so the statusline shows none for these runtimes rather than a
+guess. A past session is listed from this plugin's own archive in the
+vault, because the protocol has no session list of its own, and it resumes
+only with an agent that advertises `loadSession`.
+
+- **Gemini CLI**: measured on 2026-09-04 (Gemini CLI 0.58.0: the handshake
+  and its refusal of a session without a key). Signs in inside the CLI with
+  a Gemini API key, Vertex AI, or a Workspace Code Assist licence. Google
+  ended the personal-account free tier for the CLI on 2026-06-18, and this
+  plugin makes no promise of one, whatever the CLI still lists. Add
+  `AGENTS.md` to `context.fileName` in `~/.gemini/settings.json` so the
+  vault's own rules are read.
+- **Copilot CLI**: written from the specification, not yet measured against
+  the agent. Any Copilot plan; on Free, Pro and Pro+ GitHub may train on
+  inputs and outputs unless you opt out in your GitHub settings. Reads
+  `AGENTS.md` natively.
+- **OpenCode**: written from the specification, not yet measured. Brings its
+  own provider catalogue, local models included, configured inside OpenCode.
+  Reads `AGENTS.md` natively.
+- **Qwen Code**: written from the specification, not yet measured. A Gemini
+  CLI fork; the same `context.fileName` setting admits `AGENTS.md`.
+
+Your data goes to the agent's maker under your own account terms with them,
+not through anything of ours. The terms were checked on 4 September 2026 and
+can change without notice; the date is the point they were checked.
 
 ## Safety
 

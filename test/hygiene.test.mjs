@@ -172,22 +172,48 @@ test('the view and main.ts reach a provider through the registry only', () => {
 });
 
 test('an absent provider is null, never Claude in disguise', async () => {
-  const { providerFor, missingProviderMessage, providerName } = await import('./build/pure.mjs');
-  assert.equal(providerFor('acp'), null, 'the registry substituted a provider for an id this build lacks');
-  assert.equal(providerFor('claude')?.id, 'claude');
-  assert.equal(providerFor('codex')?.id, 'codex');
+  const { providerFor, missingProviderMessage, providerName, PROVIDER_IDS } = await import('./build/pure.mjs');
+  // Every id this build declares is answered; an id that is not declared
+  // cannot be typed, so the null path is asserted through a stale manifest value.
+  for (const id of PROVIDER_IDS) assert.equal(providerFor(id)?.id, id, `${id} has no provider`);
+  assert.equal(providerFor('acp'), null, 'the retired placeholder id resolved to a provider');
   assert.match(missingProviderMessage('acp'), /not part of this build/);
   assert.match(missingProviderMessage('codex'), /not found on this machine/);
-  assert.equal(providerName('acp'), 'an ACP agent');
+  assert.equal(providerName('gemini'), 'Gemini CLI');
 });
 
 test('the seam declares every provider id, and the registry answers each one', () => {
   const src = read('src/provider/types.ts');
-  assert.match(src, /'claude' \| 'codex' \| 'acp'/, 'the ProviderId union changed shape');
+  assert.match(src, /'claude' \| 'codex' \| 'gemini' \| 'copilot' \| 'opencode' \| 'qwen'/, 'the ProviderId union changed shape');
   const registry = read('src/provider/registry.ts');
-  for (const id of ['claude', 'codex', 'acp']) {
+  for (const id of ['claude', 'codex', 'gemini', 'copilot', 'opencode', 'qwen']) {
     assert.match(registry, new RegExp(`\\b${id}:`), `the registry has no entry for ${id}`);
   }
+});
+
+test('the view and main.ts reach the ACP runtimes through the registry only', () => {
+  const offenders = [...tsFilesUnder('src/view'), 'src/main.ts', ...tsFilesUnder('src/state'), ...tsFilesUnder('src/model')]
+    .filter((f) => /from '[^']*provider\/acp[^']*'/.test(read(f)));
+  assert.deepEqual(offenders, [], `an ACP type crossed the seam:\n  ${offenders.join('\n  ')}`);
+});
+
+test('the ACP client never authenticates, advertises no fs or terminal capability, and names the plugin', () => {
+  /* Lex, 2026-09-04: no sign-in brokered for any runtime; Vex: the agent has
+     the filesystem through its own tools, the client offers none. */
+  const files = tsFilesUnder('src/provider/acp').map((f) => read(f)).join('\n');
+  assert.doesNotMatch(files, /request\('authenticate'|GEMINI_API_KEY\s*[:=]|GOOGLE_API_KEY|GH_TOKEN|GITHUB_TOKEN/, 'a login call or a credential variable is in the ACP client');
+  assert.match(files, /readTextFile: false, writeTextFile: false \}, terminal: false/, 'a client capability is advertised');
+  assert.match(files, /name: 'icor-for-life-chat'/, 'the handshake does not name the plugin');
+});
+
+test('every runtime carries an install line and a vendor page, and the plugin runs none of them', async () => {
+  const { availableProviders } = await import('./build/pure.mjs');
+  for (const p of availableProviders()) {
+    assert.match(p.installation.command, /\S/, `${p.id} has no install command`);
+    assert.match(p.installation.page, /^https:\/\//, `${p.id} has no vendor page`);
+  }
+  const install = read('src/provider/install.ts');
+  assert.doesNotMatch(install, /spawn|exec\(|child_process/, 'the install offer runs a process');
 });
 
 test('the view and main.ts reach Codex through the registry only, the same rule as for Claude', () => {
