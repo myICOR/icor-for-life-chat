@@ -334,9 +334,9 @@ ${HELPERS}
     /* The reply surface: the action bar's buttons under a reply and under
        the user's own well, and the sentence a collapsed group now says. */
     actionBar: '.aic-assistant .aic-actions',
-    actionBtn: '.aic-assistant .aic-action',
+    actionBtn: '.aic-assistant .aic-reply-btn',
     actionMore: '.aic-action-more',
-    userActionBtn: '.aic-user .aic-action',
+    userActionBtn: '.aic-user .aic-reply-btn',
     toolSummaryText: '.aic-tool-summary-text',
     toolSummaryCount: '.aic-tool-summary-count',
     thumb: '.aic-thumb',
