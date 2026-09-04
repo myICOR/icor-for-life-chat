@@ -246,6 +246,14 @@ policy and sandbox, and the mode chip shows both names. Bypass means "never
 ask, full disk access" on Codex exactly as it does on Claude, and it is a
 per-conversation choice, never a saved default.
 
+One honest limit, measured on 2026-09-04: in every mode but Bypass, Codex
+runs commands inside its own macOS sandbox, and that sandbox blocks `open`
+and the `obsidian` command line tool (the tool cannot reach the running
+app's socket). A Codex conversation can read and write your notes, but it
+cannot open one in Obsidian for you the way a Claude Code conversation can.
+The team says so when it happens rather than pretending. Whether a narrower
+sandbox rule can admit the socket is being probed.
+
 Your data goes to OpenAI under your own ChatGPT or API terms, not through
 anything of ours. This reflects OpenAI's published Codex documentation and
 terms as of 4 September 2026; they can change without notice, so treat the

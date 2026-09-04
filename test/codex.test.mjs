@@ -1,14 +1,14 @@
 /* The Codex provider, asserted headless.
  *
- * Two sources of truth. `test/fixtures/codex-recorded-turn.json` is verbatim
- * wire traffic recorded by `tools/codex-probe.mjs` against codex-cli 0.143.0
- * on 2026-09-04: the handshake, a thread start, two turns that FAILED at the
- * provider (the ChatGPT sign-in on the recording machine had been revoked), the
- * store calls and the catalogue. The model-output path (deltas, tool items,
- * usage) could not be recorded that day and is asserted against the server's
- * own schema shapes instead, written into `synthetic()` below. The day a
- * signed-in recording exists, the fixture replaces the synthetic frames and
- * these tests are the first thing that tells us where the schema lied. */
+ * Three sources of truth. `test/fixtures/codex-recorded-turn.json` is verbatim
+ * wire traffic recorded by `tools/codex-probe.mjs` against a SIGNED-IN
+ * codex-cli 0.153.2 on 2026-09-04: the handshake, a thread start, one turn that
+ * ran a shell command behind an approval request and answered "Done.", one long
+ * turn interrupted mid-stream, the store calls and the catalogue.
+ * `test/fixtures/codex-recorded-signed-out.json` is the earlier recording from
+ * the same day with a revoked sign-in, kept for the failure path. `synthetic()`
+ * below holds the schema shapes for item kinds the live turn did not exercise
+ * (file changes, a failing command). */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -25,6 +25,7 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 const RECORDED = JSON.parse(readFileSync(resolve(here, 'fixtures/codex-recorded-turn.json'), 'utf8'));
+const SIGNED_OUT = JSON.parse(readFileSync(resolve(here, 'fixtures/codex-recorded-signed-out.json'), 'utf8'));
 const CWD = RECORDED.cwd;
 
 /** The server's answer to the FIRST client request with this method. */
@@ -36,22 +37,29 @@ function responseTo(method) {
   return res.frame;
 }
 
-function notifications() {
-  return RECORDED.frames
+function notifications(recording = RECORDED) {
+  return recording.frames
     .filter((f) => f.dir === 'server' && f.frame.method !== undefined && f.frame.id === undefined)
     .map((f) => f.frame);
 }
 
+function responseIn(recording, method) {
+  const req = recording.frames.find((f) => f.dir === 'client' && f.frame.method === method && f.frame.id !== undefined);
+  const res = recording.frames.find((f) => f.dir === 'server' && f.frame.id === req.frame.id && f.frame.method === undefined);
+  return res.frame;
+}
+
 /* ------------------------------------------------------------ the recording */
 
-test('the recording is what the header says: a handshake, a thread, two failed turns, the store calls', () => {
+test('the recording is what the header says: a handshake, a thread, one completed turn, one interrupted, the store calls', () => {
   const methods = RECORDED.frames.filter((f) => f.dir === 'client' && f.frame.method).map((f) => f.frame.method);
-  for (const m of ['initialize', 'initialized', 'thread/start', 'turn/start', 'thread/list', 'thread/read', 'model/list', 'account/read', 'thread/fork']) {
+  for (const m of ['initialize', 'initialized', 'thread/start', 'turn/start', 'turn/interrupt', 'thread/list', 'thread/read', 'model/list', 'account/read', 'thread/fork']) {
     assert.ok(methods.includes(m), `${m} was never sent`);
   }
   const completed = notifications().filter((n) => n.method === 'turn/completed');
-  assert.equal(completed.length, 2, 'two turns completed');
-  assert.deepEqual(completed.map((n) => n.params.turn.status), ['failed', 'failed'], 'both failed at the provider (signed out)');
+  assert.deepEqual(completed.map((n) => n.params.turn.status), ['completed', 'interrupted']);
+  const approvals = RECORDED.frames.filter((f) => f.dir === 'server' && f.frame.method === 'item/commandExecution/requestApproval');
+  assert.equal(approvals.length, 1, 'the shell command asked for approval once');
 });
 
 test('thread/start becomes one session event carrying the thread id, the model and the provider', () => {
@@ -66,10 +74,34 @@ test('thread/start becomes one session event carrying the thread id, the model a
   assert.equal(s.contextWindow, null, 'no context window was measured, so none is claimed');
 });
 
-test('a failed turn replays as an error event and a turn-end that says isError, and nothing throws', () => {
+test('the live turn replays as reasoning, one Bash row with its result, the streamed answer, and a measured turn end', () => {
   const n = new CodexNormalizer(CWD);
+  const events = [];
+  for (const frame of notifications()) events.push(...n.notification(frame.method, frame.params));
+  const kinds = events.map((e) => e.kind);
+  assert.equal(kinds.filter((k) => k === 'turn-end').length, 1, 'the completed turn ends once');
+  assert.equal(kinds.filter((k) => k === 'aborted').length, 1, 'the interrupted turn aborts, never ends');
+  const calls = events.filter((e) => e.kind === 'tool-call');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].name, 'Bash');
+  assert.match(calls[0].target, /probe\.txt/, 'the row opens onto the raw command');
+  const results = events.filter((e) => e.kind === 'tool-result');
+  assert.equal(results.length, 1);
+  assert.equal(results[0].ok, true);
+  const finals = events.filter((e) => e.kind === 'text-final');
+  assert.equal(finals[0].text, 'Done.');
+  assert.ok(events.filter((e) => e.kind === 'text-delta').length > 10, 'the answer streamed as deltas');
+  const end = events.find((e) => e.kind === 'turn-end');
+  assert.equal(end.isError, false);
+  assert.ok(end.usage.totalTokens > 0 && end.usage.inputTokens > 0 && end.usage.outputTokens > 0, 'usage is measured from the wire');
+  assert.ok(end.durationMs > 0);
+  assert.ok(kinds.indexOf('tool-call') < kinds.indexOf('text-final'), 'the command ran before the answer');
+});
+
+test('a failed turn (signed-out recording) replays as an error event and a turn-end that says isError, and nothing throws', () => {
+  const n = new CodexNormalizer(SIGNED_OUT.cwd);
   const kinds = [];
-  for (const frame of notifications()) {
+  for (const frame of notifications(SIGNED_OUT)) {
     for (const e of n.notification(frame.method, frame.params)) kinds.push(e.kind);
   }
   assert.deepEqual(kinds, ['error', 'turn-end', 'error', 'turn-end']);
@@ -97,8 +129,9 @@ test('the catalogue comes from model/list, hidden rows stay hidden, and efforts 
   assert.ok(choices.every((c) => c.value && c.displayName), 'no row without a name');
 });
 
-test('account/read while signed out reads as signedIn false, never null', () => {
-  assert.equal(signedInFrom(responseTo('account/read').result), false);
+test('account/read reads signedIn from the wire: true in the live recording, false when signed out, never null for a real answer', () => {
+  assert.equal(signedInFrom(responseTo('account/read').result), true);
+  assert.equal(signedInFrom(responseIn(SIGNED_OUT, 'account/read').result), false);
   assert.equal(signedInFrom({ account: { type: 'chatgpt', planType: 'plus' } }), true);
   assert.equal(signedInFrom(undefined), null);
   assert.equal(signedInFrom('garbage'), null);
