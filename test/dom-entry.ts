@@ -369,8 +369,25 @@ async function mount(): Promise<void> {
     folders: () => [{ path: '04 Inner World', count: 3 }],
     tags: () => [{ tag: '#gamedev', count: 14 }],
     properties: () => [{ key: 'age', values: [{ value: '4', count: 2 }] }],
+    /* THE VAULT'S OTHER ROOMS (G1): a WiP folder, an open task, and the open
+       note's links with one measured zero, so the root carries its three new
+       rows and the sweep meets a disabled row. */
+    wip: () => [{ path: '03 WiP/2026-09-04-a-brief', name: '2026-09-04-a-brief', notes: 2 }],
+    tasks: () => [{ path: '06 AI Team/AI Team Knowledge/Tasks/open/tsk-2026-09-04-001-x.md', title: 'A task', owner: 'larry', status: 'open' }],
+    linked: () => ({ path: '04 Inner World/a.md', basename: 'a', from: 3, to: 0 }),
   });
   (composer.el.querySelector('.aic-add') as HTMLButtonElement).click();
+  const rootLabels = Array.from(composer.el.querySelectorAll('.aic-ctx-row')).map((r) => r.textContent ?? '');
+  for (const want of ['WiP folder', 'Open tasks', 'Linked notes']) {
+    if (!rootLabels.some((l) => l.includes(want))) throw new Error(`the + menu root lost its ${want} row`);
+  }
+  /* Into the linked view and back, so a disabled row (Links to a, 0) is
+     painted under the sweep, then the Tags view the sweep already covers. */
+  const linkedRow = Array.from(composer.el.querySelectorAll('.aic-ctx-row'))
+    .find((r) => r.textContent?.includes('Linked notes')) as HTMLElement;
+  linkedRow.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  if (!composer.el.querySelector('.aic-ctx-row.is-disabled')) throw new Error('a zero-count linked row is not disabled');
+  (composer.el.querySelector('.aic-ctx-back') as HTMLButtonElement).click();
   const tagsRow = Array.from(composer.el.querySelectorAll('.aic-ctx-row'))
     .find((r) => r.textContent?.includes('Tags')) as HTMLElement;
   tagsRow.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));

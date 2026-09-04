@@ -92,9 +92,22 @@ export interface ContextSources {
   folders: () => ReadonlyArray<{ path: string; count: number }>;
   tags: () => ReadonlyArray<{ tag: string; count: number }>;
   properties: () => ReadonlyArray<{ key: string; values: ReadonlyArray<{ value: string; count: number }> }>;
+  /* THE VAULT'S OTHER ROOMS (R1, R5, R9). Each is optional because a bare
+     vault has none of them, and a row that opens onto "Nothing here yet" is a
+     promise the menu should not make: the root shows a room only when its
+     source is present and answers. */
+  wip?: () => ReadonlyArray<{ path: string; name: string; notes: number }>;
+  tasks?: () => ReadonlyArray<{ path: string; title: string; owner: string; status: string }>;
+  /** The open note and its link counts, or null when no note is open. */
+  linked?: () => { path: string; basename: string; from: number; to: number } | null;
 }
 
-type MenuView = 'root' | 'notes' | 'folders' | 'tags' | 'properties' | 'values';
+type MenuView = 'root' | 'notes' | 'folders' | 'tags' | 'properties' | 'values' | 'wip' | 'tasks' | 'linked';
+
+/** A source's function type with the optional-ness removed, so its return type can be named. */
+type SourceFn<K extends keyof ContextSources> = NonNullable<ContextSources[K]>;
+/** The sources that answer with a LIST; `linked` answers with one note and has its own reader. */
+type ListSourceKey = Exclude<keyof ContextSources, 'linked'>;
 
 /** One row of the `+` menu. A row either opens a view or makes a pick. */
 interface MenuRow {
@@ -106,6 +119,8 @@ interface MenuRow {
   pick: ContextPick | null;
   /** For the properties view: the key whose values the row opens. */
   key: string | null;
+  /** A row that names a measured zero: shown, never activated. */
+  disabled?: boolean;
 }
 
 /** The debounce on a preview read: long enough to skip rows arrowed past. */
@@ -177,7 +192,7 @@ export class Composer {
   private menuFilterText = '';
   private sources: ContextSources | null = null;
   /** Lists fetched while the menu is open; dropped when it closes. */
-  private menuCache: { [K in keyof ContextSources]?: ReturnType<ContextSources[K]> } = {};
+  private menuCache: { [K in keyof ContextSources]?: ReturnType<SourceFn<K>> } = {};
   /* THE OUTSIDE-CLICK GUARD RUNS IN THE CAPTURE PHASE, and that is the whole
      fix for "clicking Tags does nothing" (Tom, 2026-09-04). A row answers on
      mousedown by entering the next view, which EMPTIES the menu and rebuilds
@@ -1041,18 +1056,19 @@ export class Composer {
     this.enterView(this.menuView === 'values' ? 'properties' : 'root');
   }
 
-  private source<K extends keyof ContextSources>(key: K): ReturnType<ContextSources[K]> {
+  private source<K extends ListSourceKey>(key: K): ReturnType<SourceFn<K>> {
     const cache = this.menuCache as Record<string, unknown>;
     const cached = cache[key];
-    if (cached !== undefined) return cached as ReturnType<ContextSources[K]>;
-    let fetched: ReturnType<ContextSources[K]>;
+    if (cached !== undefined) return cached as ReturnType<SourceFn<K>>;
+    let fetched: ReturnType<SourceFn<K>>;
     try {
-      fetched = (this.sources ? this.sources[key]() : []) as ReturnType<ContextSources[K]>;
+      const fn = this.sources?.[key] as (() => ReturnType<SourceFn<K>>) | undefined;
+      fetched = (fn ? fn() : []) as ReturnType<SourceFn<K>>;
     } catch (error) {
       // A vault-side scan that throws must say so; an empty list would read
       // as "this vault has no tags", which is a lie about the vault.
       this.notice(`Could not list ${key}: ${error instanceof Error ? error.message : String(error)}`);
-      fetched = [] as unknown as ReturnType<ContextSources[K]>;
+      fetched = [] as unknown as ReturnType<SourceFn<K>>;
     }
     cache[key] = fetched;
     return fetched;
@@ -1077,13 +1093,69 @@ export class Composer {
     switch (this.menuView) {
       case 'root': {
         if (q) return this.noteRows(q);
-        return [
+        const rows: MenuRow[] = [];
+        /* The WiP room first, when the vault has one: the deliverable being
+           worked on is the context a message most often wants, and the newest
+           folder is almost always the one. */
+        if (this.sources?.wip && this.source('wip').length > 0) {
+          rows.push({ icon: 'briefcase', label: 'WiP folder', detail: '', count: null, opens: 'wip', pick: null, key: null });
+        }
+        rows.push(
           { icon: 'eye', label: 'Active note', detail: '', count: null, opens: null, pick: { kind: 'active' }, key: null },
           { icon: 'file-text', label: 'Notes', detail: '', count: null, opens: 'notes', pick: null, key: null },
           { icon: 'folder', label: 'Folders', detail: '', count: null, opens: 'folders', pick: null, key: null },
           { icon: 'tag', label: 'Tags', detail: '', count: null, opens: 'tags', pick: null, key: null },
           { icon: 'sliders-horizontal', label: 'Properties', detail: '', count: null, opens: 'properties', pick: null, key: null },
+        );
+        if (this.sources?.tasks) {
+          rows.push({ icon: 'list-checks', label: 'Open tasks', detail: '', count: null, opens: 'tasks', pick: null, key: null });
+        }
+        if (this.sources?.linked && this.linkedNote() !== null) {
+          rows.push({ icon: 'link', label: 'Linked notes', detail: '', count: null, opens: 'linked', pick: null, key: null });
+        }
+        return rows;
+      }
+      case 'wip':
+        return this.source('wip')
+          .filter((f) => has(f.name))
+          .slice(0, MENU_LIMIT)
+          .map((f) => ({
+            icon: 'briefcase', label: f.name, detail: '', count: f.notes,
+            opens: null, pick: { kind: 'wip', path: f.path }, key: null,
+          }));
+      case 'tasks': {
+        const tasks = this.source('tasks');
+        const rows: MenuRow[] = [];
+        if (!q) {
+          rows.push({
+            icon: 'list-checks', label: `All open tasks`, detail: '', count: tasks.length,
+            opens: null, pick: { kind: 'tasks' }, key: null, disabled: tasks.length === 0,
+          });
+        }
+        for (const t of tasks) {
+          if (!has(t.title) && !has(t.owner)) continue;
+          if (rows.length >= MENU_LIMIT) break;
+          rows.push({
+            icon: t.status === 'in-progress' ? 'loader' : 'circle', label: t.title, detail: t.owner,
+            count: null, opens: null, pick: { kind: 'note', path: t.path }, key: null,
+          });
+        }
+        return rows;
+      }
+      case 'linked': {
+        const note = this.linkedNote();
+        if (!note) return [];
+        const rows: MenuRow[] = [
+          {
+            icon: 'link', label: `Linked from ${note.basename}`, detail: 'the notes this note links to', count: note.from,
+            opens: null, pick: { kind: 'linked', direction: 'from', path: note.path }, key: null, disabled: note.from === 0,
+          },
+          {
+            icon: 'link', label: `Links to ${note.basename}`, detail: 'the notes that link here', count: note.to,
+            opens: null, pick: { kind: 'linked', direction: 'to', path: note.path }, key: null, disabled: note.to === 0,
+          },
         ];
+        return rows.filter((r) => has(r.label));
       }
       case 'notes':
         return this.noteRows(q);
@@ -1134,7 +1206,24 @@ export class Composer {
       case 'tags': return 'Tags';
       case 'properties': return 'Properties';
       case 'values': return this.menuKey ?? 'Values';
+      case 'wip': return 'WiP folder';
+      case 'tasks': return 'Open tasks';
+      case 'linked': return 'Linked notes';
     }
+  }
+
+  /** The open note's link counts, read once per menu open. */
+  private linkedNote(): { path: string; basename: string; from: number; to: number } | null {
+    const cache = this.menuCache as Record<string, unknown>;
+    if ('linked' in cache) return cache.linked as ReturnType<NonNullable<ContextSources['linked']>>;
+    let value: ReturnType<NonNullable<ContextSources['linked']>> = null;
+    try {
+      value = this.sources?.linked ? this.sources.linked() : null;
+    } catch (error) {
+      this.notice(`Could not read the open note's links: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    cache.linked = value;
+    return value;
   }
 
   /** Rebuild the popover for the current view. Cheap: forty rows at most. */
@@ -1221,6 +1310,8 @@ export class Composer {
       el.setAttr('role', 'option');
       el.setAttr('aria-selected', i === this.menuActive ? 'true' : 'false');
       el.toggleClass('is-active', i === this.menuActive);
+      el.toggleClass('is-disabled', row.disabled === true);
+      if (row.disabled) el.setAttr('aria-disabled', 'true');
       const glyph = el.createSpan({ cls: 'aic-ctx-row-icon' });
       setIcon(glyph, row.icon);
       const text = el.createSpan({ cls: 'aic-ctx-row-text' });
@@ -1247,7 +1338,7 @@ export class Composer {
   }
 
   private activateMenuRow(row: MenuRow | undefined): void {
-    if (!row) return;
+    if (!row || row.disabled) return;
     if (row.opens) {
       this.enterView(row.opens, row.key);
       return;

@@ -27,6 +27,8 @@ export interface InsightsHost {
   /** The roster's portrait for a participant key, or null. */
   avatarFor: (key: string) => string | null;
   openSession: (folder: string) => void;
+  /** Open a WiP folder's brief or README (R1). */
+  openWip: (folder: string) => void;
   onRange: (range: RangeKey) => void;
   onAgent: (key: string | null) => void;
   onModel: (model: string | null) => void;
@@ -294,5 +296,23 @@ export function renderInsights(root: HTMLElement, page: InsightsPage, state: Ins
       setTooltip(face, a.agentType);
     }
     if (s.tokens !== null) row.createSpan({ cls: 'aic-ins-session-tokens', text: `${compactNumber(s.tokens)} TOK` });
+    /* THE DELIVERABLES A SESSION TOUCHED (R1): one glyph per WiP folder, each
+       its own button so a click opens the folder and not the conversation.
+       Only sessions whose manifest carries the fact show it; an older folder
+       shows nothing rather than an empty glyph. */
+    const wip = s.wip ?? [];
+    if (wip.length > 0) {
+      const strip = list.createDiv({ cls: 'aic-ins-session-wip' });
+      for (const folder of wip) {
+        const name = folder.split('/').pop() ?? folder;
+        const btn = strip.createEl('button', { cls: 'aic-ins-wip', type: 'button' });
+        const glyph = btn.createSpan({ cls: 'aic-ins-wip-icon' });
+        setIcon(glyph, 'briefcase');
+        btn.createSpan({ cls: 'aic-ins-wip-name', text: name });
+        btn.setAttr('aria-label', `Open the deliverable ${name}`);
+        setTooltip(btn, folder);
+        btn.addEventListener('click', () => host.openWip(folder));
+      }
+    }
   }
 }

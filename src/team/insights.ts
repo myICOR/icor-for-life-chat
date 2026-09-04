@@ -97,6 +97,8 @@ export interface SessionRecord {
   tools: Record<string, number>;
   mainToolCalls: number;
   mainTextBlocks: number;
+  /** WiP folders the session touched, from the manifest; empty for older folders. */
+  wip: string[];
 }
 
 export type RangeKey = '7d' | '30d' | '90d' | 'all';

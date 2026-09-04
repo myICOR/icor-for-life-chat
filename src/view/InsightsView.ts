@@ -7,7 +7,7 @@
  * under the archive root reloads, debounced, so a conversation finishing in
  * another tab shows up without reopening. */
 
-import { ItemView, TFile } from 'obsidian';
+import { ItemView, Notice, TFile } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 import { INK_PLUGIN_ATTR, INK_PLUGIN_NAME, VIEW_TYPE_INSIGHTS } from '../constants';
 import { archiveRoot } from '../model/settings';
@@ -19,6 +19,7 @@ import { avatarUrl, detectTeam } from '../team/detect';
 import type { TeamRoster } from '../team/detect';
 import { renderInsights } from './InsightsRender';
 import type IcorChatPlugin from '../main';
+import { deliverableEntry } from '../wip/deliverable';
 
 export class InsightsView extends ItemView {
   private body: HTMLElement | null = null;
@@ -93,11 +94,18 @@ export class InsightsView extends ItemView {
         resolveAvatar: (path) => avatarUrl(this.app, path),
         avatarFor: (key) => this.roster?.agents.find((a) => a.slug === key)?.avatarPath ?? null,
         openSession: (folder) => void this.openConversation(folder),
+        openWip: (folder) => void this.openWip(folder),
         onRange: (range) => { this.range = range; this.paint(); },
         onAgent: (key) => { this.filters = { ...this.filters, agent: key }; this.paint(); },
         onModel: (model) => { this.filters = { ...this.filters, model }; this.paint(); },
       },
     );
+  }
+
+  private async openWip(folder: string): Promise<void> {
+    const file = deliverableEntry(this.app, folder);
+    if (file) await this.app.workspace.getLeaf('tab').openFile(file);
+    else new Notice(`${folder} holds no note to open.`);
   }
 
   private async openConversation(folder: string): Promise<void> {
