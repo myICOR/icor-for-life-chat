@@ -451,6 +451,17 @@ export class Composer {
     this.textarea.focus();
   }
 
+  /** Replace the whole field. "Edit and resend" puts the old words back to be changed. */
+  setText(text: string): void {
+    this.textarea.value = text;
+    this.textarea.setSelectionRange(text.length, text.length);
+    this.textarea.focus();
+    this.autoGrow();
+    this.refreshSlash();
+    this.syncSend();
+    this.paint();
+  }
+
   /** Insert text at the caret and focus. The decision chip's whole job. */
   insert(text: string): void {
     const start = this.textarea.selectionStart ?? this.textarea.value.length;

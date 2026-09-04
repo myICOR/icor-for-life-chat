@@ -2,7 +2,7 @@
  * else; it never imports a provider SDK, only the Provider seam that wraps
  * whichever runtime answers. */
 
-import { ItemView, MarkdownView, Notice, Platform, TFile } from 'obsidian';
+import { ItemView, MarkdownView, Notice, Platform, TFile, normalizePath } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 import { VIEW_TYPE_CHAT } from '../constants';
 import { ChatStore } from '../state/store';
@@ -47,7 +47,9 @@ import { agentShares } from '../team/usage';
 import type { AgentShare } from '../team/usage';
 import { renderTeamStrip } from './TeamStrip';
 import { setupSummary, setupTeam } from '../team/setup';
-import type { EmptyTeamBlock } from './stream/StreamRenderer';
+import type { ActionTarget, EmptyTeamBlock } from './stream/StreamRenderer';
+import { bindActions } from './actions';
+import type { ReplyAction, ReplyActionContext } from './actions';
 
 /** The newest slice of a stored conversation painted on resume. */
 const REPLAY_CAP = 400;
@@ -129,6 +131,10 @@ export class ChatView extends ItemView {
   private mainTextBlocks = 0;
   /** True once a turn has ended: the strip has nothing honest to say before. */
   private turnEnded = false;
+  /* THE FINISH BADGE on this leaf's tab header, set when a turn ends out of
+   * sight and cleared when the leaf is looked at again. Held as the element
+   * the class went on, so the clear never has to find it. */
+  private badgedTab: HTMLElement | null = null;
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: IcorChatPlugin) {
     super(leaf);
@@ -207,6 +213,7 @@ export class ChatView extends ItemView {
         if (ref) new ContextModal(this.app, ref).open();
       },
       onTogglePin: (key, text) => this.togglePinFor(key, text),
+      actionsFor: (target) => this.actionsFor(target),
       renderHost: {
         home: this.plugin.homeDir,
         insertCode: (code) => this.composer?.insert(`${code} `),
@@ -218,6 +225,7 @@ export class ChatView extends ItemView {
       },
       onDecisions: (decisions, blockId) => this.recordDecisions(decisions, blockId),
     });
+    this.registerBuiltInActions();
     this.roster = detectTeam(this.app);
     this.stream.renderEmptyState(this.emptyTeamBlock());
     this.renderPins();
@@ -238,9 +246,13 @@ export class ChatView extends ItemView {
       this.app.workspace.on('active-leaf-change', (leaf) => {
         const view = leaf?.view;
         if (view instanceof MarkdownView) this.lastMarkdownView = view;
+        if (leaf === this.leaf) this.clearFinishBadge();
         this.refreshContext();
       }),
     );
+    this.registerDomEvent(window, 'focus', () => {
+      if (this.isBeingLookedAt()) this.clearFinishBadge();
+    });
     this.registerEvent(this.app.workspace.on('file-open', () => this.refreshContext()));
     this.registerDomEvent(document, 'selectionchange', () => this.refreshContext());
     const current = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -265,6 +277,244 @@ export class ChatView extends ItemView {
     this.registerEvent(this.app.vault.on('delete', (f) => this.onTeamChange(f.path)));
     this.registerEvent(this.app.vault.on('rename', (f, old) => { this.onTeamChange(f.path); this.onTeamChange(old); }));
     this.focusComposer();
+  }
+
+  /* -------------------------------------------------------------- actions */
+
+  /* THE BUILT-IN ACTIONS, registered through the same registry any other
+     part of the plugin uses, so the bar has one code path. Registering
+     replaces by id, so a second view opening does not double them. */
+  private registerBuiltInActions(): void {
+    const reg = this.plugin.replyActions;
+    const builtins: ReplyAction[] = [
+      {
+        id: 'copy', icon: 'copy', label: 'Copy',
+        run: async (ctx) => {
+          await navigator.clipboard.writeText(ctx.text);
+          new Notice('Copied.');
+        },
+      },
+      {
+        id: 'insert-at-cursor', icon: 'text-cursor-input', label: 'Insert at cursor',
+        when: (ctx) => ctx.role === 'assistant',
+        run: (ctx) => ctx.view.insertAtCursor(ctx.text),
+      },
+      {
+        id: 'save-as-note', icon: 'file-plus', label: 'Save as note',
+        when: (ctx) => ctx.role === 'assistant',
+        run: (ctx) => ctx.view.saveAsNote(ctx.text),
+      },
+      {
+        id: 'edit-resend', icon: 'pencil-line', label: 'Edit and resend',
+        when: (ctx) => ctx.role === 'user' && ctx.key !== null,
+        run: (ctx) => ctx.view.editAndResend(ctx.key ?? '', ctx.text),
+      },
+      {
+        id: 'regenerate', icon: 'refresh-cw', label: 'Regenerate', section: 'more',
+        when: (ctx) => ctx.role === 'assistant',
+        run: (ctx) => ctx.view.regenerate(),
+      },
+    ];
+    for (const action of builtins) reg.register(action);
+  }
+
+  /** The registry's applicable actions, bound to one block of this view. */
+  private actionsFor(target: ActionTarget) {
+    const ctx: ReplyActionContext = {
+      app: this.app,
+      plugin: this.plugin,
+      view: this,
+      blockId: target.blockId,
+      text: target.text,
+      el: target.el,
+      role: target.role,
+      key: target.key,
+    };
+    return bindActions(this.plugin.replyActions, ctx);
+  }
+
+  /**
+   * The reply's words at the caret of the note the user was last in. That
+   * view is remembered, not looked up: while the user is clicking in this
+   * pane the active view IS this pane, which is the same trap the context
+   * tray fell into on day one.
+   */
+  insertAtCursor(text: string): void {
+    const view = this.lastMarkdownView;
+    if (!view || !view.file || !this.app.workspace.getLeavesOfType('markdown').some((l) => l.view === view)) {
+      new Notice('Open a note first: there is no editor to insert into.');
+      return;
+    }
+    view.editor.replaceSelection(text);
+    new Notice(`Inserted into ${view.file.basename}.`);
+  }
+
+  /**
+   * The reply as its own note. Into the Daily Scratchpad room when the vault
+   * has one, else the vault root; named by the date and the reply's first
+   * words; stamped with the session so the note can find its conversation.
+   */
+  async saveAsNote(text: string): Promise<void> {
+    const stamp = new Date().toISOString().slice(0, 10);
+    const slug = slugOf(text) || 'reply';
+    const roomPath = '00 Daily Scratchpad';
+    const room = this.app.vault.getAbstractFileByPath(roomPath);
+    const folder = room && !(room instanceof TFile) ? roomPath : '';
+    const base = folder ? `${folder}/${stamp}-${slug}` : slug;
+    let path = normalizePath(`${base}.md`);
+    for (let n = 2; this.app.vault.getAbstractFileByPath(path) !== null; n += 1) {
+      path = normalizePath(`${base}-${n}.md`);
+    }
+    const sessionId = this.store.state.sessionId ?? this.resumeSessionId ?? '';
+    const frontmatter = [
+      '---',
+      `date: ${stamp}`,
+      'source: icor-chat',
+      `session_ids: [${sessionId ? `"${sessionId}"` : ''}]`,
+      '---',
+      '',
+    ].join('\n');
+    const file = await this.app.vault.create(path, `${frontmatter}${text.trim()}\n`);
+    await this.app.workspace.getLeaf(true).openFile(file);
+    new Notice(`Saved as ${file.basename}.`);
+  }
+
+  /* EDIT AND RESEND, which is a REWIND when the runtime can do one.
+   *
+   * The conversation is forked up to the message before the one being
+   * edited, this tab moves onto the fork, the history above is repainted from
+   * the fork's own record, and the old words land in the composer to be
+   * changed. The original thread stays on disk untouched. A runtime whose
+   * store cannot fork gets the honest fallback: the words come back to the
+   * composer and go out as the next turn, and a notice says the thread was
+   * not rewound. */
+  async editAndResend(key: string, text: string): Promise<void> {
+    if (this.store.state.status === 'streaming') {
+      new Notice('Wait for the running turn to finish, or stop it, before editing.');
+      return;
+    }
+    const rewound = await this.rewindBefore(key);
+    if (rewound === 'unsupported') new Notice('This runtime cannot fork a conversation. The edit goes out as a new turn.');
+    this.composer?.setText(text);
+    this.focusComposer();
+  }
+
+  /** The last reply again: rewind to before the last prompt and send it once more. */
+  async regenerate(): Promise<void> {
+    if (this.store.state.status === 'streaming') {
+      new Notice('Wait for the running turn to finish, or stop it, before regenerating.');
+      return;
+    }
+    const last = [...this.transcript].reverse().find((t) => t.role === 'user');
+    if (!last) return;
+    const rewound = await this.rewindBefore(String(last.index));
+    if (rewound === 'unsupported') new Notice('This runtime cannot fork a conversation. The prompt goes out as a new turn.');
+    await this.submit(last.text);
+  }
+
+  /**
+   * Move this tab onto a fork that ends just before the user turn `key`.
+   * Returns what happened, because the caller's notice depends on it:
+   * `rewound` (the tab is on a fork, history repainted), `fresh` (the edited
+   * turn was the first one, so the tab is simply a new conversation), or
+   * `unsupported` (no fork on this runtime; nothing changed).
+   */
+  private async rewindBefore(key: string): Promise<'rewound' | 'fresh' | 'unsupported'> {
+    const store = this.sessionStore;
+    const sessionId = this.store.state.sessionId ?? this.resumeSessionId;
+    if (!store?.fork || !sessionId) return 'unsupported';
+    const ordinal = this.transcript.filter((t) => t.role === 'user' && t.index < Number(key)).length;
+    let forkId: string | null = null;
+    if (ordinal > 0) {
+      /* The provider's own message ids, read back from its record: the k-th
+         spoken entry is the turn being edited, and the entry before it is
+         where the fork stops (inclusive on the runtime's side). */
+      const { entries } = await store.read(sessionId, this.plugin.vaultPath, ARCHIVE_READ_CAP);
+      let seen = 0;
+      let cutAt = -1;
+      for (let i = 0; i < entries.length; i += 1) {
+        if (entries[i]?.spoken === null) continue;
+        if (seen === ordinal) { cutAt = i - 1; break; }
+        seen += 1;
+      }
+      const before = cutAt >= 0 ? entries[cutAt]?.messageId ?? null : null;
+      if (cutAt >= 0 && !before) return 'unsupported';
+      forkId = await store.fork(sessionId, this.plugin.vaultPath, before ?? undefined);
+      if (!forkId) return 'unsupported';
+    }
+    this.session?.dispose();
+    this.session = null;
+    this.resetConversation();
+    if (forkId) {
+      await this.resume(forkId);
+      this.stream?.note('Rewound: the turns above are the fork, the original thread is unchanged.');
+      return 'rewound';
+    }
+    this.resumeSessionId = null;
+    this.stream?.renderEmptyState(this.emptyTeamBlock());
+    return 'fresh';
+  }
+
+  /** Everything this tab remembers about one conversation, cleared for the next. */
+  private resetConversation(): void {
+    this.stopTicking();
+    this.transcript.length = 0;
+    this.surfaced.length = 0;
+    this.blockIndex.clear();
+    this.turnCounter = 0;
+    this.events.length = 0;
+    this.sessionIds.length = 0;
+    this.sentGroups.clear();
+    this.taskPrompts.clear();
+    this.refs = [];
+    this.pins = [];
+    this.openPins.clear();
+    this.followUps = NO_FOLLOW_UPS;
+    this.mainToolCalls = 0;
+    this.mainTextBlocks = 0;
+    this.turnEnded = false;
+    this.startedAt = Date.now();
+    this.resumeSessionId = null;
+    this.store.state = { ...this.store.state, sessionId: null, status: 'idle', usage: null, contextTokens: null, subagents: {}, turnStartedAt: null, resumed: false, sessionStartedAt: null };
+    this.plugin.subagents.retireFinished();
+    this.stream?.reset();
+    this.renderPins();
+    this.refreshDecisions();
+    this.renderChips();
+    this.paintTeamStrip();
+    this.composer?.setStreaming(false);
+  }
+
+  /* ------------------------------------------------------- finish signals */
+
+  /** True when the user can see this pane and the window has their attention. */
+  private isBeingLookedAt(): boolean {
+    if (!document.hasFocus()) return false;
+    if (!this.containerEl.isShown()) return false;
+    return this.app.workspace.getActiveViewOfType(ChatView) === this;
+  }
+
+  /**
+   * A turn ended while the user was elsewhere. The tab gets a dot; the chime
+   * plays only when the user switched it on. Nothing happens while the pane
+   * is being looked at: a signal for something already in view is noise.
+   */
+  private signalFinish(): void {
+    if (this.isBeingLookedAt()) return;
+    if (this.plugin.settings.finishBadge) this.setFinishBadge();
+    if (this.plugin.settings.finishChime) playChime();
+  }
+
+  private setFinishBadge(): void {
+    const header = (this.leaf as unknown as { tabHeaderEl?: HTMLElement }).tabHeaderEl;
+    if (!header) return;
+    header.addClass('aic-tab-done');
+    this.badgedTab = header;
+  }
+
+  private clearFinishBadge(): void {
+    this.badgedTab?.removeClass('aic-tab-done');
+    this.badgedTab = null;
   }
 
   /* ------------------------------------------------------------- the team */
@@ -413,6 +663,7 @@ export class ChatView extends ItemView {
   }
 
   override async onClose(): Promise<void> {
+    this.clearFinishBadge();
     this.stopTicking();
     this.clearanceObserver?.disconnect();
     this.clearanceObserver = null;
@@ -1005,6 +1256,7 @@ export class ChatView extends ItemView {
     if (event.kind === 'turn-end') {
       this.settleTurn();
       this.composer?.setStreaming(false);
+      this.signalFinish();
     }
     if (event.kind === 'aborted' || event.kind === 'error') {
       this.followUps = turnAborted();
@@ -1218,5 +1470,39 @@ export class ChatView extends ItemView {
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
     });
+  }
+}
+
+/** The first few words of a reply as a file name: lowercase, hyphenated, bounded. */
+function slugOf(text: string): string {
+  const line = text.split('\n').map((l) => l.replace(/^[#>*\-\s]+/, '').trim()).find((l) => l.length > 0) ?? '';
+  return line.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48);
+}
+
+/* TWO QUIET NOTES, 120 ms each, no asset. The Web Audio API is in every
+   Electron; a synthesised tone ships no file and cannot go missing. Wrapped
+   because an AudioContext can refuse to start without a user gesture, and a
+   chime that throws would take the turn's own bookkeeping down with it. */
+function playChime(): void {
+  try {
+    const Ctx = (window as unknown as { AudioContext?: typeof AudioContext }).AudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const at = ctx.currentTime;
+    for (const [i, freq] of [660, 880].entries()) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, at + i * 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.08, at + i * 0.12 + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + i * 0.12 + 0.12);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(at + i * 0.12);
+      osc.stop(at + i * 0.12 + 0.13);
+    }
+    window.setTimeout(() => void ctx.close(), 600);
+  } catch {
+    // A chime that cannot play is a chime that stays quiet.
   }
 }

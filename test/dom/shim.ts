@@ -46,6 +46,14 @@ function install(): void {
   proto.createSpan = function (this: HTMLElement, o?: ElOptions): HTMLElement {
     return (this as AnyEl).createEl('span', o) as HTMLElement;
   };
+  /* Obsidian's cross-realm instanceof, which `remeasureDecisionBodies` calls
+     from the column's ResizeObserver. It was never exercised because nothing
+     in the fixture resized the column after mount; a block appended after
+     the observer attached made it fire, and a shim without the method threw
+     out of the observer callback. The prototype method is the honest twin. */
+  proto.instanceOf = function (this: HTMLElement, ctor: abstract new (...args: never[]) => unknown): boolean {
+    return this instanceof ctor;
+  };
   proto.empty = function (this: HTMLElement): void {
     while (this.firstChild) this.removeChild(this.firstChild);
   };

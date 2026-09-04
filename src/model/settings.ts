@@ -47,6 +47,12 @@ export interface ChatSettings {
    * team folder, so in a bare vault the switch changes nothing on screen.
    */
   factTeamStrip: boolean;
+  /* FINISH SIGNALS. A long turn ends while the user is in another tab or
+     another app; the badge marks the tab so the finished work is found, the
+     chime says it out loud. The chime is off by default: a sound nobody asked
+     for is the one thing a plugin should never ship on. */
+  finishBadge: boolean;
+  finishChime: boolean;
 }
 
 export const DEFAULT_SETTINGS: ChatSettings = {
@@ -84,6 +90,8 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   factSessionStart: false,
   factSessionUpdated: false,
   factTeamStrip: true,
+  finishBadge: true,
+  finishChime: false,
 };
 
 /* THE STATUSLINE SECTION'S TWO PROSE STRINGS.

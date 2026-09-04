@@ -162,6 +162,8 @@ export function settingDefinitions(input: DefinitionInput): GroupDefinition[] {
         { name: 'Context awareness', desc: 'Send the note you have open and the text you have selected.', control: { type: 'toggle', key: 'contextAwareness' } },
         { name: 'Structured replies', desc: 'Ask for the ICOR card format and render it natively. On by default; turn it off for plain chat.', control: { type: 'toggle', key: 'structuredReplies' } },
         { name: 'Team strip', desc: 'Show who on the AI team did the work in this conversation, with their share of activity (tool calls and messages). Appears only in a vault with a 06 AI Team folder.', control: { type: 'toggle', key: 'factTeamStrip' } },
+        { name: 'Mark the tab when a turn finishes', desc: 'A dot on the chat tab when a turn ends while you are looking elsewhere. It clears when you come back.', control: { type: 'toggle', key: 'finishBadge' } },
+        { name: 'Chime when a turn finishes', desc: 'Two quiet notes when a turn ends while you are looking elsewhere. Off by default.', control: { type: 'toggle', key: 'finishChime' } },
       ],
     },
     { index: '03', heading: 'Statusline', items: facts },

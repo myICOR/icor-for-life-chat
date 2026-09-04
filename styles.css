@@ -2926,6 +2926,76 @@
 
 /* ==== REGION G2: reply surface (activity sentence, message actions, finish signals) ==== */
 
+/* G2.1 THE ACTION BAR. Bottom-right of a finished block, quiet until the block
+   is hovered or a control in it holds focus. The buttons ride the icon-button
+   reset that is already stated at (0,3,0); this region only sizes and places
+   them. A block is `position: relative` so the bar can sit in its corner
+   without pushing the words. */
+.aic-assistant, .aic-structured { position: relative; }
+.aic-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  opacity: 0;
+  transition: opacity 140ms var(--aic-ease);
+}
+.aic-assistant:hover .aic-actions,
+.aic-structured:hover .aic-actions,
+.aic-user:hover .aic-actions,
+.aic-actions:focus-within { opacity: 1; }
+.aic-root.aic-root .aic-action {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--aic-r-control);
+  color: var(--aic-dim);
+}
+.aic-root.aic-root .aic-action:hover,
+.aic-root.aic-root .aic-action:focus-visible { background: var(--aic-wash); color: var(--aic-paper); }
+.aic-root.aic-root .aic-action .svg-icon { width: 14px; height: 14px; }
+
+/* G2.2 THE ACTIVITY SENTENCE on a collapsed group: body voice, the quiet ink,
+   the count in the mono voice beside it. It replaces the `12 TOOL CALLS`
+   kicker, which counted the thing the reader was not looking at. */
+.aic-tool-summary-label { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; }
+.aic-tool-summary-text {
+  font-family: var(--aic-body);
+  font-size: 13px;
+  color: var(--aic-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.aic-tool-summary-count {
+  font-family: var(--aic-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--aic-dim);
+  flex: 0 0 auto;
+}
+
+/* G2.3 THE FINISH BADGE, on the workspace tab header. Outside .aic-root by
+   nature, so the marker is read off the theme's own channel here with the
+   same stock fallback the token block declares. */
+.workspace-tab-header.aic-tab-done .workspace-tab-header-inner-title { position: relative; padding-right: 12px; }
+.workspace-tab-header.aic-tab-done .workspace-tab-header-inner-title::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 999px;
+  background: var(--ink-marker, #d43f16);
+}
+.theme-dark .workspace-tab-header.aic-tab-done .workspace-tab-header-inner-title::after { background: var(--ink-marker, #ff5a2d); }
+
 /* ==== END REGION G2 ==== */
 
 /* ==== REGION G3: memory (recent logs, remember, journals) ==== */

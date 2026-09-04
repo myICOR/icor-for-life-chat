@@ -131,6 +131,13 @@ export interface ReplayEntry {
   /** The user's own words, or null when the message was not a person typing. */
   spoken: string | null;
   events: ChatEvent[];
+  /**
+   * The provider's own id for this stored message, when it has one. It is
+   * what `SessionStore.fork` takes as `upToMessageId`, so "edit and resend"
+   * can rewind to the message before the one being edited. Null for a
+   * provider whose store carries no ids, and the view then forks whole.
+   */
+  messageId?: string | null;
 }
 
 export interface SessionReplay {

@@ -18,6 +18,7 @@ import { InsightsView } from './view/InsightsView';
 import { detectTeam } from './team/detect';
 import type { TeamRoster } from './team/detect';
 import { SubagentBus } from './state/subagents';
+import { ReplyActionRegistry } from './view/actions';
 import type { RenderHost } from './structured/render';
 import type { ItemView } from 'obsidian';
 import { availableProviders, providerFor } from './provider/registry';
@@ -53,6 +54,10 @@ export default class IcorChatPlugin extends Plugin {
   override settings: ChatSettings = { ...DEFAULT_SETTINGS };
   /** One bus per vault: a subagent transcript outlives the chip that opened it. */
   readonly subagents = new SubagentBus();
+  /* EVERY ACTION A REPLY OFFERS, from one list. The view registers the
+     built-ins (copy, insert, save, edit and resend, regenerate); other parts
+     of the plugin register theirs here and the bar draws them all alike. */
+  readonly replyActions = new ReplyActionRegistry();
 
   /* THE PROVIDER'S OWN MODEL CATALOGUE, cached the first time a session
    * reports it, and empty until then.

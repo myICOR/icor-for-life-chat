@@ -8,10 +8,12 @@
  *   - Streaming text is written as text; markdown is rendered once, at
  *     finalize. Code fences and math therefore never re-parse mid-token. */
 
-import { Component, MarkdownRenderer, setIcon, setTooltip } from 'obsidian';
+import { Component, MarkdownRenderer, Menu, setIcon, setTooltip } from 'obsidian';
 import type { App } from 'obsidian';
 import type { ChatEvent, ToolStatus, TurnContext, TurnImage } from '../../model/types';
 import { dot, kicker, shortAge, shortDuration } from '../dom';
+import { activitySentence } from '../../model/activity';
+import type { BoundAction } from '../actions';
 import { fallbackPurpose } from '../../provider/tooling';
 import type { ApprovalChoice } from '../../provider/types';
 import { parseStructured, decisionsOf } from '../../structured/parser';
@@ -79,8 +81,24 @@ interface ToolGroup {
   forcedOpen: boolean;
 }
 
+/** What a block hands the view when it asks which actions apply to it. */
+export interface ActionTarget {
+  blockId: string;
+  text: string;
+  el: HTMLElement;
+  role: 'assistant' | 'user';
+  /** The user well's transcript key; null on a reply. */
+  key: string | null;
+}
+
 export interface StreamCallbacks {
   onApproval: (toolUseId: string, choice: ApprovalChoice) => void;
+  /* THE ACTIONS A BLOCK OFFERS, already bound to it. The renderer draws a
+     bar from whatever list comes back and knows none of the names: the list
+     is the plugin's registry, so an action added elsewhere shows up here
+     without this file changing. Absent means no bar (the subagent view, the
+     fixtures that are not about actions). */
+  actionsFor?: (target: ActionTarget) => BoundAction[];
   onOpenSubagent?: (agentId: string) => void;
   /** A group chip on a sent turn was clicked: show the notes it stood for. */
   onOpenContextGroup?: (label: string) => void;
@@ -453,6 +471,7 @@ export class StreamRenderer {
       }
     }
     if (text) well.createDiv({ cls: 'aic-user-text', text });
+    if (key !== null && text) this.renderActionBar(well, { blockId: key, text, el: well, role: 'user', key });
     if (contextNote) {
       const row = well.createDiv({ cls: 'aic-user-context' });
       /* THE PILL OPENS THE NOTE when we know where it is.
@@ -558,6 +577,7 @@ export class StreamRenderer {
           void MarkdownRenderer.render(this.app, text, host, this.sourcePath, this.owner);
         });
         this.callbacks.onDecisions(decisionsOf(doc), blockId);
+        this.renderActionBar(el, { blockId, text: source, el, role: 'assistant', key: null });
         return;
       }
       // Not in the format is the common case and must render as ordinary chat.
@@ -565,6 +585,68 @@ export class StreamRenderer {
 
     el.addClass('is-rendered');
     await MarkdownRenderer.render(this.app, source, el, this.sourcePath, this.owner);
+    this.renderActionBar(el, { blockId, text: source, el, role: 'assistant', key: null });
+  }
+
+  /* THE ACTION BAR, bottom-right of a finished block.
+   *
+   * Quiet until the block is hovered or something in the bar has focus, and
+   * always reachable by keyboard because every control in it is a real
+   * <button> with a name. Primary actions are their own icon buttons; the
+   * rest wait behind three dots and open as Obsidian's own Menu, so the long
+   * tail costs the block no width. Rebuilt whole on every call: a block is
+   * finalised once, so this runs once per block. */
+  private renderActionBar(host: HTMLElement, target: ActionTarget): void {
+    const actions = this.callbacks.actionsFor?.(target) ?? [];
+    host.querySelector(':scope > .aic-actions')?.remove();
+    if (actions.length === 0) return;
+    const bar = host.createDiv({ cls: 'aic-actions' });
+    bar.setAttr('role', 'toolbar');
+    bar.setAttr('aria-label', target.role === 'user' ? 'Actions for your message' : 'Actions for this reply');
+    const primary = actions.filter((a) => a.section === 'primary');
+    const more = actions.filter((a) => a.section === 'more');
+    for (const action of primary) {
+      const btn = bar.createEl('button', { cls: 'aic-icon-btn aic-action', type: 'button' });
+      setIcon(btn, action.icon);
+      btn.setAttr('aria-label', action.label);
+      setTooltip(btn, action.label);
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        void action.run();
+      });
+    }
+    if (more.length > 0) {
+      const btn = bar.createEl('button', { cls: 'aic-icon-btn aic-action aic-action-more', type: 'button' });
+      setIcon(btn, 'ellipsis');
+      btn.setAttr('aria-label', 'More actions');
+      btn.setAttr('aria-haspopup', 'menu');
+      setTooltip(btn, 'More actions');
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const menu = new Menu();
+        for (const action of more) {
+          menu.addItem((item) => item.setTitle(action.label).setIcon(action.icon).onClick(() => void action.run()));
+        }
+        const dom = (menu as unknown as { dom?: HTMLElement }).dom;
+        if (dom) dom.addClass('aic-menu');
+        menu.showAtMouseEvent(ev);
+      });
+    }
+  }
+
+  /** Every block in the column, in order. "Edit and resend" repaints from a clean slate. */
+  reset(): void {
+    this.column.empty();
+    this.blocks.clear();
+    this.blockText.clear();
+    this.tools.clear();
+    this.wells.clear();
+    this.group = null;
+    this.working = null;
+    this.emptyEl = null;
+    this.thinkingText = '';
+    this.heldBlockId = null;
+    this.thinkingOpen = false;
   }
 
   /* ------------------------------------------------- the working indicator */
@@ -737,7 +819,7 @@ export class StreamRenderer {
     const chevron = summary.createSpan({ cls: 'aic-chevron' });
     setIcon(chevron, 'chevron-right');
     const summaryGutter = summary.createSpan({ cls: 'aic-tool-summary-gutter' });
-    const summaryLabel = summary.createSpan({ cls: 'aic-kicker aic-tool-summary-label' });
+    const summaryLabel = summary.createSpan({ cls: 'aic-tool-summary-label' });
     const rowsEl = el.createDiv({ cls: 'aic-tool-rows' });
     const group: ToolGroup = {
       el,
@@ -986,7 +1068,18 @@ export class StreamRenderer {
     // No inline display: `.aic-toolgroup:not(.has-summary) .aic-tool-summary`
     // hides it in the stylesheet, so visibility has ONE driver - the class set
     // three lines up - instead of a class and an inline style that can split.
-    group.summaryLabel.setText(`${count} TOOL CALLS`);
+    /* THE SENTENCE, not the count. "Read 4 notes, edited 2, ran 3 commands
+       · 41.0S" is measured off the rows themselves; the count rides beside it
+       in the quiet mono voice so nothing the old label said is lost. A group
+       whose rows the table cannot name falls back to the count alone. */
+    const sentence = activitySentence(group.rows.map((r) => ({
+      name: r.name, target: r.target, status: r.status, startedAt: r.startedAt, endedAt: r.finishedAt,
+    })));
+    group.summaryLabel.empty();
+    group.summaryLabel.createSpan({ cls: 'aic-tool-summary-text', text: sentence || `${count} tool calls` });
+    if (sentence) {
+      group.summaryLabel.createSpan({ cls: 'aic-tool-summary-count', text: `${count} ${count === 1 ? 'call' : 'calls'}` });
+    }
     group.summaryGutter.empty();
     if (anyRunning) dot(group.summaryGutter, 'marker');
     else if (anyApproval) dot(group.summaryGutter, 'warning');
