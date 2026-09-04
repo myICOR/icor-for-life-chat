@@ -8,7 +8,7 @@
 
 import { query, AbortError } from '@anthropic-ai/claude-agent-sdk';
 import type { Options, Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
-import { Normalizer, toolTarget } from './normalize';
+import { Normalizer, toolPurpose, toolTarget } from './normalize';
 import { launchPermissions } from './launch';
 import { ApprovalBroker, toPermissionAnswer } from './permissions';
 import type { ApprovalChoice, PendingApproval } from './permissions';
@@ -318,6 +318,7 @@ export class ChatSession {
             toolUseId: ctx.toolUseID ?? `${toolName}:${ctx.requestId}`,
             toolName,
             target: toolTarget(toolName, input),
+            purpose: toolPurpose(toolName, input, config.cwd),
             title: ctx.title ?? `Claude wants to run ${toolName}`,
           },
           ctx.signal,

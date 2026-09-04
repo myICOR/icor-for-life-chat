@@ -223,3 +223,96 @@ test('a tool result gloss is the first line, bounded', () => {
   assert.equal(resultDetail('x'.repeat(400)).length, 160);
   assert.equal(resultDetail(undefined), '');
 });
+
+/* ----------------------------------------------------- the purpose line */
+
+import { toolPurpose, fallbackPurpose, resultOutput, RESULT_OUTPUT_CAP, relativeTo } from './build/pure.mjs';
+
+const CWD = '/Users/tom/My Life Folder - TR';
+
+test('a Bash call shows its description, and a Bash call without one says so', () => {
+  assert.equal(toolPurpose('Bash', { command: 'ls', description: 'List the vault root' }, CWD), 'List the vault root');
+  assert.equal(toolPurpose('Bash', { command: 'ls' }, CWD), 'Ran a command');
+  assert.equal(toolPurpose('Bash', { command: 'ls', description: '   ' }, CWD), 'Ran a command', 'blank is not a description');
+});
+
+test('file tools read as a verb and a vault-relative path', () => {
+  assert.equal(toolPurpose('Read', { file_path: `${CWD}/04 Inner World/INDEX.md` }, CWD), 'Read 04 Inner World/INDEX.md');
+  assert.equal(toolPurpose('Write', { file_path: `${CWD}/new.md` }, CWD), 'Wrote new.md');
+  assert.equal(toolPurpose('Edit', { file_path: `${CWD}/a.md` }, CWD), 'Edited a.md');
+  assert.equal(toolPurpose('MultiEdit', { file_path: `${CWD}/a.md` }, CWD), 'Edited a.md');
+  assert.equal(toolPurpose('NotebookEdit', { notebook_path: `${CWD}/n.ipynb` }, CWD), 'Edited n.ipynb');
+  // Outside the vault the path stays as given; with no cwd the same.
+  assert.equal(toolPurpose('Read', { file_path: '/etc/hosts' }, CWD), 'Read /etc/hosts');
+  assert.equal(toolPurpose('Read', { file_path: `${CWD}/a.md` }, ''), `Read ${CWD}/a.md`);
+  assert.equal(toolPurpose('Read', {}, CWD), 'Read a file');
+});
+
+test('search, web and agent tools read as sentences', () => {
+  assert.equal(toolPurpose('Glob', { pattern: '**/*.md' }, CWD), 'Searched files matching **/*.md');
+  assert.equal(toolPurpose('Grep', { pattern: 'TODO' }, CWD), 'Searched for TODO');
+  assert.equal(toolPurpose('Grep', { pattern: 'TODO', path: `${CWD}/06 AI Team` }, CWD), 'Searched for TODO in 06 AI Team');
+  assert.equal(toolPurpose('WebFetch', { url: 'https://github.com/logancyang/obsidian-copilot' }, CWD), 'Fetched github.com');
+  assert.equal(toolPurpose('WebSearch', { query: 'obsidian plugin api' }, CWD), 'Searched the web for obsidian plugin api');
+  assert.equal(toolPurpose('Agent', { subagent_type: 'pax', description: 'research the copilot repo' }, CWD), 'Sent pax to research the copilot repo');
+  assert.equal(toolPurpose('Task', { subagent_type: 'pax' }, CWD), 'Sent pax on a task');
+  assert.equal(toolPurpose('Task', { description: 'look' }, CWD), 'Sent a subagent to look');
+  assert.equal(toolPurpose('TodoWrite', { todos: [] }, CWD), 'Updated the plan');
+  assert.equal(toolPurpose('AskUserQuestion', {}, CWD), 'Asked a question');
+  assert.equal(toolPurpose('mcp__foo__bar', { description: 'Look up a thread' }, CWD), 'Look up a thread');
+  assert.equal(toolPurpose('mcp__foo__bar', {}, CWD), 'Used mcp__foo__bar');
+});
+
+test('toolPurpose never throws', () => {
+  assert.equal(toolPurpose('WebFetch', { url: 42 }, CWD), 'Fetched a page');
+  assert.equal(toolPurpose('Read', { file_path: null }, CWD), 'Read a file');
+  assert.equal(toolPurpose('Bash', Object.create(null), CWD), 'Ran a command');
+});
+
+test('the Normalizer relativises against the cwd the init event named', () => {
+  const n = new Normalizer();
+  n.normalize({ type: 'system', subtype: 'init', session_id: 's', model: 'm', cwd: CWD, permissionMode: 'default', slash_commands: [] });
+  const [call] = n.normalize(assistant([{ type: 'tool_use', id: 'r1', name: 'Read', input: { file_path: `${CWD}/a.md` } }]));
+  assert.equal(call.purpose, 'Read a.md');
+  assert.equal(call.target, `${CWD}/a.md`, 'the raw target keeps the full path');
+  const fresh = new Normalizer();
+  const [bare] = fresh.normalize(assistant([{ type: 'tool_use', id: 'r2', name: 'Read', input: { file_path: `${CWD}/a.md` } }]));
+  assert.equal(bare.purpose, `Read ${CWD}/a.md`, 'no cwd, no guess');
+});
+
+test('a stored call without a purpose gets one from its name and target', () => {
+  assert.equal(fallbackPurpose('Read', '/v/a.md'), 'Read /v/a.md');
+  assert.equal(fallbackPurpose('Edit', 'x.md'), 'Edited x.md');
+  assert.equal(fallbackPurpose('Grep', 'TODO'), 'Searched for TODO');
+  assert.equal(fallbackPurpose('WebFetch', 'https://example.org/p'), 'Fetched example.org');
+  // A Bash target is the command, not a description: it is not promoted to prose.
+  assert.equal(fallbackPurpose('Bash', 'cd x && ls'), 'Ran a command');
+  assert.equal(fallbackPurpose('TodoWrite', ''), 'Updated the plan');
+  assert.equal(fallbackPurpose('Whatever', ''), 'Used Whatever');
+});
+
+test('the result body is the joined text, capped, and the cap announces itself', () => {
+  assert.equal(resultOutput('one\ntwo'), 'one\ntwo');
+  assert.equal(resultOutput([{ type: 'text', text: 'a' }, { type: 'image' }, { type: 'text', text: 'b' }]), 'a\nb');
+  assert.equal(resultOutput(undefined), '');
+  const long = 'x'.repeat(RESULT_OUTPUT_CAP + 250);
+  const out = resultOutput(long);
+  assert.ok(out.startsWith('x'.repeat(RESULT_OUTPUT_CAP)));
+  assert.ok(out.endsWith('\n[... 250 more characters]'), out.slice(-40));
+  // And the event carries it beside the one-line detail.
+  const n = new Normalizer();
+  const [res] = n.normalize({
+    type: 'user',
+    message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't', content: 'first\nsecond' }] },
+    parent_tool_use_id: null,
+  });
+  assert.equal(res.detail, 'first');
+  assert.equal(res.output, 'first\nsecond');
+});
+
+test('relativeTo strips exactly the vault prefix', () => {
+  assert.equal(relativeTo('/v/a/b.md', '/v'), 'a/b.md');
+  assert.equal(relativeTo('/v/a/b.md', '/v/'), 'a/b.md');
+  assert.equal(relativeTo('/vault2/a.md', '/v'), '/vault2/a.md');
+  assert.equal(relativeTo('/v/a.md', ''), '/v/a.md');
+});

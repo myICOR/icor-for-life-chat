@@ -304,8 +304,8 @@ ${HELPERS}
     segAuto: ".aic-seg-btn.is-active[data-tone='acceptEdits']",
     segBypass: ".aic-seg-btn.is-active[data-tone='bypassPermissions']",
     sendStop: '.aic-send.is-stop',
-    toolRunningName: '.aic-tool.is-running .aic-tool-name',
-    toolFailedName: '.aic-tool.is-failed .aic-tool-name',
+    toolRunningName: '.aic-tool.is-running .aic-tool-purpose',
+    toolFailedName: '.aic-tool.is-failed .aic-tool-purpose',
     toolFailedGlyph: '.aic-tool.is-failed .aic-glyph-fail',
     toolSummary: '.aic-tool-summary',
     decisionBlocked: '.aic-decision.is-blocked',
@@ -388,78 +388,75 @@ ${HELPERS}
   }
 
   /* THE TOOL ROWS, and whether the one thing a user came to read is reachable.
-     Two claims that only mean something together: a row whose payload is CUT
-     opens, and a row that FITS does not pretend it can. */
+     Two claims that only mean something together: a row with a BODY (a raw
+     argument or a result) opens, and a row with neither does not pretend to.
+     And a third that is the whole point of the row: the closed row shows the
+     PURPOSE sentence, never the command. */
   out.toolRows = Array.from(document.querySelectorAll('.aic-tool')).map((r) => {
-    const t = r.querySelector('.aic-tool-target');
+    const p = r.querySelector('.aic-tool-purpose');
     return {
-      name: (r.querySelector('.aic-tool-name')?.textContent || '').trim(),
-      chars: t ? (t.textContent || '').length : 0,
-      expandable: r.classList.contains('is-expandable'),
+      purpose: (p?.textContent || '').trim(),
+      hasBody: r.classList.contains('is-expandable'),
       role: r.getAttribute('role'),
       tabindex: r.getAttribute('tabindex'),
       expanded: r.getAttribute('aria-expanded'),
       name2: r.getAttribute('aria-label') || '',
       cursor: getComputedStyle(r).cursor,
       glyphs: r.querySelectorAll('.aic-chevron').length,
-      /* Measured with the row in its COLLAPSED state, which is what the page
-         is showing: overflow means the string is being cut right now. */
-      cut: t ? t.scrollWidth > t.clientWidth + 1 : false,
-      wrap: t ? getComputedStyle(t).whiteSpace : null,
-      overflowX: t ? getComputedStyle(t).overflowX : null,
+      icons: r.querySelectorAll('.aic-tool-icon .svg-icon').length,
+      wrap: p ? getComputedStyle(p).whiteSpace : null,
+      /* The command must NOT be in the closed row. The body element exists
+         but is empty while closed; anything with text in it is a leak. */
+      bodyText: (r.querySelector('.aic-tool-body')?.textContent || '').trim(),
+      bodyDisplay: r.querySelector('.aic-tool-body') ? getComputedStyle(r.querySelector('.aic-tool-body')).display : null,
     };
   });
   /* And the same row OPENED, which is the state the click produces. Read after
-     the collapsed pass so the numbers above are not the ones the click
-     changed. */
+     the closed pass so the numbers above are not the ones the click changed. */
   {
-    const long = Array.from(document.querySelectorAll('.aic-tool')).find((r) => r.classList.contains('is-expandable'));
+    const long = Array.from(document.querySelectorAll('.aic-tool')).find(
+      (r) => r.classList.contains('is-expandable') && (r.querySelector('.aic-tool-purpose')?.textContent || '').startsWith('Check every'),
+    );
     if (long) {
-      const t0 = long.querySelector('.aic-tool-target');
-      /* The collapsed height, taken BEFORE the click. Comparing the two is a
-         direct measurement of "the cell grew"; counting lines is not, because
-         line-height serialises as the keyword normal and parseFloat answers
-         NaN - which Math.round turns into a number-shaped null and an
-         assertion that fails for the wrong reason. */
-      const collapsedHeight = Math.round(t0.getBoundingClientRect().height);
+      const collapsedHeight = Math.round(long.getBoundingClientRect().height);
       long.click();
       const t = long.querySelector('.aic-tool-target');
+      const pre = long.querySelector('.aic-tool-body-pre');
       const right = long.querySelector('.aic-tool-right');
       out.toolExpanded = {
         expanded: long.getAttribute('aria-expanded'),
-        wrap: getComputedStyle(t).whiteSpace,
-        overflowX: getComputedStyle(t).overflowX,
-        /* WRAP, not scroll: the cell is taller than one line and nothing is
-           hidden sideways. */
+        wrap: t ? getComputedStyle(t).whiteSpace : null,
+        overflowX: t ? getComputedStyle(t).overflowX : null,
         collapsedHeight,
-        expandedHeight: Math.round(t.getBoundingClientRect().height),
-        cut: t.scrollWidth > t.clientWidth + 1,
-        /* The name and the duration keep their places. */
-        nameVisible: !!long.querySelector('.aic-tool-name'),
+        expandedHeight: Math.round(long.getBoundingClientRect().height),
+        cut: t ? t.scrollWidth > t.clientWidth + 1 : null,
+        commandText: (t?.textContent || '').trim(),
+        resultText: (pre?.textContent || '').trim(),
+        lines: (long.querySelector('.aic-tool-lines')?.textContent || '').trim(),
+        kickers: Array.from(long.querySelectorAll('.aic-tool-body-kicker')).map((k) => (k.textContent || '').trim()),
+        purposeVisible: !!long.querySelector('.aic-tool-purpose'),
         rightVisible: !!right,
         rowRight: Math.round(long.getBoundingClientRect().right),
-        cellRight: Math.round(t.getBoundingClientRect().right),
+        cellRight: t ? Math.round(t.getBoundingClientRect().right) : 0,
+        preMaxHeight: pre ? getComputedStyle(pre).maxHeight : null,
+        preOverflowY: pre ? getComputedStyle(pre).overflowY : null,
       };
       /* THE EXPANDED STATE SURVIVES A RE-RENDER. These rows sit in a stream
          that keeps updating, and a row that snapped shut every time a later
-         tool finished would be unusable - the user would lose the command
-         they opened mid-read. Driven through the shipped renderer with a real
-         event, not by calling a paint method. */
+         tool finished would be unusable. Driven through the shipped renderer
+         with a real event, not by calling a paint method. */
       window.aicStream.apply(window.aicEvent({
-        kind: 'tool-call', toolUseId: 't6', name: 'Read', target: 'later.md', input: {},
+        kind: 'tool-call', toolUseId: 't6', name: 'Read', target: 'later.md', purpose: 'Read later.md', input: {},
       }));
-      window.aicStream.apply(window.aicEvent({ kind: 'tool-result', toolUseId: 't6', ok: true, detail: '' }));
+      window.aicStream.apply(window.aicEvent({ kind: 'tool-result', toolUseId: 't6', ok: true, detail: '', output: '' }));
       out.toolStillOpen = long.getAttribute('aria-expanded');
-      /* AND the re-measure path, which is the one that can actually undo it. A
-         new event upserts a NEW row and never touches this one, so the
-         assertion above passes even against a build that resets the state -
-         measured, and it did. The pass a resize triggers is the pass that
-         reaches an already-open row, so it is called here directly. */
+      /* AND the repaint-every-row path, which is the one that can undo it. */
       window.aicStream.remeasureTools();
       out.toolOpenAfterRemeasure = long.getAttribute('aria-expanded');
 
       long.click();
       out.toolReCollapsed = long.getAttribute('aria-expanded');
+      out.toolBodyAfterClose = (long.querySelector('.aic-tool-body')?.textContent || '').trim();
 
       /* THE RAIL. A running long row, opened: its status dot must stretch into
          a left rail that brackets the block, and a collapsed running row's dot
@@ -468,14 +465,14 @@ ${HELPERS}
       window.aicStream.apply(window.aicEvent({
         kind: 'tool-call', toolUseId: 't7', name: 'Bash',
         target: 'cd /Users/tom/My-Life-Folder/06-AI-Team/Guidelines && python3 check-every-guideline-for-stale-notes.py --verbose --since 2026-08-01 --report wide --and-a-tail-long-enough-to-wrap-in-any-pane',
+        purpose: 'Check every guideline for stale notes',
         input: {},
       }));
-      window.aicStream.remeasureTools();
       const rows = Array.from(document.querySelectorAll('.aic-tool'));
       const runningLong = rows[rows.length - 1];
       runningLong.click();
       const railDot = runningLong.querySelector('.aic-tool-gutter .aic-dot');
-      const shortRunning = rows.find((r) => r.querySelector('.aic-tool-name')?.textContent === 'Read' && r.querySelector('.aic-dot'));
+      const shortRunning = rows.find((r) => (r.querySelector('.aic-tool-purpose')?.textContent || '') === 'Read note.md' && r.querySelector('.aic-dot'));
       const roundDot = shortRunning?.querySelector('.aic-tool-gutter .aic-dot') ?? null;
       const geo = (el) => {
         if (!el) return null;
@@ -1610,8 +1607,8 @@ test('the row wash is fenced: the ground alone, 140ms, and not hover-only', () =
     );
     /* And the DOM half: the row is focusable and reports its state, so the cue
        is reachable without a mouse at all. */
-    const cut = s.base.toolRows.filter((r) => r.cut);
-    for (const r of cut) {
+    const openable = s.base.toolRows.filter((r) => r.hasBody);
+    for (const r of openable) {
       assert.equal(r.tabindex, '0', `${room}: the cue is hover-only - the row takes no focus`);
       assert.ok(r.expanded === 'true' || r.expanded === 'false',
         `${room}: the row does not report aria-expanded`);
@@ -1619,66 +1616,83 @@ test('the row wash is fenced: the ground alone, 140ms, and not hover-only', () =
   });
 });
 
-test('a truncated tool row opens, and a row that fits does not pretend to', () => {
+test('a tool row says what was done, never the command, and stays on one line', () => {
   forEachRoom((s, room) => {
     const rows = s.base.toolRows;
-    assert.ok(rows.length >= 4, `${room}: only ${rows.length} tool rows - the fixture shrank`);
-    const cut = rows.filter((r) => r.cut);
-    const fits = rows.filter((r) => !r.cut && r.chars > 0);
-    // Cardinality on BOTH sides: one empty list makes half the claim vacuous.
-    assert.ok(cut.length >= 1, `${room}: no row is truncated, so the expansion is guarding nothing`);
-    assert.ok(fits.length >= 1, `${room}: every row is truncated, so "rows that fit stay inert" is untested`);
-
-    for (const r of cut) {
-      assert.equal(r.expandable, true,
-        `${room}: the ${r.name} row is cut and cannot be opened. The cut lands after the cd, so ` +
-        `every row reads alike and the part that differs is the part that is gone.`);
-      assert.equal(r.role, 'button', `${room}: the ${r.name} row is clickable but not a control`);
-      assert.equal(r.tabindex, '0', `${room}: the ${r.name} row has no tab stop`);
-      assert.equal(r.expanded, 'false', `${room}: the ${r.name} row does not report its state`);
-      assert.ok(r.name2.length > 3, `${room}: the ${r.name} row's control has no accessible name`);
-      assert.equal(r.cursor, 'pointer', `${room}: the ${r.name} row does not look clickable`);
-      // Tom asked for the chevrons OFF the pickers in the same pass. The stream
-      // does not get to grow one per row instead.
-      assert.equal(r.glyphs, 0, `${room}: the ${r.name} row grew a disclosure glyph`);
-    }
-    for (const r of fits) {
-      assert.equal(r.expandable, false,
-        `${room}: the ${r.name} row fits and still offers to expand - an affordance with nothing ` +
-        `behind it is the same shape as a guard that cannot fail`);
-      assert.equal(r.role, null, `${room}: a row with nothing to reveal took a tab stop`);
-      assert.equal(r.tabindex, null, `${room}: a row with nothing to reveal took a tab stop`);
+    assert.ok(rows.length >= 5, `${room}: only ${rows.length} tool rows - the fixture shrank`);
+    const bash = rows.find((r) => r.purpose === 'Check every open task against the index');
+    assert.ok(bash, `${room}: the Bash row does not show its purpose sentence`);
+    for (const r of rows) {
+      assert.equal(r.icons, 1, `${room}: the "${r.purpose}" row carries ${r.icons} family icons, not one`);
+      assert.equal(r.wrap, 'nowrap', `${room}: the "${r.purpose}" row wraps; the closed row is one line`);
+      assert.ok(!r.purpose.includes('cd "'), `${room}: the closed row leaks the command: ${r.purpose}`);
+      assert.equal(r.bodyText, '', `${room}: a closed row already holds body text: ${r.bodyText}`);
+      assert.equal(r.bodyDisplay, 'none', `${room}: a closed row's body takes a grid line (${r.bodyDisplay})`);
     }
   });
 });
 
-test('an opened tool row WRAPS, keeps its timing, and closes again', () => {
+test('a tool row with a body opens, and a row without one does not pretend to', () => {
+  forEachRoom((s, room) => {
+    const rows = s.base.toolRows;
+    const withBody = rows.filter((r) => r.hasBody);
+    const without = rows.filter((r) => !r.hasBody);
+    // Cardinality on BOTH sides: one empty list makes half the claim vacuous.
+    assert.ok(withBody.length >= 1, `${room}: no row has a body, so the expansion is guarding nothing`);
+    assert.ok(without.length >= 1, `${room}: every row has a body, so "inert rows stay inert" is untested`);
+    assert.ok(without.some((r) => r.purpose === 'Updated the plan'), `${room}: the TodoWrite row grew a body from nothing`);
+
+    for (const r of withBody) {
+      assert.equal(r.role, 'button', `${room}: the "${r.purpose}" row is clickable but not a control`);
+      assert.equal(r.tabindex, '0', `${room}: the "${r.purpose}" row has no tab stop`);
+      assert.equal(r.expanded, 'false', `${room}: the "${r.purpose}" row does not report its state`);
+      assert.ok(r.name2.length > 3, `${room}: the "${r.purpose}" row's control has no accessible name`);
+      assert.equal(r.cursor, 'pointer', `${room}: the "${r.purpose}" row does not look clickable`);
+      // The disclosure chevron is the ONE glyph a row with a body carries.
+      assert.equal(r.glyphs, 1, `${room}: the "${r.purpose}" row carries ${r.glyphs} chevrons`);
+    }
+    for (const r of without) {
+      assert.equal(r.role, null, `${room}: a row with nothing to reveal took a tab stop`);
+      assert.equal(r.tabindex, null, `${room}: a row with nothing to reveal took a tab stop`);
+      assert.equal(r.glyphs, 0, `${room}: a row with nothing to reveal grew a chevron - an empty promise`);
+      assert.equal(r.cursor, 'auto', `${room}: a row with nothing to reveal looks clickable`);
+    }
+  });
+});
+
+test('an opened tool row shows the command and the result, wraps, and closes again', () => {
   forEachRoom((s, room) => {
     const e = s.base.toolExpanded;
-    assert.ok(e, `${room}: no expandable row to open`);
+    assert.ok(e, `${room}: no row with a body to open`);
     assert.equal(e.expanded, 'true', `${room}: the click did not open the row`);
-    assert.notEqual(e.wrap, 'nowrap', `${room}: the opened row still refuses to wrap`);
-    assert.equal(e.cut, false, `${room}: the opened row is still cutting its payload`);
+    /* THE BODY IS THE COMMAND AND THE RESULT, each under its kicker, and the
+       purpose line stays put above them. */
+    assert.deepEqual(e.kickers, ['COMMAND', 'RESULT'], `${room}: the body's kickers are ${e.kickers}`);
+    assert.ok(e.commandText.startsWith('cd "/Users/tom/Desktop/ICOR for Life"'),
+      `${room}: the opened row does not show the command: ${e.commandText}`);
+    assert.equal(e.resultText.split('\n')[0], '12 tasks checked', `${room}: the opened row does not show the result`);
+    assert.equal(e.lines, '4 lines', `${room}: the line count reads "${e.lines}" - it is measured, and the fixture has four`);
+    assert.ok(e.purposeVisible, `${room}: opening the row lost its purpose line`);
+    assert.ok(e.rightVisible, `${room}: opening the row lost its right cell`);
     /* WRAP, NOT SCROLL. A horizontal scrollbar inside a chat row hides the end
        of the string behind a gesture. Two signals, because either alone can be
-       satisfied by the wrong fix: the cell grew taller than one line, and it
-       does not extend past the row's own right edge. */
+       satisfied by the wrong fix: the row grew taller, and the command box does
+       not extend past the row's own right edge. */
+    assert.notEqual(e.wrap, 'nowrap', `${room}: the opened command still refuses to wrap`);
+    assert.equal(e.cut, false, `${room}: the opened command is still cutting its payload`);
     assert.ok(e.expandedHeight > e.collapsedHeight,
-      `${room}: the opened payload is still ${e.expandedHeight}px tall, the same as collapsed - ` +
-      `it did not wrap, so the rest of the command is still somewhere the user cannot see`);
+      `${room}: the opened row is still ${e.expandedHeight}px tall, the same as closed`);
     assert.ok(e.cellRight <= e.rowRight + 1,
-      `${room}: the opened payload runs ${e.cellRight - e.rowRight}px past the row's right edge`);
-    assert.notEqual(e.overflowX, 'scroll', `${room}: the opened row scrolls sideways`);
-    // The timing is often why the row was opened at all.
-    assert.equal(e.nameVisible, true, `${room}: the tool name vanished when the row opened`);
-    assert.equal(e.rightVisible, true, `${room}: the duration vanished when the row opened`);
+      `${room}: the opened command runs ${e.cellRight - e.rowRight}px past the row's right edge`);
+    /* The result is bounded in HEIGHT with its own scroll, never in width. */
+    assert.equal(e.preMaxHeight, '280px', `${room}: the result box has no height cap (${e.preMaxHeight})`);
+    assert.equal(e.preOverflowY, 'auto', `${room}: the result box does not scroll vertically`);
     assert.equal(s.base.toolStillOpen, 'true',
-      `${room}: a later tool event closed a row the user had opened. These rows live in a stream ` +
-      `that keeps updating, so a row that snaps shut loses the command mid-read.`);
+      `${room}: a later tool event snapped the open row shut`);
     assert.equal(s.base.toolOpenAfterRemeasure, 'true',
-      `${room}: re-measuring the rows closed one the user had opened. Narrowing the pane must not ` +
-      `throw away what someone is reading.`);
+      `${room}: the repaint-every-row pass closed the open row`);
     assert.equal(s.base.toolReCollapsed, 'false', `${room}: a second click did not close the row`);
+    assert.equal(s.base.toolBodyAfterClose, '', `${room}: the closed row kept its body text in the DOM`);
   });
 });
 

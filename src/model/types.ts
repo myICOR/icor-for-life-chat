@@ -94,11 +94,31 @@ export type ChatEventBody =
       kind: 'tool-call';
       toolUseId: string;
       name: string;
+      /** The raw argument: the command, the path, the pattern. What the row OPENS onto. */
       target: string;
+      /* WHAT WAS DONE, in one plain sentence, and it is what the row SHOWS.
+       * "Read 04 Inner World/Contacts/People/bernd-martin.md", "Ran Open the
+       * demo note in Obsidian". A row that printed the shell command said what
+       * the agent typed and never what it meant; every Bash row in a session
+       * began with the same cd and the part that differed was the part cut
+       * off. Derived by `toolPurpose`, a script: two people given the same
+       * input cannot disagree about it. */
+      purpose: string;
       input: Record<string, unknown>;
     }
-  | { kind: 'tool-result'; toolUseId: string; ok: boolean; detail: string }
-  | { kind: 'tool-approval'; toolUseId: string; name: string; target: string }
+  | {
+      kind: 'tool-result';
+      toolUseId: string;
+      ok: boolean;
+      /** The first line, for a tooltip. */
+      detail: string;
+      /** The result body, capped at `RESULT_OUTPUT_CAP` characters. The opened row reads it. */
+      output: string;
+    }
+  /* `purpose` is optional here only because two producers exist: the live
+   * broker, which knows the input and can derive it, and a stored transcript
+   * from before 0.6, which cannot. The renderer falls back to the name. */
+  | { kind: 'tool-approval'; toolUseId: string; name: string; target: string; purpose?: string }
   | { kind: 'tool-approval-resolved'; toolUseId: string; allowed: boolean }
   | {
       kind: 'subagent-start';

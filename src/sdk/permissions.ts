@@ -13,6 +13,8 @@ export interface PendingApproval {
   toolUseId: string;
   toolName: string;
   target: string;
+  /** What the call would DO, in one sentence. See `toolPurpose`. */
+  purpose?: string;
   title: string;
   resolve: (choice: ApprovalChoice) => void;
 }

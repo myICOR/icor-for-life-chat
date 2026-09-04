@@ -235,23 +235,30 @@ async function mount(): Promise<void> {
   );
   const ev = <T extends Record<string, unknown>>(body: T): never =>
     ({ ...body, stream: 'main' }) as never;
-  stream2.apply(ev({ kind: 'tool-call', toolUseId: 't1', name: 'Read', target: 'note.md', input: {} }));
-  stream2.apply(ev({ kind: 'tool-call', toolUseId: 't2', name: 'Bash', target: 'ls', input: {} }));
-  stream2.apply(ev({ kind: 'tool-result', toolUseId: 't2', ok: true, detail: '' }));
-  stream2.apply(ev({ kind: 'tool-call', toolUseId: 't3', name: 'Edit', target: 'locked.md', input: {} }));
-  stream2.apply(ev({ kind: 'tool-result', toolUseId: 't3', ok: false, detail: 'permission denied' }));
-  stream2.apply(ev({ kind: 'tool-approval', toolUseId: 't4', name: 'Write', target: '06 AI Team/note.md' }));
-  /* THE ROW THE EXPANSION EXISTS FOR: a Bash payload long enough that the pane
-     cuts it, and cut in the place that makes every row read alike - after the
-     `cd`. The short rows above stay in the fixture on purpose, because the
-     claim is not "rows expand", it is "rows that are CUT expand and rows that
-     fit do not". */
+  stream2.apply(ev({ kind: 'tool-call', toolUseId: 't1', name: 'Read', target: 'note.md', purpose: 'Read note.md', input: {} }));
+  stream2.apply(ev({ kind: 'tool-call', toolUseId: 't2', name: 'Bash', target: 'ls', purpose: 'List the vault root', input: {} }));
+  stream2.apply(ev({ kind: 'tool-result', toolUseId: 't2', ok: true, detail: '', output: '' }));
+  stream2.apply(ev({ kind: 'tool-call', toolUseId: 't3', name: 'Edit', target: 'locked.md', purpose: 'Edited locked.md', input: {} }));
+  stream2.apply(ev({ kind: 'tool-result', toolUseId: 't3', ok: false, detail: 'permission denied', output: 'permission denied' }));
+  stream2.apply(ev({ kind: 'tool-approval', toolUseId: 't4', name: 'Write', target: '06 AI Team/note.md', purpose: 'Wrote 06 AI Team/note.md' }));
+  /* THE ROW THE EXPANSION EXISTS FOR: a Bash call whose command is long and
+     whose result has a body. The closed row says what it DID (the purpose)
+     and never the command; the opened row shows both. */
   stream2.apply(ev({
     kind: 'tool-call', toolUseId: 't5', name: 'Bash',
     target: 'cd "/Users/tom/Desktop/ICOR for Life" && python3 "06 AI Team/AI Team Knowledge/Scripts/check-every-open-task-against-the-index.py" --verbose --since 2026-08-01',
+    purpose: 'Check every open task against the index',
     input: {},
   }));
-  stream2.apply(ev({ kind: 'tool-result', toolUseId: 't5', ok: true, detail: '' }));
+  stream2.apply(ev({
+    kind: 'tool-result', toolUseId: 't5', ok: true, detail: '12 tasks checked',
+    output: '12 tasks checked\n0 stale\n2 without an owner\ndone',
+  }));
+  /* AND THE ROW THAT MUST STAY INERT: no argument, no output, so nothing to
+     open. The claim is not "rows expand", it is "rows with a body expand and
+     rows without one do not pretend to". */
+  stream2.apply(ev({ kind: 'tool-call', toolUseId: 't8', name: 'TodoWrite', target: '', purpose: 'Updated the plan', input: {} }));
+  stream2.apply(ev({ kind: 'tool-result', toolUseId: 't8', ok: true, detail: '', output: '' }));
 
   /* Handed to the gate so it can drive the SHIPPED renderer for one more
      event after opening a row. "Does an expanded row survive a re-render" is a
