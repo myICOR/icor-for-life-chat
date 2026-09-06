@@ -52,6 +52,16 @@ const DOC: StructuredDoc = {
             { disposition: 'owned', label: 'badge', value: '2', qualifier: 'amber' },
             { disposition: 'unowned', label: 'code chip', value: '3', qualifier: null },
             { disposition: 'noted', label: 'agent chip', value: '4', qualifier: null },
+            /* THE ROW THE DOOR EXISTS FOR (2026-09-06): a value long enough
+               to be cut at any sane pane width, with the qualifying clause the
+               format puts at the end. The gate asserts the label survives, the
+               row becomes a control, and opened it hides nothing. */
+            {
+              disposition: 'unowned',
+              label: 'a row with a long value',
+              value: 'this sentence is long enough that the panel will cut it, and the qualification that changes its meaning lives right here at the end of the line where the ellipsis used to swallow it whole',
+              qualifier: 'only while streaming',
+            },
           ],
         },
         { kind: 'insight', text: 'A specificity fix not counted against the competing selector is a guess.' },

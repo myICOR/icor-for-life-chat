@@ -302,8 +302,13 @@ function parseCardBody(c: Cursor): Block[] {
           break;
         }
         case 'NOT COVERED': {
+          /* EVERY ROW. This was `rows.slice(0, 3)`: the format's editorial
+             bound pressed into the parser, which is the wrong enforcer - by
+             the time text reaches here it has been written, so the cap did
+             not shorten the reply, it made row four CEASE TO EXIST with no
+             trace on screen (the 2026-09-06 member report on silent loss). */
           const rows = takeRows(c);
-          if (rows.length) blocks.push({ kind: 'notCovered', rows: rows.slice(0, 3) });
+          if (rows.length) blocks.push({ kind: 'notCovered', rows });
           break;
         }
         case 'NEXT': {
@@ -326,8 +331,13 @@ function parseCardBody(c: Cursor): Block[] {
           if (rows.length) {
             blocks.push({ kind: 'group', title: kicker, rows });
           } else {
+            /* A sub-head over prose KEEPS its sub-head. The kicker was
+               consumed and the paragraph pushed alone, so WHY IT MATTERS
+               rendered as a bare paragraph while a longer heading beside it
+               (too long to be a kicker) kept its line: the same reply, two
+               fates, and one of them a heading that silently vanished. */
             const text = takeParagraph(c);
-            if (text) blocks.push({ kind: 'prose', text });
+            if (text) blocks.push({ kind: 'prose', text, title: kicker });
           }
         }
       }

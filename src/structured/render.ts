@@ -61,11 +61,96 @@ function gutter(cell: HTMLElement, disposition: Disposition | null): void {
 function renderRow(parent: HTMLElement, row: Row): HTMLElement {
   const el = parent.createDiv({ cls: 'aic-srow' });
   gutter(el.createSpan({ cls: 'aic-srow-gutter' }), row.disposition);
-  el.createSpan({ cls: 'aic-srow-label', text: row.label });
-  const right = el.createSpan({ cls: 'aic-srow-right' });
+  // Label and value share ONE flex cell (see .aic-srow-text): that is what
+  // lets the label keep its width up to half the row and the value the rest.
+  const text = el.createSpan({ cls: 'aic-srow-text' });
+  text.createSpan({ cls: 'aic-srow-label', text: row.label });
+  const right = text.createSpan({ cls: 'aic-srow-right' });
   if (row.value) right.createSpan({ cls: 'aic-srow-value', text: row.value });
   if (row.qualifier) right.createSpan({ cls: 'aic-srow-qual', text: `(${row.qualifier})` });
+  wireRow(el);
   return el;
+}
+
+/* A ROW THAT IS CUT OPENS, and says so before it is clicked.
+ *
+ * Two members reported the same loss on 2026-09-06: a long value ended in an
+ * ellipsis and the qualifying clause the format puts at the END of a row was
+ * the part that went, with no way to reach it on screen and no signal that
+ * anything was missing. Widening the pane did not help, because the label
+ * track was being crushed to zero by the value first (that half is the grid
+ * in styles.css). This is the other half, the same discipline as the decision
+ * body and the tool rows: the affordance is MEASURED, never assumed. A row
+ * whose label, value and qualifier all fit gets no tab stop, no pointer and
+ * no chevron; a row that is actually cut becomes a control with a visible
+ * door, and opened it wraps everything it holds. Measured on the next frame,
+ * because a node measured before layout answers zero, and again on every pane
+ * resize by `remeasureRows`, since the cut is a function of width. */
+function wireRow(el: HTMLElement): void {
+  const toggle = (): void => {
+    if (!el.hasClass('is-expandable')) return;
+    el.toggleClass('is-expanded', !el.hasClass('is-expanded'));
+    paintRow(el);
+  };
+  el.addEventListener('click', () => {
+    // A reader selecting text in an open row is not asking it to close.
+    if (el.hasClass('is-expanded') && (window.getSelection()?.toString() ?? '') !== '') return;
+    toggle();
+  });
+  el.addEventListener('keydown', (ev: KeyboardEvent) => {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    ev.preventDefault();
+    toggle();
+  });
+  const door = el.createSpan({ cls: 'aic-srow-chevron' });
+  setIcon(door, 'chevron-down');
+  door.setAttr('aria-hidden', 'true');
+  window.requestAnimationFrame(() => measureRow(el));
+}
+
+/** Is any span in the row wider than the box it was given? */
+function rowIsCut(el: HTMLElement): boolean {
+  for (const sel of ['.aic-srow-label', '.aic-srow-value', '.aic-srow-qual']) {
+    const span = el.querySelector(sel);
+    if (span && span.instanceOf(HTMLElement) && span.scrollWidth > span.clientWidth + 1) return true;
+  }
+  return false;
+}
+
+function measureRow(el: HTMLElement): void {
+  // A hidden row measures zero everywhere and must keep the answer it had.
+  if (el.clientHeight === 0) return;
+  // Measured at REST, in the three-column shape a fitting row has: the door's
+  // own track must not be what cuts the row it exists to open.
+  const wasExpanded = el.hasClass('is-expanded');
+  el.removeClass('is-expanded', 'is-expandable');
+  const cut = rowIsCut(el);
+  if (wasExpanded) el.addClass('is-expanded');
+  el.toggleClass('is-expandable', cut);
+  if (!cut) el.removeClass('is-expanded');
+  paintRow(el);
+}
+
+function paintRow(el: HTMLElement): void {
+  if (!el.hasClass('is-expandable')) {
+    el.removeAttribute('role');
+    el.removeAttribute('tabindex');
+    el.removeAttribute('aria-expanded');
+    el.removeAttribute('aria-label');
+    return;
+  }
+  const open = el.hasClass('is-expanded');
+  el.setAttr('role', 'button');
+  el.setAttr('tabindex', '0');
+  el.setAttr('aria-expanded', open ? 'true' : 'false');
+  el.setAttr('aria-label', open ? 'Collapse the row' : 'Show the full row');
+}
+
+/** Re-measure every card row under `root`. The cut is a function of width. */
+export function remeasureRows(root: HTMLElement): void {
+  for (const el of Array.from(root.querySelectorAll('.aic-srow'))) {
+    if (el.instanceOf(HTMLElement)) measureRow(el);
+  }
 }
 
 class Renderer {
@@ -210,9 +295,12 @@ class Renderer {
         break;
       }
       case 'prose':
-      default:
-        prose(card.createDiv({ cls: 'aic-band aic-assistant is-rendered' }), block.text);
+      default: {
+        const wrap = card.createDiv({ cls: 'aic-band' });
+        if (block.title) wrap.createDiv({ cls: 'aic-kicker', text: block.title });
+        prose(wrap.createDiv({ cls: 'aic-assistant is-rendered' }), block.text);
         break;
+      }
     }
   }
 

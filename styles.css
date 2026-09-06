@@ -969,8 +969,22 @@
 }
 .aic-input::placeholder { color: var(--aic-faint); opacity: 1; }
 
-.aic-action { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-.aic-action-spacer { flex: 1 1 auto; }
+/* THE ROW CANNOT OVERFLOW THE CARD. The pickers are flex items that may
+   SHRINK (their text ellipsises), the spacer gives way first, and the send
+   pill and the stop control never shrink, so the pill's right edge is inside
+   the card at every pane width. Measured live on 2026-09-06: the Stop control
+   pushed the Queue pill past the card edge, and even at rest the Send pill was
+   clipped once the pickers outgrew the row. */
+.aic-action { display: flex; align-items: center; gap: 8px; margin-top: 8px; min-width: 0; }
+.aic-action-spacer { flex: 1 1 0; min-width: 0; }
+.aic-action > .aic-seg,
+.aic-action > .aic-text-btn,
+.aic-action > .aic-provider-btn { flex: 0 1 auto; min-width: 0; }
+.aic-action > .aic-seg > .aic-seg-btn { min-width: 0; }
+.aic-root.aic-root .aic-action .aic-seg-btn,
+.aic-root.aic-root .aic-action .aic-text-btn,
+.aic-root.aic-root .aic-action .aic-provider-btn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aic-action > .aic-send { flex: 0 0 auto; }
 
 /* THE THREE PICKERS, and they are ONE control drawn once.
  *
@@ -1508,7 +1522,15 @@
 
 .aic-srow {
   display: grid;
-  grid-template-columns: 16px 1fr auto;
+  /* THE LABEL IS NEVER CRUSHED. This was `16px 1fr auto`: an auto value track
+     sizes to its content first and the fr label takes what is left, so a long
+     value pushed the label to ZERO width and the reader saw an orphan value
+     with no signal that a label had ever been there (member report,
+     2026-09-06). Label and value now share one flex cell (.aic-srow-text):
+     the label keeps its content width up to half the row, the value takes the
+     rest; both ellipsise at rest, and a cut row opens (R1). Not
+     `fit-content()` on a grid track, which lint reads as off-baseline. */
+  grid-template-columns: 16px minmax(0, 1fr);
   gap: 8px;
   align-items: baseline;
   min-height: 24px;
@@ -1519,7 +1541,10 @@
   padding: 3px 0;
 }
 .aic-srow-gutter { display: inline-flex; align-items: center; justify-content: flex-start; }
+.aic-srow-text { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .aic-srow-label {
+  flex: 0 1 auto;
+  max-width: 50%;
   font-size: 13px;
   color: var(--aic-dim);
   /* Truncation is ellipsis, never wrap-to-crush. Stock Obsidian's
@@ -1533,7 +1558,9 @@
 .aic-srow-right {
   display: inline-flex;
   align-items: baseline;
+  justify-content: flex-end;
   gap: 8px;
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
 }
@@ -2905,7 +2932,7 @@
   border: 1px solid var(--aic-destructive);
   box-shadow: none;
   outline: none;
-  margin: 0 8px 0 0;
+  margin: 0;
   opacity: 1;
   font: inherit;
   letter-spacing: inherit;
@@ -2914,15 +2941,18 @@
   border-radius: var(--aic-r-pill);
   background: transparent;
   color: var(--aic-destructive-text);
-  font-family: var(--aic-display);
-  font-weight: 600;
-  font-size: 12px;
+  /* ICON ONLY (Tom, 2026-09-06). The word beside the glyph made this control
+     wide enough to push the Queue pill out of the card in a narrow pane; the
+     square is the universal stop glyph and the name lives in the tooltip and
+     the aria-label. Same height as the pill, square, never shrunk. */
+  width: 28px;
   height: 28px;
-  line-height: 26px;
-  padding: 0 12px 0 10px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 0;
+  flex: 0 0 auto;
 }
 .aic-root.aic-root .aic-stop:hover { background: var(--aic-wash); }
 .aic-root.aic-root .aic-stop[hidden] { display: none; }
@@ -3256,6 +3286,60 @@
 /* ==== END REGION T1 ==== */
 
 /* ==== REGION R1: card rows that open (labels never crushed, values unfold) ==== */
+
+/* R1.1 the door. A chevron in the row's fourth column, and the column is
+   empty on a row that fits: an affordance on a row that is not cut is a
+   promise the click cannot keep. Faint at rest so it never competes with the
+   value, marker on hover so it reads as the control it is. */
+.aic-srow-chevron { display: none; color: var(--aic-faint); line-height: 0; }
+.aic-srow-chevron .svg-icon { width: 12px; height: 12px; transition: transform 140ms var(--aic-ease); }
+.aic-srow.is-expandable .aic-srow-chevron { display: inline-flex; }
+/* The fourth track exists only on a cut row: a zero-width track still costs
+   its gap, and every row that fits would have paid 8px for a door it has not
+   got. */
+.aic-srow.is-expandable { cursor: pointer; border-radius: 2px; grid-template-columns: 16px minmax(0, 1fr) 12px; }
+.aic-srow.is-expandable:hover .aic-srow-chevron,
+.aic-srow.is-expandable:focus-visible .aic-srow-chevron { color: var(--aic-marker); }
+.aic-srow.is-expandable:focus-visible { outline: 2px solid var(--aic-marker); outline-offset: 2px; }
+.aic-srow.is-expanded .aic-srow-chevron .svg-icon { transform: rotate(180deg); }
+
+/* R1.2 the open row: the text cell wraps into two lines. The label wraps on
+   the first at full width, the value and its qualifier take the second,
+   left-aligned, and NOTHING is hidden - the ellipsis, the nowrap and the
+   overflow all come off, and a long token breaks rather than runs past the
+   card. */
+.aic-srow.is-expanded { align-items: start; }
+.aic-srow.is-expanded .aic-srow-text { flex-wrap: wrap; }
+.aic-srow.is-expanded .aic-srow-label {
+  flex: 1 1 100%;
+  max-width: none;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+.aic-srow.is-expanded .aic-srow-right {
+  flex: 1 1 100%;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  overflow: visible;
+  text-align: left;
+}
+.aic-srow.is-expanded .aic-srow-value,
+.aic-srow.is-expanded .aic-srow-qual {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+/* R1.3 a sub-head over prose inside a card: the kicker keeps the band's own
+   kicker rule and the prose under it drops the reply-level top margin, which
+   was written for a paragraph that stands alone in the column. */
+.aic-band > .aic-assistant { margin-top: 0; }
+.aic-band > .aic-kicker + .aic-assistant { margin-top: 4px; }
+
 /* ==== END REGION R1 ==== */
 
 /* ==== REGION S1: background tasks, usage windows, alpha runtimes ==== */

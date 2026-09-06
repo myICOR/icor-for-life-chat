@@ -331,7 +331,8 @@ export class Composer {
     this.stopBtn = action.createEl('button', { cls: 'aic-stop', type: 'button' });
     const stopGlyph = this.stopBtn.createSpan({ cls: 'aic-stop-icon' });
     setIcon(stopGlyph, 'square');
-    this.stopBtn.createSpan({ text: 'Stop' });
+    // The glyph alone (Tom, 2026-09-06): the word made the control wide
+    // enough to push the Queue pill out of the card. The name is the label.
     this.stopBtn.setAttr('aria-label', 'Stop the current turn');
     setTooltip(this.stopBtn, 'Stop the current turn');
     this.stopBtn.addEventListener('click', () => this.cb.onStop());

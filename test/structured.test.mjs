@@ -320,3 +320,55 @@ test('the format tells the model it is not writing into a terminal', () => {
   assert.match(STRUCTURED_REPLY_PROMPT, /editorial and still\nhold/i,
     'the no-wrap rule also cancelled the limits on how much to write');
 });
+
+/* ------------------------------------------------ silent loss (2026-09-06) */
+
+test('NOT COVERED keeps every row the model wrote', () => {
+  const doc = parseStructured([
+    'LARRY · bounds · COMPLETE',
+    'ANSWER',
+    'Four things are out.',
+    'NOT COVERED',
+    '⚪ one :: a',
+    '⚪ two :: b',
+    '⚪ three :: c',
+    '⚪ four :: d',
+  ].join('\n'));
+  const block = doc.segments[0].blocks.find((b) => b.kind === 'notCovered');
+  assert.equal(block.rows.length, 4, 'row four used to cease to exist at parse time');
+  assert.equal(block.rows[3].label, 'four');
+});
+
+test('a sub-head over prose keeps its sub-head', () => {
+  const doc = parseStructured([
+    'LARRY · headings · COMPLETE',
+    'ANSWER',
+    'Two headings, two fates, before this.',
+    'WHY IT MATTERS',
+    'The clause at the end of a row is the one that changes its meaning.',
+    '',
+    'WHAT THIS MEANS DAY TO DAY',
+    'Click Copy when a row looks odd.',
+  ].join('\n'));
+  const blocks = doc.segments[0].blocks;
+  const why = blocks.find((b) => b.kind === 'prose' && b.title === 'WHY IT MATTERS');
+  assert.ok(why, 'the kicker was consumed and the paragraph pushed alone');
+  assert.equal(why.text, 'The clause at the end of a row is the one that changes its meaning.');
+  // The longer line is not a kicker (over 24 characters) and stays prose as before.
+  assert.ok(blocks.some((b) => b.kind === 'prose' && !b.title && b.text.startsWith('WHAT THIS MEANS')));
+});
+
+test('a long value row keeps its label and its whole value', () => {
+  const value = 'this sentence is long enough that the panel will cut it, and the qualification that changes its meaning lives right here at the end';
+  const doc = parseStructured([
+    'LARRY · rows · COMPLETE',
+    'ANSWER',
+    'Nothing is dropped.',
+    `🔴 a row with a long value :: ${value} (only while streaming)`,
+    '🟢 short row :: fine',
+  ].join('\n'));
+  const group = doc.segments[0].blocks.find((b) => b.kind === 'group');
+  assert.equal(group.rows[0].label, 'a row with a long value');
+  assert.equal(group.rows[0].value, value);
+  assert.equal(group.rows[0].qualifier, 'only while streaming');
+});

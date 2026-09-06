@@ -332,6 +332,11 @@ ${HELPERS}
        this map is inside a template literal.) */
     toolChevron: '.aic-tool-summary .aic-chevron',
     toolRowExpandable: '.aic-tool.is-expandable',
+    /* A card row measured as cut (R1). Listed so a fixture whose long row
+       stopped being cut, or a measurer that stopped firing, is a red build
+       and not a silently vacuous row test. */
+    srowExpandable: '.aic-srow.is-expandable',
+    srowChevron: '.aic-srow.is-expandable .aic-srow-chevron',
     /* The reply surface: the action bar's buttons under a reply and under
        the user's own well, and the sentence a collapsed group now says. */
     actionBar: '.aic-assistant .aic-actions',
@@ -500,6 +505,106 @@ ${HELPERS}
       out.toolExpanded = null;
       out.toolReCollapsed = null;
       out.toolRail = null;
+    }
+  }
+
+  /* THE CARD ROWS (R1). Every row: is it a control, and does its label still
+     have width. Then the cut row OPENED, which is the state the click makes:
+     nothing may be cut once open. Read closed first so the numbers above are
+     not the ones the click changed. */
+  out.srows = Array.from(document.querySelectorAll('.aic-srow')).map((r) => {
+    const label = r.querySelector('.aic-srow-label');
+    const value = r.querySelector('.aic-srow-value');
+    return {
+      label: (label?.textContent || '').trim(),
+      labelWidth: label ? label.clientWidth : 0,
+      labelCut: label ? label.scrollWidth > label.clientWidth + 1 : false,
+      valueCut: value ? value.scrollWidth > value.clientWidth + 1 : false,
+      expandable: r.classList.contains('is-expandable'),
+      role: r.getAttribute('role'),
+      tabindex: r.getAttribute('tabindex'),
+      expanded: r.getAttribute('aria-expanded'),
+      name2: r.getAttribute('aria-label') || '',
+      cursor: getComputedStyle(r).cursor,
+      chevrons: Array.from(r.querySelectorAll('.aic-srow-chevron')).filter((c) => getComputedStyle(c).display !== 'none').length,
+      columns: getComputedStyle(r).gridTemplateColumns.split(' ').length,
+    };
+  });
+  {
+    const long = Array.from(document.querySelectorAll('.aic-srow')).find(
+      (r) => (r.querySelector('.aic-srow-label')?.textContent || '') === 'a row with a long value',
+    );
+    if (long) {
+      const collapsedHeight = Math.round(long.getBoundingClientRect().height);
+      long.click();
+      const label = long.querySelector('.aic-srow-label');
+      const value = long.querySelector('.aic-srow-value');
+      const qual = long.querySelector('.aic-srow-qual');
+      const right = long.querySelector('.aic-srow-right');
+      out.srowExpanded = {
+        expanded: long.getAttribute('aria-expanded'),
+        name2: long.getAttribute('aria-label') || '',
+        wrap: value ? getComputedStyle(value).whiteSpace : null,
+        valueCut: value ? value.scrollWidth > value.clientWidth + 1 : null,
+        labelCut: label ? label.scrollWidth > label.clientWidth + 1 : null,
+        qualCut: qual ? qual.scrollWidth > qual.clientWidth + 1 : null,
+        qualText: (qual?.textContent || '').trim(),
+        collapsedHeight,
+        expandedHeight: Math.round(long.getBoundingClientRect().height),
+        rowRight: Math.round(long.getBoundingClientRect().right),
+        rightRight: right ? Math.round(right.getBoundingClientRect().right) : 0,
+        /* The value moved UNDER the label: its top is below the label's top. */
+        valueBelowLabel: label && value ? value.getBoundingClientRect().top > label.getBoundingClientRect().top + 4 : null,
+        chevronRotation: (() => {
+          const svg = long.querySelector('.aic-srow-chevron .svg-icon');
+          return svg ? getComputedStyle(svg).transform : null;
+        })(),
+      };
+      long.click();
+      out.srowReCollapsed = long.getAttribute('aria-expanded');
+    } else {
+      out.srowExpanded = null;
+      out.srowReCollapsed = null;
+    }
+  }
+
+  /* THE ACTION ROW AT 320px, STREAMING (Stop visible, pill reading Queue).
+     The claim is geometric: the pill's right edge, and the Stop control's,
+     are inside the composer card's content box. Forced narrow for one read
+     and put back, so nothing else on the page is measured at that width. */
+  {
+    const host = one('.aic-stop-probe');
+    const card = host ? host.querySelector('.aic-composer') : null;
+    if (host && card) {
+      const prior = host.style.width;
+      host.style.width = '320px';
+      void host.offsetWidth;
+      const cs = getComputedStyle(card);
+      const cardRect = card.getBoundingClientRect();
+      const contentRight = cardRect.right - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth);
+      const contentLeft = cardRect.left + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth);
+      const send = card.querySelector('.aic-send');
+      const stop = card.querySelector('.aic-stop');
+      const action = card.querySelector('.aic-action');
+      out.narrowAction = {
+        cardWidth: Math.round(cardRect.width),
+        contentRight: Math.round(contentRight * 100) / 100,
+        contentLeft: Math.round(contentLeft * 100) / 100,
+        sendRight: send ? Math.round(send.getBoundingClientRect().right * 100) / 100 : null,
+        sendText: (send?.textContent || '').trim(),
+        stopRight: stop ? Math.round(stop.getBoundingClientRect().right * 100) / 100 : null,
+        stopHidden: stop ? stop.hidden : null,
+        stopWidth: stop ? Math.round(stop.getBoundingClientRect().width) : null,
+        stopHeight: stop ? Math.round(stop.getBoundingClientRect().height) : null,
+        stopText: (stop?.textContent || '').trim(),
+        stopIcons: stop ? stop.querySelectorAll('.svg-icon').length : 0,
+        actionScroll: action ? action.scrollWidth > action.clientWidth + 1 : null,
+        firstLeft: action ? Math.round(action.firstElementChild.getBoundingClientRect().left * 100) / 100 : null,
+      };
+      host.style.width = prior;
+      void host.offsetWidth;
+    } else {
+      out.narrowAction = null;
     }
   }
 
@@ -2119,5 +2224,80 @@ test('no text on a card is clipped to a line count', () => {
     assert.equal(s.base.el.askedText.lineClamp, 'none',
       `${room}: the ASKED text is clamped to ${s.base.el.askedText.lineClamp} lines and the ` +
       `remainder is unreachable - the panel scrolls, there is nothing to save space for`);
+  });
+});
+
+/* ------------------------------------------------- R1: card rows that open */
+
+test('a card row never loses its label, and a fitting row is not a control', () => {
+  forEachRoom((s, room) => {
+    const rows = s.base.srows;
+    assert.ok(rows.length >= 5, `${room}: only ${rows.length} card rows - the fixture shrank`);
+    for (const r of rows) {
+      assert.ok(r.labelWidth > 0, `${room}: the "${r.label}" row's label was crushed to ${r.labelWidth}px`);
+      assert.ok(!r.labelCut, `${room}: the "${r.label}" row's LABEL is cut - the value took its track`);
+    }
+    const fits = rows.filter((r) => !r.expandable);
+    const cut = rows.filter((r) => r.expandable);
+    assert.ok(fits.length >= 1, `${room}: every row is cut, so "a fitting row is inert" is untested`);
+    assert.ok(cut.length >= 1, `${room}: no row is cut, so the door is guarding nothing`);
+    for (const r of fits) {
+      assert.equal(r.valueCut, false, `${room}: the "${r.label}" row is cut and not expandable - silent loss`);
+      assert.equal(r.role, null, `${room}: a row that fits took a role`);
+      assert.equal(r.tabindex, null, `${room}: a row that fits took a tab stop`);
+      assert.equal(r.chevrons, 0, `${room}: a row that fits grew a chevron - an empty promise`);
+      assert.equal(r.cursor, 'auto', `${room}: a row that fits looks clickable`);
+      assert.equal(r.columns, 2, `${room}: a row that fits pays for the door's track (${r.columns} columns)`);
+    }
+    for (const r of cut) {
+      assert.equal(r.role, 'button', `${room}: the cut "${r.label}" row is not a control`);
+      assert.equal(r.tabindex, '0', `${room}: the cut "${r.label}" row has no tab stop`);
+      assert.equal(r.expanded, 'false', `${room}: the cut "${r.label}" row does not report its state`);
+      assert.equal(r.name2, 'Show the full row', `${room}: the cut row's name is "${r.name2}"`);
+      assert.equal(r.cursor, 'pointer', `${room}: the cut "${r.label}" row does not look clickable`);
+      assert.equal(r.chevrons, 1, `${room}: the cut row shows ${r.chevrons} chevrons; an ellipsis alone is not a signal`);
+      assert.equal(r.columns, 3, `${room}: the cut row has no track for its door (${r.columns} columns)`);
+    }
+  });
+});
+
+test('an opened card row hides nothing, and closes again', () => {
+  forEachRoom((s, room) => {
+    const e = s.base.srowExpanded;
+    assert.ok(e, `${room}: the long row is not in the fixture`);
+    assert.equal(e.expanded, 'true', `${room}: the click did not open the row`);
+    assert.equal(e.name2, 'Collapse the row', `${room}: the open row's name is "${e.name2}"`);
+    assert.notEqual(e.wrap, 'nowrap', `${room}: the opened value still refuses to wrap`);
+    assert.equal(e.valueCut, false, `${room}: the opened value is still cut`);
+    assert.equal(e.labelCut, false, `${room}: the opened label is still cut`);
+    assert.equal(e.qualCut, false, `${room}: the opened qualifier is still cut`);
+    assert.equal(e.qualText, '(only while streaming)', `${room}: the qualifier went missing when the row opened`);
+    assert.ok(e.expandedHeight > e.collapsedHeight,
+      `${room}: the opened row is still ${e.expandedHeight}px tall, the same as closed`);
+    assert.ok(e.valueBelowLabel, `${room}: the opened value did not move under the label`);
+    assert.ok(e.rightRight <= e.rowRight + 1, `${room}: the opened value runs ${e.rightRight - e.rowRight}px past the row`);
+    assert.notEqual(e.chevronRotation, 'none', `${room}: the open row's chevron did not turn`);
+    assert.equal(s.base.srowReCollapsed, 'false', `${room}: a second click did not close the row`);
+  });
+});
+
+test('at 320px, streaming, the Queue pill and the Stop control stay inside the card', () => {
+  forEachRoom((s, room) => {
+    const n = s.base.narrowAction;
+    assert.ok(n, `${room}: no streaming composer to narrow`);
+    assert.equal(n.cardWidth, 320, `${room}: the probe did not take the width (${n.cardWidth}px)`);
+    assert.equal(n.stopHidden, false, `${room}: Stop is hidden while streaming`);
+    assert.equal(n.sendText, 'Queue', `${room}: the pill reads "${n.sendText}" mid-turn`);
+    assert.ok(n.sendRight <= n.contentRight + 0.5,
+      `${room}: the Queue pill's right edge (${n.sendRight}) is past the card's content box (${n.contentRight})`);
+    assert.ok(n.stopRight <= n.contentRight + 0.5,
+      `${room}: the Stop control's right edge (${n.stopRight}) is past the card's content box (${n.contentRight})`);
+    assert.ok(n.firstLeft >= n.contentLeft - 0.5, `${room}: the action row starts before the card's content box`);
+    assert.equal(n.actionScroll, false, `${room}: the action row overflows its own box`);
+    /* ICON ONLY: no word, one glyph, a 28px square. */
+    assert.equal(n.stopText, '', `${room}: Stop still carries the word "${n.stopText}"`);
+    assert.equal(n.stopIcons, 1, `${room}: Stop carries ${n.stopIcons} glyphs`);
+    assert.equal(n.stopWidth, 28, `${room}: Stop is ${n.stopWidth}px wide, not a 28px square`);
+    assert.equal(n.stopHeight, 28, `${room}: Stop is ${n.stopHeight}px tall, not a 28px square`);
   });
 });
