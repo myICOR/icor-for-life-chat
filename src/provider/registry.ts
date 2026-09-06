@@ -61,6 +61,19 @@ export function missingProviderMessage(id: ProviderId): string {
     : `${name} is not part of this build of the plugin, so this conversation cannot open on it.`;
 }
 
+/* HOW FAR A RUNTIME HAS BEEN TAKEN (Tom, 2026-09-06). Claude Code is the
+ * runtime this plugin was built on and measured against turn by turn. Every
+ * other runtime joined through the seam in one day each and has not been
+ * through that; it works, and the user is told it is Alpha and not fully
+ * tested yet, on the chip, in the menu and in settings. The list of stable
+ * runtimes is this function, so promoting one is a one-word change here. */
+export function providerMaturity(id: ProviderId): 'stable' | 'alpha' {
+  return id === 'claude' ? 'stable' : 'alpha';
+}
+
+/** The one sentence every Alpha surface says, so the three cannot drift. */
+export const ALPHA_NOTE = 'Alpha, not fully tested yet.';
+
 export function availableProviders(): Provider[] {
   return Object.values(providers).filter((p): p is Provider => p !== null);
 }

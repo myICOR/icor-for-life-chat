@@ -62,7 +62,8 @@ function allOn(): Record<FactId, boolean> {
 }
 
 export class Statusline {
-  private readonly cells = new Map<FactId, Cell>();
+  /** Keyed by the fact's CELL, not its id: the plan budget is one id and one cell per window. */
+  private readonly cells = new Map<string, Cell>();
   private readonly seq = stripSeq++;
   private painted: Fact[] = [];
   private observer: ResizeObserver | null = null;
@@ -107,15 +108,15 @@ export class Statusline {
     // A colliding pair means the glyph stopped being a label. Everything falls
     // back to words rather than shipping an ambiguous icon.
     const useIcons = glyphsAreUnique(facts);
-    const wanted = new Set(facts.map((f) => f.id));
-    for (const [id, cell] of this.cells) {
-      if (!wanted.has(id)) {
+    const wanted = new Set(facts.map((f) => f.cell));
+    for (const [key, cell] of this.cells) {
+      if (!wanted.has(key)) {
         cell.root.remove();
-        this.cells.delete(id);
+        this.cells.delete(key);
       }
     }
     facts.forEach((fact, index) => {
-      const cell = this.cellFor(fact.id);
+      const cell = this.cellFor(fact.id, fact.cell);
       this.paint(cell, fact, useIcons);
       cell.root.toggleClass('is-first', index === 0);
       // Appending an existing node MOVES it, which keeps the ring's element
@@ -131,8 +132,8 @@ export class Statusline {
     this.observer = null;
   }
 
-  private cellFor(id: FactId): Cell {
-    const found = this.cells.get(id);
+  private cellFor(id: FactId, key: string): Cell {
+    const found = this.cells.get(key);
     if (found) return found;
     /* Born on the strip via Obsidian's own helper. It lands appended, which is
        fine: render() re-appends every visible cell in order anyway, and an
@@ -142,6 +143,7 @@ export class Statusline {
        tab-stop count are all claims about WHICH readout, and a gate that had to
        infer that from a label string would be guarding the label. */
     root.setAttr('data-fact', id);
+    root.setAttr('data-cell', key);
     root.createSpan({ cls: 'aic-middot', text: '·' });
     const fact = root.createSpan({ cls: 'aic-fact' });
     const icon = fact.createSpan({ cls: 'aic-fact-icon' });
@@ -154,14 +156,15 @@ export class Statusline {
        The tooltip carries the same string: two copies would be two things to
        keep true. */
     const describe = fact.createSpan({ cls: 'aic-fact-desc' });
-    const descId = `${PLUGIN_ID}-${this.seq}-fact-${id}`;
+    // Per CELL: two plan windows are two described nodes, never one id twice.
+    const descId = `${PLUGIN_ID}-${this.seq}-fact-${key.replace(/[^a-z0-9_-]/gi, '-')}`;
     describe.setAttr('id', descId);
     describe.setAttr('hidden', 'hidden');
     fact.setAttr('aria-describedby', descId);
     const cell: Cell = {
       root, fact, ring: null, arc: null, label, direction, value, state, describe, icon, iconName: null,
     };
-    this.cells.set(id, cell);
+    this.cells.set(key, cell);
     return cell;
   }
 
@@ -257,7 +260,7 @@ export class Statusline {
        between here and the end of this function. */
     this.el.toggleClass('is-live', this.live);
     if (this.painted.length === 0) return;
-    for (const fact of this.painted) this.cells.get(fact.id)?.root.removeClass('is-dropped');
+    for (const fact of this.painted) this.cells.get(fact.cell)?.root.removeClass('is-dropped');
     const style = window.getComputedStyle(this.el);
     const available =
       this.el.clientWidth - parseFloat(style.paddingLeft || '0') - parseFloat(style.paddingRight || '0');
@@ -265,16 +268,16 @@ export class Statusline {
     // here would drop facts the pane has room for. The next render measures it.
     if (!Number.isFinite(available) || available <= 0) return;
     const gap = parseFloat(style.columnGap || style.gap || '0') || 0;
-    const widths = new Map<FactId, number>();
-    for (const fact of this.painted) widths.set(fact.id, this.cells.get(fact.id)?.root.offsetWidth ?? 0);
-    const kept = fitFacts(this.painted, (f) => widths.get(f.id) ?? 0, available, gap);
-    const keptIds = new Set(kept.map((f) => f.id));
+    const widths = new Map<string, number>();
+    for (const fact of this.painted) widths.set(fact.cell, this.cells.get(fact.cell)?.root.offsetWidth ?? 0);
+    const kept = fitFacts(this.painted, (f) => widths.get(f.cell) ?? 0, available, gap);
+    const keptCells = new Set(kept.map((f) => f.cell));
     this.painted.forEach((fact) => {
-      const cell = this.cells.get(fact.id);
+      const cell = this.cells.get(fact.cell);
       if (!cell) return;
-      cell.root.toggleClass('is-dropped', !keptIds.has(fact.id));
+      cell.root.toggleClass('is-dropped', !keptCells.has(fact.cell));
     });
-    kept.forEach((fact, index) => this.cells.get(fact.id)?.root.toggleClass('is-first', index === 0));
+    kept.forEach((fact, index) => this.cells.get(fact.cell)?.root.toggleClass('is-first', index === 0));
     /* NO STRIP AT ALL, never a clipped one. The ladder ran out of readouts to
        remove and the budgets still do not fit whole, so the honest render is
        nothing: same zero height as a pane with no session behind it, and no

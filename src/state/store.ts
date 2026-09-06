@@ -58,7 +58,14 @@ export function reduce(prev: ChatState, e: ChatEvent): ChatState {
       };
     }
     case 'rate-limit':
-      return { ...prev, rateLimits: e.facts, lastUpdatedAt: now };
+      return {
+        ...prev,
+        rateLimits: e.facts,
+        rateLimitWindows: e.facts.window === 'unknown'
+          ? prev.rateLimitWindows
+          : { ...prev.rateLimitWindows, [e.facts.window]: e.facts },
+        lastUpdatedAt: now,
+      };
     case 'turn-end': {
       // The SDK's result totals are running totals for the session, not per-turn
       // deltas: read the latest, never sum across results.

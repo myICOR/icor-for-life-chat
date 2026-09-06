@@ -316,3 +316,60 @@ test('relativeTo strips exactly the vault prefix', () => {
   assert.equal(relativeTo('/vault2/a.md', '/v'), '/vault2/a.md');
   assert.equal(relativeTo('/v/a.md', ''), '/v/a.md');
 });
+
+/* ------------------------------------------------ background tasks (2026-09-06) */
+
+/* Shapes from the SDK's own types (sdk.d.ts: SDKTaskStartedMessage,
+   SDKTaskProgressMessage, SDKTaskNotificationMessage). A Bash call sent with
+   run_in_background answers at once and ends later as a task notification;
+   the row that shows it has to outlive the result. */
+test('a task_started without a subagent_type is a background row, never a subagent', () => {
+  const n = new Normalizer();
+  const [e] = n.normalize({
+    type: 'system', subtype: 'task_started', task_id: 'bg1', tool_use_id: 'toolu_bg',
+    description: 'Run the test suite', task_type: 'local_bash', uuid: 'u', session_id: 's',
+  });
+  assert.equal(e.kind, 'task-update');
+  assert.equal(e.status, 'running');
+  assert.equal(e.toolUseId, 'toolu_bg');
+  assert.equal(e.taskId, 'bg1');
+  assert.equal(e.description, 'Run the test suite');
+  assert.equal(e.taskType, 'local_bash');
+});
+
+test('progress and the notification close a background task on its own row', () => {
+  const n = new Normalizer();
+  n.normalize({ type: 'system', subtype: 'task_started', task_id: 'bg1', tool_use_id: 'toolu_bg', description: 'd', task_type: 'local_bash' });
+  const [progress] = n.normalize({
+    type: 'system', subtype: 'task_progress', task_id: 'bg1', tool_use_id: 'toolu_bg', description: 'd',
+    usage: { total_tokens: 0, tool_uses: 0, duration_ms: 10 }, summary: 'halfway',
+  });
+  assert.equal(progress.kind, 'task-update');
+  assert.equal(progress.status, 'running');
+  assert.equal(progress.summary, 'halfway');
+  const [end] = n.normalize({
+    type: 'system', subtype: 'task_notification', task_id: 'bg1', tool_use_id: 'toolu_bg',
+    status: 'completed', output_file: '/tmp/out.txt', summary: '12 tests passed',
+  });
+  assert.equal(end.kind, 'task-update');
+  assert.equal(end.status, 'completed');
+  assert.equal(end.summary, '12 tests passed');
+  assert.equal(end.outputFile, '/tmp/out.txt');
+  for (const status of ['failed', 'stopped']) {
+    const m = new Normalizer();
+    m.normalize({ type: 'system', subtype: 'task_started', task_id: 'x', description: 'd', task_type: 'local_bash' });
+    const [ev] = m.normalize({ type: 'system', subtype: 'task_notification', task_id: 'x', status, output_file: '', summary: '' });
+    assert.equal(ev.kind, 'task-update');
+    assert.equal(ev.status, status);
+    assert.equal(ev.toolUseId, null, 'a task the CLI started on its own names no tool call');
+    assert.equal(ev.taskId, 'x');
+  }
+});
+
+test('subagent progress is not a task update, and a subagent still closes as one', () => {
+  const n = new Normalizer();
+  n.normalize({ type: 'system', subtype: 'task_started', task_id: 'a', tool_use_id: 't', description: 'd', subagent_type: 'pax' });
+  assert.deepEqual(n.normalize({ type: 'system', subtype: 'task_progress', task_id: 'a', tool_use_id: 't', description: 'd', usage: { total_tokens: 1, tool_uses: 1, duration_ms: 1 } }), []);
+  const [end] = n.normalize({ type: 'system', subtype: 'task_notification', task_id: 'a', tool_use_id: 't', status: 'completed', output_file: '', summary: '' });
+  assert.equal(end.kind, 'subagent-end');
+});

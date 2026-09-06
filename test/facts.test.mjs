@@ -8,7 +8,7 @@ import {
   RENDER_ORDER, DROP_GROUPS, RING_MIN_CONSUMED, RING_CIRCUMFERENCE,
   ringCount, ringDashOffset, fitFacts, visibleFacts,
   FACT_TOOLTIPS, FACT_NAMES, FACT_SETTING_KEYS, DEFAULT_SETTINGS, factVisibility,
-  Normalizer,
+  Normalizer, usageEvents,
 } from './build/pure.mjs';
 
 const NOW = 1_700_000_000_000;
@@ -201,9 +201,50 @@ test('overage has nothing left to have a direction, and being there is the state
   assert.match(f.accessibleName, /overage used/i);
 });
 
-test('the strip carries at most one plan fact - one budget, one nearest wall', () => {
-  const facts = buildFacts(withPlan('seven_day', 'allowed_warning', 0.79), NOW);
-  assert.equal(facts.filter((f) => f.budget && f.label !== 'CTX').length, 1);
+test('one plan cell per measured window, 5H before 7D, and one event still means one cell', () => {
+  const one = buildFacts(withPlan('seven_day', 'allowed_warning', 0.79), NOW);
+  assert.equal(one.filter((f) => f.budget && f.label !== 'CTX').length, 1);
+  /* Two windows arrive as two events, and the strip used to keep only the
+     last: the 7-day figure vanished the moment a 5-hour one arrived. Both are
+     kept now, keyed by window, and rendered nearest horizon first. */
+  let st = reduce(emptyState(), { kind: 'rate-limit', facts: limits('seven_day', 'allowed', 0.4), stream: null });
+  st = reduce(st, { kind: 'rate-limit', facts: limits('five_hour', 'allowed_warning', 0.9), stream: null });
+  const both = buildFacts({ ...st, lastUpdatedAt: NOW }, NOW).filter((f) => f.id === 'plan');
+  assert.deepEqual(both.map((f) => f.label), ['5H', '7D']);
+  assert.deepEqual(both.map((f) => f.value), ['10%', '60%']);
+  assert.deepEqual(both.map((f) => f.cell), ['plan:five_hour', 'plan:seven_day']);
+  assert.equal(both[0].tone, 'warning');
+  assert.equal(both[1].tone, 'quiet');
+  // The latest event for a window replaces that window and no other.
+  st = reduce(st, { kind: 'rate-limit', facts: limits('seven_day', 'allowed', 0.5), stream: null });
+  assert.deepEqual(buildFacts({ ...st, lastUpdatedAt: NOW }, NOW).filter((f) => f.id === 'plan').map((f) => f.value), ['10%', '50%']);
+  // An unknown window is never stored, so it can never render.
+  st = reduce(st, { kind: 'rate-limit', facts: limits('unknown', 'allowed', 0.5), stream: null });
+  assert.equal(buildFacts({ ...st, lastUpdatedAt: NOW }, NOW).filter((f) => f.id === 'plan').length, 2);
+  assert.equal('unknown' in st.rateLimitWindows, false);
+});
+
+test('the usage report fills every window it measured, as a fraction, with the wire status', () => {
+  const report = {
+    rate_limits_available: true,
+    rate_limits: {
+      five_hour: { utilization: 18, resets_at: '2026-09-06T18:00:00Z' },
+      seven_day: { utilization: 42.5, resets_at: null },
+      seven_day_opus: null,
+      seven_day_sonnet: { utilization: null, resets_at: null },
+    },
+  };
+  const events = usageEvents(report, new Map([['five_hour', 'allowed_warning']]));
+  assert.deepEqual(events.map((e) => e.facts.window), ['five_hour', 'seven_day']);
+  assert.equal(events[0].facts.utilization, 0.18);
+  assert.equal(events[0].facts.resetsAt, Date.parse('2026-09-06T18:00:00Z'));
+  assert.equal(events[0].facts.status, 'allowed_warning', 'the wire status survives the report, which carries none');
+  assert.equal(events[1].facts.utilization, 0.425);
+  assert.equal(events[1].facts.resetsAt, null);
+  assert.equal(events[1].facts.status, 'allowed');
+  for (const bad of [null, undefined, 'x', {}, { rate_limits: null }, { rate_limits: { five_hour: { utilization: 'a' } } }]) {
+    assert.deepEqual(usageEvents(bad), [], 'a reshaped or absent report emits nothing');
+  }
 });
 
 test('a remainder percentage renders its word forever - no glyph depicts "remaining"', () => {

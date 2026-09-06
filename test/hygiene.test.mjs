@@ -14,6 +14,7 @@ import { dirname, resolve } from 'node:path';
 import {
   DEFAULT_SETTINGS, RENDER_ORDER, FACT_SETTING_KEYS,
   settingDefinitions, controlKeys, isNote, modelOptions, validateRetention,
+  providerMaturity, ALPHA_NOTE, runtimeRows,
 } from './build/pure.mjs';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -180,6 +181,17 @@ test('an absent provider is null, never Claude in disguise', async () => {
   assert.match(missingProviderMessage('acp'), /not part of this build/);
   assert.match(missingProviderMessage('codex'), /not found on this machine/);
   assert.equal(providerName('gemini'), 'Gemini CLI');
+});
+
+test('Claude Code is the one stable runtime; every other id is Alpha, and the settings row says so first', () => {
+  assert.equal(providerMaturity('claude'), 'stable');
+  for (const id of ['codex', 'gemini', 'copilot', 'opencode', 'qwen']) assert.equal(providerMaturity(id), 'alpha', id);
+  assert.equal(ALPHA_NOTE, 'Alpha, not fully tested yet.');
+  const input = { settings: DEFAULT_SETTINGS, detections: { codex: { found: true, hint: 'Codex 1.0 at /usr/local/bin/codex.' }, claude: { found: true, hint: 'Claude at /x.' } } };
+  const codexRow = runtimeRows(input, 'codex', 'Codex', 'codexPath', 'd', 'p')[0];
+  assert.match(codexRow.desc, /^Alpha, not fully tested yet\. Codex 1\.0/);
+  const claudeRow = runtimeRows(input, 'claude', 'Claude Code', 'cliPath', 'd', 'p')[0];
+  assert.doesNotMatch(claudeRow.desc, /Alpha/);
 });
 
 test('the seam declares every provider id, and the registry answers each one', () => {

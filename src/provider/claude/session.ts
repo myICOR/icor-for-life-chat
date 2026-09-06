@@ -33,7 +33,22 @@
  * and only opens a separate turn when the running turn had no further model
  * call to give it to. The plugin cannot tell the two apart at a turn boundary,
  * which is why model/followups.ts treats every turn end as idle and re-arms on
- * the first signal of a turn the CLI starts on its own. */
+ * the first signal of a turn the CLI starts on its own.
+ *
+ * THE SECOND SOURCE OF PLAN USAGE (2026-09-06). The wire's rate_limit_event
+ * names ONE window per event, so a strip that shows the 5-hour and the 7-day
+ * window together needs every window at once. SDK 0.3.226 carries a control
+ * request for exactly that, the structured data behind `/usage`, under a
+ * method the SDK itself names as experimental:
+ * `usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET`. It is called
+ * once after the session's init and once after every turn end, through
+ * feature detection and a try/catch: on a runtime that lacks it, refuses it,
+ * or changes its shape, NOTHING is emitted and the strip carries whatever the
+ * wire events measured. Its utilization is a PERCENT (0 to 100, per the SDK's
+ * own type) where the wire event's is a fraction (0 to 1); it is divided by
+ * 100 here so one fact type carries both. The endpoint reports no status
+ * word, so the window keeps the status the wire last gave it, else `allowed`.
+ * Not yet measured against a live session; the guard is the measurement. */
 
 import { query, AbortError } from '@anthropic-ai/claude-agent-sdk';
 import type { Options, Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
@@ -44,7 +59,8 @@ import { ApprovalBroker, toPermissionAnswer } from './permissions';
 import type {
   ApprovalChoice, ProviderSession, SessionConfig, SessionHooks, SessionImage,
 } from '../types';
-import type { EffortName, ModelChoice, PermissionModeName } from '../../model/types';
+import type { EffortName, ModelChoice, PermissionModeName, RateLimitFacts } from '../../model/types';
+import { usageEvents } from './usage';
 
 export type { SessionConfig, SessionHooks, SessionImage } from '../types';
 
@@ -135,6 +151,9 @@ export class ChatSession implements ProviderSession {
   private handle: Query | null = null;
   private pump: Promise<void> | null = null;
   private disposed = false;
+  /** The status word the wire last gave each window; the usage report carries none. */
+  private readonly wireStatus = new Map<RateLimitFacts['window'], RateLimitFacts['status']>();
+  private usageInFlight = false;
 
   constructor(
     private readonly config: SessionConfig,
@@ -296,7 +315,11 @@ export class ChatSession implements ProviderSession {
         if (this.disposed) break;
         this.hooks.onRawMessage?.(message);
         for (const event of this.normalizer.normalize(message)) {
+          if (event.kind === 'rate-limit' && event.facts.window !== 'unknown') {
+            this.wireStatus.set(event.facts.window, event.facts.status);
+          }
           this.hooks.onEvent(event);
+          if (event.kind === 'session' || event.kind === 'turn-end') void this.refreshUsage(handle);
         }
       }
     } catch (error) {
@@ -316,6 +339,24 @@ export class ChatSession implements ProviderSession {
       }
     } finally {
       this.broker.close();
+    }
+  }
+
+  /* Every plan window at once, from the SDK's usage report. See the head of
+     this file: experimental, feature-detected, and silent when absent. */
+  private async refreshUsage(handle: Query): Promise<void> {
+    if (this.usageInFlight || this.disposed) return;
+    const fn = (handle as unknown as Record<string, unknown>).usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET;
+    if (typeof fn !== 'function') return;
+    this.usageInFlight = true;
+    try {
+      const report = (await (fn as () => Promise<unknown>).call(handle)) as Record<string, unknown> | null;
+      if (this.disposed) return;
+      for (const event of usageEvents(report, this.wireStatus)) this.hooks.onEvent(event);
+    } catch {
+      // A refused or reshaped report is not an event; the wire still measures.
+    } finally {
+      this.usageInFlight = false;
     }
   }
 

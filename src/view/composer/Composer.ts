@@ -158,6 +158,8 @@ export interface ComposerCallbacks {
 export interface ProviderOption {
   id: ProviderId;
   displayName: string;
+  /** Not fully tested yet: the chip, the menu and settings all say so. Claude Code never is. */
+  alpha: boolean;
 }
 
 export interface ComposerState {
@@ -591,6 +593,13 @@ export class Composer {
     return this.providerOptions.find((p) => p.id === id)?.displayName ?? (id === 'claude' ? 'Claude Code' : id);
   }
 
+  /** Whether the pane's runtime is one the user is warned about. Claude Code never is. */
+  private providerAlpha(): boolean {
+    const id = this.state.provider ?? 'claude';
+    if (id === 'claude') return false;
+    return this.providerOptions.find((p) => p.id === id)?.alpha ?? true;
+  }
+
   private openProviderMenu(evt: MouseEvent): void {
     const menu = new Menu();
     if (this.state.providerLocked) {
@@ -606,7 +615,7 @@ export class Composer {
     for (const option of this.providerOptions) {
       menu.addItem((item) =>
         item
-          .setTitle(option.displayName)
+          .setTitle(option.alpha ? `${option.displayName} · Alpha` : option.displayName)
           .setChecked((this.state.provider ?? 'claude') === option.id)
           .onClick(() => {
             this.state.provider = option.id;
@@ -1010,15 +1019,24 @@ export class Composer {
 
   private paint(): void {
     const providerName = this.providerName();
+    const alpha = this.providerAlpha();
     this.providerBtn.empty();
     this.providerBtn.createSpan({ text: providerName });
+    /* THE ALPHA WORD, on every runtime but Claude Code (Tom, 2026-09-06): the
+       other runtimes joined through the seam and have not been tested turn
+       by turn the way Claude has. Said on the chip, in the menu and in the
+       tooltip, so the user knows before the first message and not after. */
+    if (alpha) this.providerBtn.createSpan({ cls: 'aic-provider-alpha', text: 'ALPHA' });
     this.providerBtn.disabled = this.state.providerLocked === true;
     this.providerBtn.toggleClass('is-locked', this.state.providerLocked === true);
+    const alphaNote = alpha ? ' Alpha: not fully tested yet.' : '';
     setTooltip(
       this.providerBtn,
-      this.state.providerLocked ? `Runtime: ${providerName}. A conversation belongs to one runtime.` : 'Runtime for this conversation',
+      this.state.providerLocked
+        ? `Runtime: ${providerName}. A conversation belongs to one runtime.${alphaNote}`
+        : `Runtime for this conversation.${alphaNote}`,
     );
-    this.providerBtn.setAttr('aria-label', `Runtime: ${providerName}`);
+    this.providerBtn.setAttr('aria-label', alpha ? `Runtime: ${providerName}, Alpha: not fully tested yet` : `Runtime: ${providerName}`);
 
     const mode = MODES.find((m) => m.id === this.state.mode) ?? MODES[1];
     this.modeBtn.empty();

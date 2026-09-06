@@ -78,6 +78,13 @@ export const RENDER_ORDER: readonly FactId[] = [
 
 export interface Fact {
   id: FactId;
+  /**
+   * Which CELL on the strip this is. Equal to `id` for every readout and for
+   * the context budget; the plan budget renders one cell per measured window
+   * (`plan:five_hour`, `plan:seven_day`), all under the one `plan` id that the
+   * settings switch and the drop ladder know. Added 2026-09-06.
+   */
+  cell: string;
   /** A lucide name, or null when the fact keeps its text label. */
   icon: string | null;
   label: string;
@@ -149,9 +156,9 @@ export const FACT_TOOLTIPS: Record<FactId, readonly string[]> = {
     "From the provider's own context-window figure. No figure, no readout.",
   ],
   plan: [
-    "How much of your plan's allowance is left in the window the provider is currently reporting.",
-    'Shows one window at a time, the nearest wall. Never computed from local token counts.',
-    "From the provider's rate-limit events only. No event, no readout, which is why this can be blank for a whole session.",
+    "How much of your plan's allowance is left in each window the provider has measured: the 5-hour window and the 7-day window.",
+    'One readout per measured window. Never computed from local token counts.',
+    "From the provider's rate-limit events and its usage report only. No measurement, no readout, which is why this can be blank for a whole session.",
   ],
   tokensIn: [
     'Fresh input tokens sent to the model in this session.',
@@ -206,6 +213,11 @@ export const FACT_NAMES: Record<FactId, string> = {
  * wrong, which is worse than one that is absent. A window this map does not
  * know renders NO fact at all: nothing measured, nothing marked.
  */
+/** The order the plan cells render in: nearest horizon first. */
+const PLAN_ORDER: readonly RateLimitFacts['window'][] = [
+  'five_hour', 'seven_day', 'seven_day_opus', 'seven_day_sonnet', 'overage',
+];
+
 const PLAN_WINDOWS: Partial<Record<RateLimitFacts['window'], { label: string; spoken: string }>> = {
   five_hour: { label: '5H', spoken: '5 hour' },
   seven_day: { label: '7D', spoken: '7 day' },
@@ -252,6 +264,7 @@ export function buildFacts(state: ChatState, now: number): Fact[] {
     const pct = Math.min(999, Math.round((state.contextTokens / state.contextWindow) * 100));
     facts.push({
       id: 'context',
+      cell: 'context',
       icon: null,
       label: 'CTX',
       value: `${pct}%`,
@@ -266,12 +279,18 @@ export function buildFacts(state: ChatState, now: number): Fact[] {
 
   /* 2 PLAN ALLOWANCE. Exists only when the provider measured it: no event, no
      fact, and never a local-token substitute. The plan is ONE budget with
-     several horizons and the strip carries exactly one fact for it, the nearest
-     wall - which is structural rather than chosen, since `state.rateLimits`
-     holds the provider's latest event and nothing else. */
-  const limits = state.rateLimits;
-  const win = limits ? PLAN_WINDOWS[limits.window] : undefined;
-  if (limits && win && limits.utilization !== null) {
+     several horizons, and the strip carries one cell per horizon the provider
+     has measured, in a fixed order: the 5-hour window, then the 7-day, then
+     the per-model weekly windows, then overage. It used to carry only the
+     latest event's window, so the 7-day figure vanished whenever a 5-hour
+     event arrived (Tom, 2026-09-06). The latest event still wins for its own
+     window: `rateLimitWindows` is keyed by window and upserted per event. */
+  const windows = { ...state.rateLimitWindows };
+  if (state.rateLimits && state.rateLimits.window !== 'unknown') windows[state.rateLimits.window] = state.rateLimits;
+  for (const window of PLAN_ORDER) {
+    const limits = windows[window];
+    const win = limits ? PLAN_WINDOWS[limits.window] : undefined;
+    if (!limits || !win || limits.utilization === null) continue;
     const overage = limits.window === 'overage';
     const remaining = Math.max(0, Math.round((1 - limits.utilization) * 100));
     const used = Math.min(999, Math.round(limits.utilization * 100));
@@ -285,6 +304,7 @@ export function buildFacts(state: ChatState, now: number): Fact[] {
     if (tone === 'danger' && limits.resetsAt !== null) longForm.push(`Resets at ${clockOf(limits.resetsAt)}.`);
     facts.push({
       id: 'plan',
+      cell: `plan:${limits.window}`,
       icon: null,
       label: win.label,
       // Overage takes no direction word: past the wall there is no allowance
@@ -315,6 +335,7 @@ export function buildFacts(state: ChatState, now: number): Fact[] {
   if (state.usage && state.usage.totalTokens > 0) {
     facts.push({
       id: 'tokensIn',
+      cell: 'tokensIn',
       icon: null,
       label: 'IN',
       value: compactNumber(state.usage.inputTokens),
@@ -327,6 +348,7 @@ export function buildFacts(state: ChatState, now: number): Fact[] {
     });
     facts.push({
       id: 'tokensOut',
+      cell: 'tokensOut',
       icon: null,
       label: 'OUT',
       value: compactNumber(state.usage.outputTokens),
@@ -345,6 +367,7 @@ export function buildFacts(state: ChatState, now: number): Fact[] {
     const elapsed = Math.max(0, now - state.turnStartedAt);
     facts.push({
       id: 'elapsed',
+      cell: 'elapsed',
       icon: 'timer',
       label: 'ELAPSED',
       value: shortDuration(elapsed),
@@ -362,6 +385,7 @@ export function buildFacts(state: ChatState, now: number): Fact[] {
   if (running > 0) {
     facts.push({
       id: 'agents',
+      cell: 'agents',
       icon: 'bot',
       label: 'AGENTS',
       value: String(running),
@@ -379,6 +403,7 @@ export function buildFacts(state: ChatState, now: number): Fact[] {
   if (state.sessionStartedAt !== null) {
     facts.push({
       id: 'sessionStart',
+      cell: 'sessionStart',
       icon: null,
       label: 'START',
       value: startStamp(state.sessionStartedAt, now),
@@ -395,6 +420,7 @@ export function buildFacts(state: ChatState, now: number): Fact[] {
   if (state.lastUpdatedAt !== null) {
     facts.push({
       id: 'sessionUpdated',
+      cell: 'sessionUpdated',
       icon: null,
       label: 'UPD',
       value: clockOf(state.lastUpdatedAt),

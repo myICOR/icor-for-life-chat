@@ -1975,7 +1975,7 @@
 .aic-root.aic-root .aic-agent-chip:hover .aic-agent-name { color: var(--aic-paper); }
 .aic-agent-time {
   font-family: var(--aic-mono);
-  font-size: 9px;
+  font-size: 10px;
   color: var(--aic-faint);
   font-variant-numeric: tabular-nums;
 }
@@ -3343,4 +3343,30 @@
 /* ==== END REGION R1 ==== */
 
 /* ==== REGION S1: background tasks, usage windows, alpha runtimes ==== */
+
+/* S1.1 the BACKGROUND word on a tool row's right cell: a row that outlives
+   its turn says why, in the same mono voice as the duration beside it, in the
+   quiet ink so the purpose sentence still leads. Never a colour: a colour
+   here would be a state, and background is a fact about the task's shape. */
+.aic-tool-bg {
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--aic-dim);
+}
+
+/* S1.2 the ALPHA kicker on a runtime chip: one word, no fill, in the chip's
+   own quiet ink. It was drafted in the warning ink and measured 3.85:1 on the
+   stock light wash, under the text floor; the caution is carried by the WORD
+   and by the chip's accessible name, never by hue, which is this stylesheet's
+   own rule anyway. */
+.aic-root.aic-root .aic-provider-alpha {
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--aic-dim);
+}
+
 /* ==== END REGION S1 ==== */

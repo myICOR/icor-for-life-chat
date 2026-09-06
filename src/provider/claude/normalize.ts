@@ -78,6 +78,8 @@ export class Normalizer {
   private cwd = '';
   /** Tool-use ids known to be Task spawns, so their results close a subagent. */
   private readonly taskSpawns = new Set<string>();
+  /** Background tasks (not subagents) the CLI has started and not yet ended. */
+  private readonly backgroundTasks = new Set<string>();
   /**
    * How many content blocks of a given assistant message have already arrived.
    *
@@ -162,6 +164,16 @@ export class Normalizer {
       // and the other is dropped. Measured: without this the same agent opened
       // twice, once per signal.
       if (this.taskSpawns.has(agentId)) return [];
+      /* NOT EVERY TASK IS A SUBAGENT (2026-09-06). A Bash call sent with
+         `run_in_background` and a task the CLI starts on its own both arrive
+         as task_started with a task_type and no subagent_type. Opening a
+         subagent for those put a "bot" tab on a shell command; they are rows
+         in the tool list, and this event is what keeps such a row running
+         until its notification lands. A subagent is one the CLI names as one. */
+      if (str(raw.subagent_type) === null) {
+        this.backgroundTasks.add(agentId);
+        return [this.taskUpdate(raw, 'running', stream)];
+      }
       this.taskSpawns.add(agentId);
       return [
         {
@@ -177,8 +189,22 @@ export class Normalizer {
     if (raw.subtype === 'task_notification') {
       const agentId = str(raw.tool_use_id) ?? str(raw.task_id);
       if (!agentId) return [];
+      if (!this.taskSpawns.has(agentId)) {
+        // A background task ending, or a task nothing opened: either way it
+        // is a row's end, never a subagent's.
+        this.backgroundTasks.delete(agentId);
+        const status = raw.status === 'completed' ? 'completed' : raw.status === 'stopped' ? 'stopped' : 'failed';
+        return [this.taskUpdate(raw, status, stream)];
+      }
       this.taskSpawns.delete(agentId);
       return [{ kind: 'subagent-end', agentId, ok: raw.status === 'completed', stream }];
+    }
+    if (raw.subtype === 'task_progress') {
+      // Progress on a background task keeps its row's summary current.
+      // Subagent progress is not shown here: the subagent tab carries it.
+      const agentId = str(raw.tool_use_id) ?? str(raw.task_id);
+      if (!agentId || !this.backgroundTasks.has(agentId)) return [];
+      return [this.taskUpdate(raw, 'running', stream)];
     }
     if (raw.subtype === 'compact_boundary') {
       const meta = isRecord(raw.compact_metadata) ? raw.compact_metadata : {};
@@ -283,6 +309,24 @@ export class Normalizer {
       }
     });
     return out;
+  }
+
+  private taskUpdate(
+    raw: Record<string, unknown>,
+    status: 'running' | 'completed' | 'failed' | 'stopped',
+    stream: string | null,
+  ): ChatEvent {
+    return {
+      kind: 'task-update',
+      toolUseId: str(raw.tool_use_id),
+      taskId: str(raw.task_id) ?? str(raw.tool_use_id) ?? '',
+      status,
+      description: str(raw.description) ?? '',
+      taskType: str(raw.task_type) ?? '',
+      summary: str(raw.summary) ?? '',
+      outputFile: str(raw.output_file) ?? '',
+      stream,
+    };
   }
 
   private user(raw: Record<string, unknown>, stream: string | null): ChatEvent[] {

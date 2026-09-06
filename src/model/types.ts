@@ -156,6 +156,24 @@ export type ChatEventBody =
       task: string;
     }
   | { kind: 'subagent-end'; agentId: string; ok: boolean }
+  /* A BACKGROUND TASK that is not a subagent: a Bash call the model sent with
+   * `run_in_background`, or a task the CLI started on its own. Its tool
+   * result arrives at once ("Command running in background") and the real
+   * end arrives later as a task notification, so the row that shows it needs
+   * a second signal. `toolUseId` names the row when the CLI reports one;
+   * `taskId` is the CLI's own id and is what a row is created under when no
+   * tool call opened it. Added 2026-09-06. */
+  | {
+      kind: 'task-update';
+      toolUseId: string | null;
+      taskId: string;
+      status: 'running' | 'completed' | 'failed' | 'stopped';
+      description: string;
+      taskType: string;
+      /** The CLI's own summary of the outcome, or a progress line. Empty when it sent none. */
+      summary: string;
+      outputFile: string;
+    }
   | { kind: 'compact-boundary'; preTokens: number; postTokens: number | null }
   | { kind: 'rate-limit'; facts: RateLimitFacts }
   /* A RESUMED conversation's own start, read back from the stored session
@@ -198,7 +216,14 @@ export interface ChatState {
   usage: TurnUsage | null;
   contextWindow: number | null;
   contextTokens: number | null;
+  /** The provider's LATEST rate-limit event, whichever window it named. */
   rateLimits: RateLimitFacts | null;
+  /* EVERY WINDOW the provider has measured this session, keyed by window
+     (2026-09-06). The events name one window each and the strip used to keep
+     only the last, so the 7-day figure vanished the moment a 5-hour one
+     arrived. Still never computed locally: a window is here because an event
+     named it. `unknown` is never stored. */
+  rateLimitWindows: Partial<Record<RateLimitFacts['window'], RateLimitFacts>>;
   subagents: Record<string, SubagentState>;
   slashCommands: string[];
   turnStartedAt: number | null;
@@ -229,6 +254,7 @@ export function emptyState(): ChatState {
     contextWindow: null,
     contextTokens: null,
     rateLimits: null,
+    rateLimitWindows: {},
     subagents: {},
     slashCommands: [],
     turnStartedAt: null,
