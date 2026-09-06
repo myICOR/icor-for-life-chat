@@ -1,0 +1,12 @@
+data: {"id":"gen-2","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_abc","type":"function","function":{"name":"list_folder","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"gen-2","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"path\": \""}}]},"finish_reason":null}]}
+
+data: {"id":"gen-2","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"04 Inner World\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"gen-2","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: {"id":"gen-2","choices":[],"usage":{"prompt_tokens":210,"completion_tokens":14,"total_tokens":224,"cost":0.0009}}
+
+data: [DONE]
+

@@ -1,0 +1,13 @@
+{
+  "id": "msg_01FULL",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-5",
+  "content": [
+    { "type": "text", "text": "Here is what I found." },
+    { "type": "tool_use", "id": "toolu_01FULL", "name": "search_notes", "input": { "query": "acacia clock" } }
+  ],
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": { "input_tokens": 300, "output_tokens": 40 }
+}

@@ -1408,6 +1408,12 @@ export class ChatView extends ItemView {
       structuredReplies: settings.structuredReplies,
       resumeSessionId: this.resumeSessionId,
       pluginVersion: this.plugin.manifest.version,
+      // Desktop auth truth (chat-mobile-engine-spec-v1.md section 4). Read
+      // only by the Claude provider's spawn path; every other field above
+      // this one already existed. Felix: `this.session?.authSource` (once a
+      // session has connected) is the fact to show in Settings and the chat
+      // header - see `provider/claude/authSource.ts`.
+      allowEnvApiKey: settings.allowEnvApiKey,
     };
     const hooks: SessionHooks = {
         onEvent: (event) => this.store.apply(event),

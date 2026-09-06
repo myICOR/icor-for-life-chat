@@ -102,6 +102,7 @@ export const claudeProvider: Provider = {
   open(config: SessionConfig, hooks: SessionHooks): ChatSession {
     const pathEnv = pathEnvironment(config.detect);
     const cliPath = resolveCliPath(config.cliPath, pathEnv, isExecutableFile);
-    return new ChatSession(config, { cliPath, env: buildChildEnv(process.env, pathEnv) }, hooks);
+    const env = buildChildEnv(process.env, pathEnv, { allowEnvApiKey: config.allowEnvApiKey === true });
+    return new ChatSession(config, { cliPath, env }, hooks);
   },
 };

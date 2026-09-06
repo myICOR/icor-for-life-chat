@@ -56,11 +56,16 @@ import { Normalizer } from './normalize';
 import { toolPurpose, toolTarget } from '../tooling';
 import { launchPermissions } from './launch';
 import { ApprovalBroker, toPermissionAnswer } from './permissions';
+import { mapAuthSource } from './authSource';
 import type {
-  ApprovalChoice, ProviderSession, SessionConfig, SessionHooks, SessionImage,
+  ApprovalChoice, AuthSource, ProviderSession, SessionConfig, SessionHooks, SessionImage,
 } from '../types';
 import type { EffortName, ModelChoice, PermissionModeName, RateLimitFacts } from '../../model/types';
 import { usageEvents } from './usage';
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null;
+}
 
 export type { SessionConfig, SessionHooks, SessionImage } from '../types';
 
@@ -154,6 +159,8 @@ export class ChatSession implements ProviderSession {
   /** The status word the wire last gave each window; the usage report carries none. */
   private readonly wireStatus = new Map<RateLimitFacts['window'], RateLimitFacts['status']>();
   private usageInFlight = false;
+  /** Set once, from the CLI's own `system`/`init` message. See `authSource.ts`. */
+  private _authSource: AuthSource = 'unknown';
 
   constructor(
     private readonly config: SessionConfig,
@@ -165,6 +172,10 @@ export class ChatSession implements ProviderSession {
 
   get aborted(): boolean {
     return this.abortController.signal.aborted;
+  }
+
+  get authSource(): AuthSource {
+    return this._authSource;
   }
 
   start(): void {
@@ -314,6 +325,9 @@ export class ChatSession implements ProviderSession {
       for await (const message of handle) {
         if (this.disposed) break;
         this.hooks.onRawMessage?.(message);
+        if (isRecord(message) && message.type === 'system' && message.subtype === 'init') {
+          this._authSource = mapAuthSource(message.apiKeySource);
+        }
         for (const event of this.normalizer.normalize(message)) {
           if (event.kind === 'rate-limit' && event.facts.window !== 'unknown') {
             this.wireStatus.set(event.facts.window, event.facts.status);

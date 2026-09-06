@@ -33,6 +33,13 @@ export interface ChatSettings {
   contextAwareness: boolean;
   /** Extra PATH entries for GUI-launched Obsidian, one per line. */
   extraPath: string;
+  /** Desktop auth truth (`chat-mobile-engine-spec-v1.md` section 4). Off by
+   * default: the Claude child's spawn env is stripped of any
+   * ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN / CLAUDE_CODE_OAUTH_TOKEN
+   * inherited from the launching shell, so it falls back to Claude Code's own
+   * sign-in. On re-allows them, for a member who set Claude Code up with an
+   * API key on purpose. */
+  allowEnvApiKey: boolean;
   /* THE EIGHT READOUT SWITCHES. Eight toggles is eight toggles: there is no
      master switch and no reset-to-defaults, because a ninth control that
      changes the other eight is chrome about chrome. */
@@ -72,6 +79,7 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   vaultMode: 'auto',
   contextAwareness: true,
   extraPath: '',
+  allowEnvApiKey: false,
   /* FIVE ON, THREE OFF, and the default set is what the feature IS: most people
      never open settings. The two budgets because they are the only facts that
      answer "am I about to hit a wall"; the token pair because it is the only

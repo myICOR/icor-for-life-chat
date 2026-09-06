@@ -62,6 +62,16 @@ export interface DetectEnvironment {
 
 export type ApprovalChoice = 'deny' | 'allow-once' | 'allow-always';
 
+/**
+ * Where the runtime's credential came from, in the plugin's own words -
+ * never the SDK's own `ApiKeySource` type, which stays inside
+ * `provider/claude/` per the hygiene gate. `'unknown'` for a provider that
+ * cannot say (nothing here is guessed): Codex reports none today, so its
+ * session simply leaves `ProviderSession.authSource` unset.
+ * `chat-mobile-engine-spec-v1.md` section 4.
+ */
+export type AuthSource = 'subscription' | 'api-key' | 'unknown';
+
 export interface PendingApproval {
   toolUseId: string;
   toolName: string;
@@ -92,6 +102,16 @@ export interface SessionConfig {
   resumeSessionId: string | null;
   /** The plugin's own version, for a runtime that identifies its client on a handshake. */
   pluginVersion?: string;
+  /**
+   * Desktop auth truth (`chat-mobile-engine-spec-v1.md` section 4). Off by
+   * default: the Claude child's spawn env is stripped of `ANTHROPIC_API_KEY`,
+   * `ANTHROPIC_AUTH_TOKEN` and `CLAUDE_CODE_OAUTH_TOKEN` so it falls back to
+   * whatever sign-in Claude Code itself keeps on the machine - normally the
+   * member's subscription. True re-allows those three through, for a member
+   * who has deliberately set Claude Code up with an API key instead. Read
+   * only by the Claude provider; every other provider ignores it.
+   */
+  allowEnvApiKey?: boolean;
 }
 
 export interface SessionHooks {
@@ -120,6 +140,14 @@ export interface ProviderSession {
   /** Resolves when the message pump has finished. Tests and unload. */
   drain(): Promise<void>;
   readonly aborted: boolean;
+  /**
+   * Where THIS session's credential came from, once the runtime has said -
+   * absent until then, and absent forever for a provider that never learns
+   * one. Settings and the chat header read this to show the desktop auth
+   * truth (`chat-mobile-engine-spec-v1.md` section 4); nothing computes it
+   * from anything but the runtime's own report.
+   */
+  readonly authSource?: AuthSource;
 }
 
 export interface SessionSummary {

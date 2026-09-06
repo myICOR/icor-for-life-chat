@@ -42,7 +42,24 @@ export default defineConfig([
     },
   },
   {
-    /* THE ONE FILE-SCOPED EXEMPTION, with its reason.
+    /* THE SECOND FILE-SCOPED EXEMPTION, with its reason.
+       The own-key engine's mobile transport (`chat-mobile-engine-spec-v1.md`
+       section 5) needs `fetch` for ONE thing `requestUrl` cannot do: read a
+       STREAMING response body. `requestUrl`'s own type in obsidian.d.ts
+       resolves once with the full body - there is no streaming variant, so
+       there is no `requestUrl` call this could be instead. `requestFull` in
+       the same file, the "test key" call in testKey.ts, and every fallback
+       path still call `requestUrl`; only the one function that streams
+       reaches for `fetch`. Inline disables are (rightly) forbidden by the
+       recommended config, so the exemption lives here, file-scoped. Dated
+       2026-09-06. */
+    files: ['src/engine/transport.ts'],
+    rules: {
+      'no-restricted-globals': 'off',
+    },
+  },
+  {
+    /* THE FIRST FILE-SCOPED EXEMPTION, with its reason.
        The settings tab now implements the 1.13 declarative API, which is what
        the directory review asked for and what Obsidian 1.13 renders and
        indexes for settings search. `display()` is kept ON PURPOSE as the

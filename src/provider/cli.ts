@@ -232,14 +232,35 @@ export function resolveCliPath(
   throw new CliNotFoundError(candidates.length);
 }
 
-/** The env handed to the child: process env, PATH repaired, user extras merged. */
+/**
+ * Desktop auth truth (`chat-mobile-engine-spec-v1.md` section 4): a member's
+ * own environment can carry an Anthropic credential meant for some other
+ * tool, and Obsidian inherits the launching shell's env by default. Left
+ * alone, the Claude child would pick that up ahead of Claude Code's own
+ * sign-in with nothing on screen to say so - the exact "am I on my
+ * subscription or not" the desktop settings row exists to answer honestly.
+ * Stripped by default; `SessionConfig.allowEnvApiKey` re-allows them for a
+ * member who has deliberately set Claude Code up with an API key instead.
+ */
+export const STRIPPED_API_KEY_ENV_VARS: readonly string[] = [
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'CLAUDE_CODE_OAUTH_TOKEN',
+];
+
+/** The env handed to the child: process env, PATH repaired, user extras
+ * merged, the three credential vars stripped unless explicitly re-allowed. */
 export function buildChildEnv(
   base: NodeJS.ProcessEnv,
   env: PathEnvironment,
+  options: { allowEnvApiKey?: boolean } = {},
 ): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(base)) {
     if (typeof v === 'string') out[k] = v;
+  }
+  if (!options.allowEnvApiKey) {
+    for (const key of STRIPPED_API_KEY_ENV_VARS) delete out[key];
   }
   out.PATH = augmentPath({ ...env, path: base.PATH ?? env.path });
   if (env.platform === 'win32') out.Path = out.PATH;

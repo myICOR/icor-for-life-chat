@@ -216,6 +216,14 @@ export function settingDefinitions(input: DefinitionInput): GroupDefinition[] {
           control: { type: 'textarea', key: 'extraPath', rows: 3 },
         },
         {
+          name: 'Let Claude Code use an API key from my environment',
+          desc: 'Off by default: Claude Code launches with any ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN or ' +
+            'CLAUDE_CODE_OAUTH_TOKEN removed from what it inherits, so it falls back to your own Claude Code ' +
+            'sign-in - normally your subscription. Turn this on only if you have set Claude Code up with an API ' +
+            'key on purpose; the chat header shows which one it actually used once a conversation has run.',
+          control: { type: 'toggle', key: 'allowEnvApiKey' },
+        },
+        {
           name: 'Model',
           desc: input.catalog.length === 0
             ? 'The full list arrives once a conversation has run: the models come from Claude Code itself, never from a list kept here.'
