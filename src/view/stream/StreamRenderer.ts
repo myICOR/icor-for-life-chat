@@ -17,7 +17,7 @@ import type { BoundAction } from '../actions';
 import { fallbackPurpose } from '../../provider/tooling';
 import type { ApprovalChoice } from '../../provider/types';
 import { parseStructured, decisionsOf } from '../../structured/parser';
-import { remeasureDecisionBodies, renderStructured } from '../../structured/render';
+import { remeasureDecisionBodies, remeasureRows, renderStructured } from '../../structured/render';
 import type { RenderHost } from '../../structured/render';
 import type { DecisionBlock } from '../../structured/model';
 import { Lightbox } from './Lightbox';
@@ -180,6 +180,9 @@ export class StreamRenderer {
         // The tool rows no longer do: whether a row opens is a fact about its
         // content, not about the pane's width.
         remeasureDecisionBodies(this.column);
+        // A card row's cut is width-bound too: the label track and the value
+        // track share the pane, so a resize can cut or free either.
+        remeasureRows(this.column);
       });
       this.resize.observe(this.column);
     }

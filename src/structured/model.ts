@@ -31,7 +31,10 @@ export type Block =
   | { kind: 'next'; items: string[] }
   | { kind: 'files'; paths: string[] }
   | { kind: 'links'; urls: string[] }
-  | { kind: 'prose'; text: string };
+  /* `title` is a sub-head the model wrote over prose that carried no rows.
+   * It used to be dropped at parse time; a heading that ceases to exist is
+   * the same silent loss as a clipped row. */
+  | { kind: 'prose'; text: string; title?: string };
 
 export interface CardHeader {
   name: string;
