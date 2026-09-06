@@ -8,8 +8,6 @@
  * written across several lines are all the same fact wearing different clothes.
  */
 
-import { isProviderId } from '../provider/types';
-import type { ProviderId } from '../provider/types';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -43,7 +41,13 @@ export function resumableSessionId(value: unknown): string | null {
 /**
  * The provider an archived note names, with an unnamed one read as Claude:
  * every note written before 0.7.0 came from a build that only spoke to it.
+ *
+ * A NAMED one is kept as the string it is, not folded to Claude. Until
+ * 2026-09-06 an id the build did not declare was read as Claude, which
+ * meant a note written on Gemini CLI (in the build for two days) would have
+ * resumed its session id on Claude Code the day Gemini left. The registry
+ * decides whether the name can launch; this only reads it.
  */
-export function providerFromFrontmatter(value: unknown): ProviderId {
-  return isProviderId(value) ? value : 'claude';
+export function providerFromFrontmatter(value: unknown): string {
+  return typeof value === 'string' && value.trim() ? value : 'claude';
 }

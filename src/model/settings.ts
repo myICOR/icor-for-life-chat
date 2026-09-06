@@ -4,6 +4,7 @@
 
 import type { EffortName, PermissionModeName } from './types';
 import type { ProviderId } from '../provider/types';
+import { isProviderId } from '../provider/types';
 import type { FactId } from './facts';
 import { ARCHIVE_FOLDER_SCAFFOLD, ARCHIVE_FOLDER_STANDALONE } from '../constants';
 
@@ -16,12 +17,6 @@ export interface ChatSettings {
   cliPath: string;
   /** Absolute path to the Codex CLI. Empty = resolve automatically. */
   codexPath: string;
-  /* The ACP runtimes' executables. One string per runtime rather than a map,
-     so the settings table's one-row-per-key gate covers each of them. */
-  geminiPath: string;
-  copilotPath: string;
-  opencodePath: string;
-  qwenPath: string;
   /** Model id passed to the CLI. Empty = whatever the CLI is configured to use. */
   model: string;
   effort: EffortName;
@@ -67,10 +62,6 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   defaultProvider: 'claude',
   cliPath: '',
   codexPath: '',
-  geminiPath: '',
-  copilotPath: '',
-  opencodePath: '',
-  qwenPath: '',
   model: '',
   effort: 'medium',
   defaultPermissionMode: 'default',
@@ -160,6 +151,19 @@ export function archiveRoot(settings: ChatSettings, scaffoldDetected: boolean): 
   return scaffold ? ARCHIVE_FOLDER_SCAFFOLD : ARCHIVE_FOLDER_STANDALONE;
 }
 
+/* STORED SETTINGS BECOME SETTINGS HERE, and nowhere else. Untyped JSON from
+ * disk, every missing field its default, and one field checked rather than
+ * trusted: `defaultProvider` is a string a past build wrote, and a build that
+ * has since dropped that runtime (the ACP four, 2026-09-06) must not carry
+ * the name into a picker that cannot launch it. It falls back to Claude,
+ * which is what a fresh install has; nothing else is rewritten. */
+export function settingsFrom(stored: unknown): ChatSettings {
+  const partial = typeof stored === 'object' && stored !== null ? (stored as Partial<ChatSettings>) : {};
+  const merged: ChatSettings = Object.assign({}, DEFAULT_SETTINGS, partial);
+  if (!isProviderId(merged.defaultProvider)) merged.defaultProvider = DEFAULT_SETTINGS.defaultProvider;
+  return merged;
+}
+
 /** Only ever true when the user is explicitly in Bypass. */
 export function skipPermissions(mode: PermissionModeName): boolean {
   return mode === 'bypassPermissions';
@@ -170,10 +174,6 @@ export function pathSettingKey(provider: ProviderId): keyof ChatSettings {
   switch (provider) {
     case 'claude': return 'cliPath';
     case 'codex': return 'codexPath';
-    case 'gemini': return 'geminiPath';
-    case 'copilot': return 'copilotPath';
-    case 'opencode': return 'opencodePath';
-    case 'qwen': return 'qwenPath';
     default: return 'cliPath';
   }
 }

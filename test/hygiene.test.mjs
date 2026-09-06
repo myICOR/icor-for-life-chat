@@ -174,18 +174,50 @@ test('the view and main.ts reach a provider through the registry only', () => {
 
 test('an absent provider is null, never Claude in disguise', async () => {
   const { providerFor, missingProviderMessage, providerName, PROVIDER_IDS } = await import('./build/pure.mjs');
-  // Every id this build declares is answered; an id that is not declared
-  // cannot be typed, so the null path is asserted through a stale manifest value.
+  assert.deepEqual([...PROVIDER_IDS], ['claude', 'codex'], 'the build carries two runtimes');
   for (const id of PROVIDER_IDS) assert.equal(providerFor(id)?.id, id, `${id} has no provider`);
   assert.equal(providerFor('acp'), null, 'the retired placeholder id resolved to a provider');
   assert.match(missingProviderMessage('acp'), /not part of this build/);
   assert.match(missingProviderMessage('codex'), /not found on this machine/);
-  assert.equal(providerName('gemini'), 'Gemini CLI');
+  /* The four ACP runtimes left on 2026-09-06. A folder or a note they wrote
+     still names them, and the Notice names them back rather than resuming
+     the session on Claude. */
+  for (const [id, name] of [['gemini', 'Gemini CLI'], ['copilot', 'Copilot CLI'], ['opencode', 'OpenCode'], ['qwen', 'Qwen Code']]) {
+    assert.equal(providerFor(id), null, `${id} is still in the build`);
+    assert.equal(providerName(id), name);
+    assert.match(missingProviderMessage(id), new RegExp(`^${name} is not part of this build`));
+  }
+  assert.equal(providerName('something-else'), 'something-else');
+});
+
+test('a stored provider the build no longer carries is read as itself, never as Claude', async () => {
+  const { manifestProvider, providerFromFrontmatter, settingsFrom, DEFAULT_SETTINGS, providerOptions } = await import('./build/pure.mjs');
+  const base = { title: 't', startedAt: '', endedAt: '', vaultPath: '', sessionIds: ['g1'], resume: { sessionId: 'g1', cwd: '', model: null, permissionMode: 'default' } };
+  assert.equal(manifestProvider({ ...base, resume: { ...base.resume, provider: 'gemini' } }), 'gemini');
+  assert.equal(manifestProvider({ ...base, provider: 'codex' }), 'codex');
+  assert.equal(manifestProvider(base), 'claude', 'a pre-@2 folder is Claude');
+  assert.equal(providerFromFrontmatter('gemini'), 'gemini');
+  assert.equal(providerFromFrontmatter(undefined), 'claude');
+  assert.equal(providerFromFrontmatter(''), 'claude');
+  // The settings default is the one place the name IS folded back: a picker
+  // cannot show a runtime that cannot launch, and Claude is what a fresh
+  // install has.
+  assert.equal(settingsFrom({ defaultProvider: 'gemini', geminiPath: '/x' }).defaultProvider, 'claude');
+  assert.equal(settingsFrom({ defaultProvider: 'codex' }).defaultProvider, 'codex');
+  assert.equal(settingsFrom(null).defaultProvider, DEFAULT_SETTINGS.defaultProvider);
+  assert.equal(settingsFrom(undefined).model, DEFAULT_SETTINGS.model);
+  const options = providerOptions({
+    settings: { ...DEFAULT_SETTINGS, defaultProvider: 'gemini' },
+    providers: [{ id: 'claude', displayName: 'Claude Code' }, { id: 'codex', displayName: 'Codex' }],
+    detections: { claude: { found: true }, codex: { found: true } },
+  });
+  assert.deepEqual(options, { claude: 'Claude Code', codex: 'Codex' }, 'a retired id is never a dropdown row');
 });
 
 test('Claude Code is the one stable runtime; every other id is Alpha, and the settings row says so first', () => {
   assert.equal(providerMaturity('claude'), 'stable');
-  for (const id of ['codex', 'gemini', 'copilot', 'opencode', 'qwen']) assert.equal(providerMaturity(id), 'alpha', id);
+  assert.equal(providerMaturity('codex'), 'alpha');
+  assert.equal(providerMaturity('gemini'), 'alpha', 'an id outside the build is not stable either');
   assert.equal(ALPHA_NOTE, 'Alpha, not fully tested yet.');
   const input = { settings: DEFAULT_SETTINGS, detections: { codex: { found: true, hint: 'Codex 1.0 at /usr/local/bin/codex.' }, claude: { found: true, hint: 'Claude at /x.' } } };
   const codexRow = runtimeRows(input, 'codex', 'Codex', 'codexPath', 'd', 'p')[0];
@@ -196,26 +228,20 @@ test('Claude Code is the one stable runtime; every other id is Alpha, and the se
 
 test('the seam declares every provider id, and the registry answers each one', () => {
   const src = read('src/provider/types.ts');
-  assert.match(src, /'claude' \| 'codex' \| 'gemini' \| 'copilot' \| 'opencode' \| 'qwen'/, 'the ProviderId union changed shape');
+  assert.match(src, /'claude' \| 'codex';/, 'the ProviderId union changed shape');
   const registry = read('src/provider/registry.ts');
-  for (const id of ['claude', 'codex', 'gemini', 'copilot', 'opencode', 'qwen']) {
+  for (const id of ['claude', 'codex']) {
     assert.match(registry, new RegExp(`\\b${id}:`), `the registry has no entry for ${id}`);
   }
 });
 
-test('the view and main.ts reach the ACP runtimes through the registry only', () => {
-  const offenders = [...tsFilesUnder('src/view'), 'src/main.ts', ...tsFilesUnder('src/state'), ...tsFilesUnder('src/model')]
-    .filter((f) => /from '[^']*provider\/acp[^']*'/.test(read(f)));
-  assert.deepEqual(offenders, [], `an ACP type crossed the seam:\n  ${offenders.join('\n  ')}`);
-});
-
-test('the ACP client never authenticates, advertises no fs or terminal capability, and names the plugin', () => {
-  /* Lex, 2026-09-04: no sign-in brokered for any runtime; Vex: the agent has
-     the filesystem through its own tools, the client offers none. */
-  const files = tsFilesUnder('src/provider/acp').map((f) => read(f)).join('\n');
-  assert.doesNotMatch(files, /request\('authenticate'|GEMINI_API_KEY\s*[:=]|GOOGLE_API_KEY|GH_TOKEN|GITHUB_TOKEN/, 'a login call or a credential variable is in the ACP client');
-  assert.match(files, /readTextFile: false, writeTextFile: false \}, terminal: false/, 'a client capability is advertised');
-  assert.match(files, /name: 'icor-for-life-chat'/, 'the handshake does not name the plugin');
+test('the ACP runtimes are gone from the source tree, not merely unlisted', () => {
+  /* Tom, 2026-09-06: removed entirely, on Axon's audit. A folder left behind
+     is a folder the next reader maintains. */
+  assert.equal(existsSync(resolve(repo, 'src/provider/acp')), false, 'src/provider/acp is still here');
+  const src = [...tsFilesUnder('src')].map((f) => read(f)).join('\n');
+  assert.doesNotMatch(src, /geminiPath|copilotPath|opencodePath|qwenPath/, 'a retired runtime still has a settings key');
+  assert.doesNotMatch(src, /--acp/, 'an ACP launch flag survives');
 });
 
 test('every runtime carries an install line and a vendor page, and the plugin runs none of them', async () => {

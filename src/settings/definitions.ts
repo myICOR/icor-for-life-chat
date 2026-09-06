@@ -22,6 +22,7 @@
 import type { ChatSettings } from '../model/settings';
 import type { ModelChoice } from '../model/types';
 import type { Detection, ProviderId } from '../provider/types';
+import { isProviderId } from '../provider/types';
 import { ALPHA_NOTE, providerMaturity } from '../provider/registry';
 import { FACT_SETTING_KEYS, MEASURED_NOTE, NARROW_NOTE } from '../model/settings';
 import { DROP_GROUPS, FACT_NAMES, FACT_TOOLTIPS, RENDER_ORDER } from '../model/facts';
@@ -98,8 +99,11 @@ export function providerOptions(input: DefinitionInput): Record<string, string> 
     const found = input.detections?.[p.id]?.found;
     if (found === true || found === undefined && p.id === 'claude') options[p.id] = p.displayName;
   }
+  /* The stored choice is a string from disk. `settingsFrom` already folds a
+     retired runtime back to Claude, so this is belt and braces: an id the
+     build does not declare is never a dropdown row. */
   const stored = input.settings.defaultProvider;
-  if (!(stored in options)) {
+  if (isProviderId(stored) && !(stored in options)) {
     const named = (input.providers ?? []).find((p) => p.id === stored);
     options[stored] = named ? named.displayName : stored;
   }
@@ -206,18 +210,6 @@ export function settingDefinitions(input: DefinitionInput): GroupDefinition[] {
         ...runtimeRows(input, 'codex', 'Codex', 'codexPath',
           'The Codex CLI, signed in with `codex login` in a terminal. The plugin never signs in for you and holds no key. Leave empty to find it automatically.',
           '/usr/local/bin/codex'),
-        ...runtimeRows(input, 'gemini', 'Gemini CLI', 'geminiPath',
-          'Speaks the Agent Client Protocol (`gemini --acp`). Signs in inside the CLI with a Gemini API key, Vertex AI or Workspace Code Assist; the plugin holds no key. Leave empty to find it automatically.',
-          '/opt/homebrew/bin/gemini'),
-        ...runtimeRows(input, 'copilot', 'Copilot CLI', 'copilotPath',
-          'GitHub Copilot CLI over the Agent Client Protocol (`copilot --acp`). Signs in inside the CLI with your GitHub account. Leave empty to find it automatically.',
-          '/usr/local/bin/copilot'),
-        ...runtimeRows(input, 'opencode', 'OpenCode', 'opencodePath',
-          'OpenCode over the Agent Client Protocol (`opencode acp`), with its own provider catalogue configured inside OpenCode. Leave empty to find it automatically.',
-          '/usr/local/bin/opencode'),
-        ...runtimeRows(input, 'qwen', 'Qwen Code', 'qwenPath',
-          'Qwen Code over the Agent Client Protocol (`qwen --acp`). Signs in inside the CLI. Leave empty to find it automatically.',
-          '/usr/local/bin/qwen'),
         {
           name: 'Extra PATH entries',
           desc: 'One directory per line, searched after your own PATH.',

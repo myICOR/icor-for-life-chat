@@ -21,15 +21,18 @@
 
 import type { ChatEvent, EffortName, ModelChoice, PermissionModeName } from '../model/types';
 
-/* One id per RUNTIME, never per protocol. `acp` was the placeholder for
- * "some agent over the Agent Client Protocol"; it went the day the runtimes
- * arrived (2026-09-04), because a manifest that says `acp` cannot say which
- * agent had the session, and a resume needs exactly that. Gemini, Copilot
- * CLI, OpenCode and Qwen Code all speak ACP through one client
- * (`provider/acp`) and each keeps its own id. */
-export type ProviderId = 'claude' | 'codex' | 'gemini' | 'copilot' | 'opencode' | 'qwen';
+/* One id per RUNTIME, never per protocol. Two runtimes are in the build:
+ * Claude Code, the one the plugin was built on, and Codex, measured against
+ * a real signed-in recording and offered as Alpha. The four Agent Client
+ * Protocol runtimes (Gemini CLI, Copilot CLI, OpenCode, Qwen Code) joined on
+ * 2026-09-04 and left on 2026-09-06 (Tom, on Axon's audit): three of them had
+ * never been measured against their agent, and a runtime nobody can test is
+ * a runtime nobody can maintain. A manifest or a note written on one of them
+ * still names it, and the reader keeps the name as a string so the session
+ * is refused in that runtime's words rather than resumed on Claude. */
+export type ProviderId = 'claude' | 'codex';
 
-export const PROVIDER_IDS: readonly ProviderId[] = ['claude', 'codex', 'gemini', 'copilot', 'opencode', 'qwen'];
+export const PROVIDER_IDS: readonly ProviderId[] = ['claude', 'codex'];
 
 export function isProviderId(value: unknown): value is ProviderId {
   return typeof value === 'string' && (PROVIDER_IDS as readonly string[]).includes(value);
@@ -195,7 +198,7 @@ export interface Provider {
    * is a pane that sits on Stop forever.
    */
   open(config: SessionConfig, hooks: SessionHooks): ProviderSession;
-  /** Null for a provider whose protocol has no session list (ACP). */
+  /** Null for a provider whose protocol has no session list. */
   readonly store: SessionStore | null;
   /**
    * The runtime's own words for one of the plugin's four modes, shown beside

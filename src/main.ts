@@ -21,7 +21,7 @@ import { SubagentBus } from './state/subagents';
 import { ReplyActionRegistry } from './view/actions';
 import type { RenderHost } from './structured/render';
 import type { ItemView } from 'obsidian';
-import { availableProviders, configureArchiveIndex, missingProviderMessage, providerFor, providerMaturity, providerName } from './provider/registry';
+import { availableProviders, missingProviderMessage, providerFor, providerMaturity, providerName } from './provider/registry';
 import { providerFromFrontmatter, resumableSessionId } from './archive/resume';
 import { shortAge } from './view/dom';
 import { ChatView } from './view/ChatView';
@@ -30,9 +30,8 @@ import { openTaskCount } from './team/load';
 import { routeChatLeaf } from './view/leafRoute';
 import { terminalHoldsSession, terminalLeafFor } from './view/handoff';
 import { ChatSettingsTab } from './settings/SettingsTab';
-import { DEFAULT_SETTINGS, archiveRoot, pathSettingKey } from './model/settings';
+import { DEFAULT_SETTINGS, archiveRoot, pathSettingKey, settingsFrom } from './model/settings';
 import { offerInstall } from './provider/install';
-import { archiveIndex } from './archive/index';
 import type { ChatSettings } from './model/settings';
 import type { ModelChoice } from './model/types';
 import type { DetectEnvironment, Detection, Provider, ProviderId } from './provider/types';
@@ -93,9 +92,6 @@ export default class IcorChatPlugin extends Plugin {
     // Each runtime prepares the host once, before anything can launch a query
     // (the Claude provider installs the renderer AbortSignal shim here).
     for (const provider of availableProviders()) provider.install?.();
-    /* The ACP runtimes have no session list of their own; the vault's archive
-       is their record, and it is read through this one door. */
-    configureArchiveIndex(archiveIndex(this.app, () => archiveRoot(this.settings, this.scaffoldDetected)));
     void this.refreshDetections();
 
     this.registerView(VIEW_TYPE_CHAT, (leaf) => new ChatView(leaf, this));
@@ -173,7 +169,8 @@ export default class IcorChatPlugin extends Plugin {
            A runtime this build lacks, or one not found here, is named in a
            disabled row rather than substituted. */
         const owner = providerFor(archived.provider);
-        if (owner && this.detections[archived.provider]?.found === true) {
+        const here = owner !== null && this.detections[owner.id]?.found === true;
+        if (owner && here) {
           menu.addItem((item) =>
             item
               .setTitle(`Resume with ${owner.displayName}`)
@@ -181,7 +178,7 @@ export default class IcorChatPlugin extends Plugin {
               .onClick(() => void this.resumeArchived(archived.sessionId, archived.provider)),
           );
         }
-        if (!owner || this.detections[archived.provider]?.found !== true) {
+        if (!here) {
           menu.addItem((item) =>
             item.setTitle(`Resume needs ${providerName(archived.provider)}, which is not here`).setIcon('bot').setDisabled(true),
           );
@@ -357,7 +354,7 @@ export default class IcorChatPlugin extends Plugin {
   }
 
   /** The session AND the runtime that had it: an id only resumes in its own provider. */
-  private archivedSession(file: TFile): { sessionId: string; provider: ProviderId } | null {
+  private archivedSession(file: TFile): { sessionId: string; provider: string } | null {
     const cache = this.app.metadataCache.getFileCache(file);
     const frontmatter = cache?.frontmatter;
     if (!frontmatter || frontmatter.source !== 'icor-chat') return null;
@@ -565,9 +562,12 @@ export default class IcorChatPlugin extends Plugin {
      pure function in view/leafRoute.ts, decided on the views' own facts, so
      pressing the robot twice reveals one pane instead of minting two. */
   /** Resume an archived session, saying so when its runtime no longer has it. */
-  private async resumeArchived(sessionId: string, provider: ProviderId): Promise<void> {
+  private async resumeArchived(sessionId: string, provider: string): Promise<void> {
+    /* A STRING until the registry answers: the note names the runtime that
+       had the session, and a note written on a runtime this build no longer
+       carries must be refused in that runtime's name, never resumed on Claude. */
     const runtime = providerFor(provider);
-    if (!runtime || this.detections[provider]?.found !== true) {
+    if (!runtime || this.detections[runtime.id]?.found !== true) {
       new Notice(missingProviderMessage(provider));
       return;
     }
@@ -575,23 +575,26 @@ export default class IcorChatPlugin extends Plugin {
       new Notice(`${runtime.displayName} no longer has this session. Continue from the transcript instead.`);
       return;
     }
-    await this.openChat(sessionId, provider);
+    await this.openChat(sessionId, runtime.id);
   }
 
   async openChat(
     resumeSessionId?: string,
-    provider?: ProviderId,
+    provider?: string,
     opts: { handover?: string; continuedFrom?: string } = {},
   ): Promise<void> {
     /* The runtime is checked HERE, before a leaf is minted: a pane that
        opens and then says its runtime is missing is a pane the user has to
-       close. The settings default is a stored string and can name a runtime
-       the build no longer carries, so it is checked the same way. */
-    const wanted = provider ?? this.settings.defaultProvider;
-    if (!providerFor(wanted)) {
-      new Notice(missingProviderMessage(wanted));
+       close. The id arrives as a string (a note, a manifest, a stored
+       default can all name a runtime the build no longer carries) and is
+       narrowed by the registry's answer, never by a cast. */
+    const asked = provider ?? this.settings.defaultProvider;
+    const runtime = providerFor(asked);
+    if (!runtime) {
+      new Notice(missingProviderMessage(asked));
       return;
     }
+    const wanted: ProviderId = runtime.id;
     /* THE GUARD before any resume: an id a terminal pane holds is revealed
        there, never resumed here (two writers fork the session file). */
     if (resumeSessionId && wanted === 'claude' && terminalHoldsSession(this.app, resumeSessionId)) {
@@ -625,8 +628,8 @@ export default class IcorChatPlugin extends Plugin {
         type: VIEW_TYPE_CHAT,
         active: true,
         state: resumeSessionId
-          ? { resumeSessionId, provider: provider ?? this.settings.defaultProvider }
-          : { provider: provider ?? this.settings.defaultProvider, ...opts },
+          ? { resumeSessionId, provider: wanted }
+          : { provider: wanted, ...opts },
       });
     } else {
       leaf = route.leaf;
@@ -652,8 +655,7 @@ export default class IcorChatPlugin extends Plugin {
   async loadSettings(): Promise<void> {
     // loadData returns untyped JSON; it is treated as a partial of our own
     // settings shape, and every missing field falls back to the default.
-    const stored = (await this.loadData()) as Partial<ChatSettings> | null;
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, stored ?? {});
+    this.settings = settingsFrom(await this.loadData());
     /* A stored Bypass default is HONOURED, and the silent rewrite that used to
        live here is gone.
      *

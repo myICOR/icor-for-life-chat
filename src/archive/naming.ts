@@ -3,8 +3,6 @@
  * The rule it enforces: we only ever delete a folder whose NAME matches our own
  * shape AND which carries our own manifest. */
 
-import { isProviderId } from '../provider/types';
-import type { ProviderId } from '../provider/types';
 
 /* SCHEMA @2 (0.7.0): the manifest names its PROVIDER. Every @1 folder on disk
  * was written by a build that only ever spoke to Claude Code, so a reader
@@ -73,8 +71,12 @@ export interface ArchiveManifest {
   schema: typeof ARCHIVE_SCHEMA | typeof ARCHIVE_SCHEMA_V1;
   pluginVersion: string;
   sdkVersion: string;
-  /** The runtime that had this conversation. Absent on @1 folders, which were all Claude. */
-  provider?: ProviderId;
+  /**
+   * The runtime that had this conversation. Absent on @1 folders, which were
+   * all Claude. A STRING, because the manifest is read back from disk and a
+   * folder written on a runtime this build no longer carries still names it.
+   */
+  provider?: string;
   title: string;
   startedAt: string;
   endedAt: string;
@@ -90,8 +92,8 @@ export interface ArchiveManifest {
     cwd: string;
     model: string | null;
     permissionMode: string;
-    /** Absent on @1 folders; read as `claude`. */
-    provider?: ProviderId;
+    /** Absent on @1 folders; read as `claude`. A string, as above. */
+    provider?: string;
   };
   files: {
     transcript: string;
@@ -139,10 +141,15 @@ export function isOurManifest(value: unknown): value is ArchiveManifest {
   return typeof schema === 'string' && ARCHIVE_SCHEMAS.includes(schema);
 }
 
-/** The provider a manifest names, with every pre-@2 folder read as Claude. */
-export function manifestProvider(manifest: ArchiveManifest): ProviderId {
+/**
+ * The provider a manifest names, with every pre-@2 folder read as Claude and
+ * a named one returned as written. Folding an undeclared name to Claude was
+ * the 2026-09-06 hazard: the registry, not this reader, says whether the
+ * name can launch.
+ */
+export function manifestProvider(manifest: ArchiveManifest): string {
   const named = manifest.resume?.provider ?? manifest.provider;
-  return isProviderId(named) ? named : 'claude';
+  return typeof named === 'string' && named.trim() ? named : 'claude';
 }
 
 /** Folders older than the cut, by their own recorded end time. */

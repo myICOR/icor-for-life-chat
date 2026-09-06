@@ -843,7 +843,17 @@ export class ChatView extends ItemView {
       // Read before any resume: a session id only means something to the
       // runtime that minted it.
       const id = (state as { provider?: unknown }).provider;
-      if (isProviderId(id)) this.provider = id;
+      if (isProviderId(id)) {
+        this.provider = id;
+      } else if (typeof id === 'string' && id) {
+        /* A workspace saved on a runtime this build no longer carries (the
+           ACP four left on 2026-09-06). The session id it holds belongs to
+           that runtime, so it is dropped rather than resumed on the default,
+           and the pane says whose it was. */
+        this.resumeSessionId = null;
+        arrivedId = null;
+        new Notice(missingProviderMessage(id));
+      }
     }
     if (state && typeof state === 'object' && 'handover' in state) {
       const text = (state as { handover?: unknown }).handover;

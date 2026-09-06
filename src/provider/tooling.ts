@@ -1,8 +1,8 @@
 /* Tool vocabulary that is the PLUGIN'S, not any provider's.
  *
  * What a call was for, what to show on its row, how to bound its result: none
- * of that depends on which agent runs the tool. Claude Code, Codex and an ACP
- * agent all send a Bash command with a description and a Read with a path,
+ * of that depends on which agent runs the tool. Claude Code and Codex both
+ * send a Bash command with a description and a Read with a path,
  * and the sentence the row prints has to be the same sentence whichever of
  * them sent it. So the rules live here, above the provider seam, and every
  * provider's normaliser imports them. Nothing in this file knows a wire

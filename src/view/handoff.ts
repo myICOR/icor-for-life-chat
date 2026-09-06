@@ -45,8 +45,8 @@ export function terminalState(resumeSessionId: string, cwd: string, provider: Pr
 /**
  * Why the hand-off is not available, or null when it is.
  *
- * The terminal resumes Claude Code sessions and nothing else, so a Codex or
- * ACP conversation says so instead of offering a swap that would fail in the
+ * The terminal resumes Claude Code sessions and nothing else, so a Codex
+ * conversation says so instead of offering a swap that would fail in the
  * terminal's own Notice. The install wording is the contract's.
  */
 export function handoffUnavailableReason(

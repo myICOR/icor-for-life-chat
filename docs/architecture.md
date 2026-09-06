@@ -21,7 +21,7 @@ Three rules hold at every stage. An unknown frame yields no events and never thr
 
 `src/provider/types.ts` declares the seam: `Provider` (detect, models, defaultModel, open, store), `ProviderSession` (start, send, interrupt, answerApproval, setPermissionMode, setModel, supportedModels, dispose, drain) and `SessionStore` (list, createdAt, exists, read, optional fork, rename, delete). `SessionConfig` and `SessionHooks` are the two shapes a session is opened with. `ReplayEntry` is how a stored conversation comes back: already translated into `ChatEvent`, so the view never learns a wire format even on replay.
 
-`src/provider/registry.ts` is the only door. It maps every `ProviderId` (`claude`, `codex`, `acp`) to an implementation or to `null`, which means "not in this build" rather than "unknown id". `providerFor(id)` falls back to Claude.
+`src/provider/registry.ts` is the only door. It maps every `ProviderId` (`claude`, `codex`) to an implementation or to `null`, which means "not in this build". `providerFor(id)` takes a string, because a manifest, a note or a stored setting can name a runtime the build no longer carries, and answers `null` for it; nothing falls back to Claude.
 
 `src/provider/claude/` is the reference implementation: `index.ts` (detection through `src/provider/cli.ts`, the PATH resolver that is provider-neutral), `session.ts` (one `query()` in streaming-input mode for the life of the tab), `normalize.ts`, `store.ts` (the SDK's own session list, scoped to the vault directory), `launch.ts` and `permissions.ts` (mode plumbing and the approval broker), `renderer-compat.ts` (the one host shim, installed through `Provider.install`). `src/provider/tooling.ts` holds the provider-neutral tool vocabulary: `toolPurpose`, `fallbackPurpose`, `resultOutput`, `relativeTo`.
 
@@ -31,7 +31,7 @@ A new provider implements the whole `ProviderSession`, a `detect` that reports w
 
 Before a provider is listed in the picker it passes the conformance list: one recorded wire fixture replayed through its normaliser renders one assistant turn as one node; an approval round-trips and a denied tool never runs; an interrupt leaves no orphaned process and no hung promise; a resume replays history above the seam; an unknown frame yields zero events; a refused mode switch is surfaced in the provider's words; the not-found detection path is exercised against a bare PATH. Structured replies ship on by default for a model only when its measured parse rate on a fixed prompt set is 90 percent or better.
 
-Two implementations are planned on this seam: Codex through OpenAI's App Server protocol, in progress, and one generic Agent Client Protocol client that carries a launch recipe per agent, next. Neither is described here until its code exists.
+Codex is the second implementation on this seam, through OpenAI's App Server protocol (`src/provider/codex/`), offered as Alpha. Four Agent Client Protocol runtimes were on the seam from 2026-09-04 to 2026-09-06 and were removed because three of them were never measured against their agent; their code is in the history at 0.10.0.
 
 ## Context
 
