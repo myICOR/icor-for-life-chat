@@ -51,6 +51,13 @@ interface ToolRow {
   target: string;
   /** The result body, once it has arrived. */
   output: string;
+  /* A BACKGROUND TASK (2026-09-06): a Bash call sent with `run_in_background`,
+     or a task the CLI started on its own. Its tool result is only the start
+     ("Command running in background"); the row stays running until the CLI's
+     task notification names it done, and outlives the turn that started it. */
+  background: boolean;
+  /** The CLI's own summary of a background task's outcome. Empty until it ends. */
+  summary: string;
   status: ToolStatus;
   startedAt: number;
   /** Stamped by the result, so the duration stops being re-read on repaint. */
@@ -373,7 +380,10 @@ export class StreamRenderer {
         /* A transcript stored before 0.6 carries no purpose. The row derives
            one from the name and the target rather than showing a blank. */
         const purpose = event.purpose || fallbackPurpose(event.name, event.target);
-        this.upsertTool(event.toolUseId, event.name, event.target, purpose).status = 'running';
+        const row = this.upsertTool(event.toolUseId, event.name, event.target, purpose);
+        row.status = 'running';
+        // The one honest signal that a shell command will outlive its result.
+        if ((event as { input?: Record<string, unknown> }).input?.run_in_background === true) row.background = true;
         this.paintTool(event.toolUseId);
         break;
       }
@@ -397,12 +407,21 @@ export class StreamRenderer {
       }
       case 'tool-result': {
         const row = this.upsertTool(event.toolUseId, 'tool', '', '');
-        row.status = event.ok ? 'done' : 'failed';
-        row.finishedAt = Date.now();
         // A stored transcript from before 0.6 carries no body; the field is
         // read defensively so a replay of one still paints the row.
         row.output = (event as { output?: string }).output ?? '';
         if (!event.ok && event.detail) setTooltip(row.el, event.detail);
+        /* A BACKGROUND command's result is its START, not its end: the CLI
+           answers "Command running in background" at once and reports the
+           real outcome later as a task notification. A row marked done here
+           told the reader the work was over while it was still running. The
+           notification is the finish; a failed start is still a finish. */
+        if (row.background && event.ok) {
+          row.status = 'running';
+        } else {
+          row.status = event.ok ? 'done' : 'failed';
+          row.finishedAt = Date.now();
+        }
         this.paintTool(event.toolUseId);
         /* The OTHER quiet stretch: between a tool's result and the model's
            next move the pane used to hold still - no dot, no text, nothing.
@@ -412,6 +431,27 @@ export class StreamRenderer {
         if (![...this.tools.values()].some((r) => r.status === 'running')) {
           this.showWorking('working');
         }
+        break;
+      }
+      case 'task-update': {
+        /* THE ROW IS THE TASK. Keyed by the tool call that started it when
+           the CLI names one, else by the CLI's own task id, so a task nothing
+           in the transcript opened still gets a row: a running thing with no
+           row is invisible work, which is the defect this event exists for. */
+        const key = event.toolUseId ?? `task:${event.taskId}`;
+        const known = this.tools.get(key);
+        const purpose = known?.purpose || event.description || (event.taskType ? `Ran a ${event.taskType} task` : 'Ran a background task');
+        const row = this.upsertTool(key, known?.name ?? 'Task', known?.target ?? '', purpose);
+        row.background = true;
+        if (event.summary) row.summary = event.summary;
+        if (event.status === 'running') {
+          if (row.status !== 'awaiting-approval') row.status = 'running';
+        } else {
+          row.status = event.status === 'completed' ? 'done' : 'failed';
+          row.finishedAt = Date.now();
+          if (event.status === 'stopped') setTooltip(row.el, 'Stopped before it finished');
+        }
+        this.paintTool(key);
         break;
       }
       case 'compact-boundary':
@@ -932,6 +972,8 @@ export class StreamRenderer {
       purpose,
       target,
       output: '',
+      background: false,
+      summary: '',
       status: 'running',
       startedAt: Date.now(),
       finishedAt: null,
@@ -996,7 +1038,7 @@ export class StreamRenderer {
 
   /** A row opens when it has something to show: a raw argument, or a result. */
   private hasBody(row: ToolRow): boolean {
-    return row.target !== '' || row.output !== '';
+    return row.target !== '' || row.output !== '' || row.summary !== '';
   }
 
   private paintExpand(row: ToolRow): void {
@@ -1033,13 +1075,20 @@ export class StreamRenderer {
       kicker(row.bodyEl, row.name === 'Bash' ? 'COMMAND' : 'INPUT', 'aic-tool-body-kicker');
       row.bodyEl.createEl('pre', { cls: 'aic-tool-target', text: row.target });
     }
+    /* A background task has two results: what the CLI said when it STARTED
+       the task, and what it said when the task ENDED. Both are shown, under
+       their own words, because the first alone reads as the whole story. */
     if (row.output) {
-      kicker(row.bodyEl, 'RESULT', 'aic-tool-body-kicker');
+      kicker(row.bodyEl, row.summary ? 'STARTED' : 'RESULT', 'aic-tool-body-kicker');
       row.bodyEl.createEl('pre', { cls: 'aic-tool-body-pre', text: row.output });
       /* MEASURED, not estimated. A line count is a fact about the text on
          screen; a token figure would be a guess wearing a number's clothes. */
       const lines = row.output.split('\n').length;
       row.bodyEl.createDiv({ cls: 'aic-tool-lines', text: `${lines} ${lines === 1 ? 'line' : 'lines'}` });
+    }
+    if (row.summary) {
+      kicker(row.bodyEl, row.status === 'running' ? 'PROGRESS' : 'RESULT', 'aic-tool-body-kicker');
+      row.bodyEl.createEl('pre', { cls: 'aic-tool-body-pre', text: row.summary });
     }
   }
 
@@ -1055,6 +1104,7 @@ export class StreamRenderer {
     const row = this.tools.get(toolUseId);
     if (!row) return;
     row.el.removeClass('is-running', 'is-done', 'is-failed', 'is-approval');
+    row.el.toggleClass('is-background', row.background);
     row.gutter.empty();
     switch (row.status) {
       case 'running':
@@ -1089,6 +1139,8 @@ export class StreamRenderer {
     if (row.finishedAt !== null && row.status !== 'awaiting-approval') {
       row.rightEl.createSpan({ cls: 'aic-tool-time', text: shortDuration(row.finishedAt - row.startedAt) });
     }
+    // The word, not a colour: a row that outlives its turn has to say why.
+    if (row.background) row.rightEl.createSpan({ cls: 'aic-tool-bg', text: 'BACKGROUND' });
     if (row.status === 'done') {
       const mark = row.rightEl.createSpan({ cls: 'aic-tool-mark is-ok' });
       setIcon(mark, 'check');
@@ -1161,7 +1213,9 @@ export class StreamRenderer {
 
   private settleRunningRows(): void {
     for (const [id, row] of this.tools) {
-      if (row.status === 'running') {
+      // A background task outlives the turn on purpose; its notification
+      // closes it, and a turn end says nothing about it.
+      if (row.status === 'running' && !row.background) {
         // No result ever arrived, so there is no duration to print: the
         // finish is not stamped and the right cell carries the mark alone.
         row.status = 'done';

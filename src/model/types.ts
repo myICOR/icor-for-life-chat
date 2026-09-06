@@ -156,6 +156,24 @@ export type ChatEventBody =
       task: string;
     }
   | { kind: 'subagent-end'; agentId: string; ok: boolean }
+  /* A BACKGROUND TASK that is not a subagent: a Bash call the model sent with
+   * `run_in_background`, or a task the CLI started on its own. Its tool
+   * result arrives at once ("Command running in background") and the real
+   * end arrives later as a task notification, so the row that shows it needs
+   * a second signal. `toolUseId` names the row when the CLI reports one;
+   * `taskId` is the CLI's own id and is what a row is created under when no
+   * tool call opened it. Added 2026-09-06. */
+  | {
+      kind: 'task-update';
+      toolUseId: string | null;
+      taskId: string;
+      status: 'running' | 'completed' | 'failed' | 'stopped';
+      description: string;
+      taskType: string;
+      /** The CLI's own summary of the outcome, or a progress line. Empty when it sent none. */
+      summary: string;
+      outputFile: string;
+    }
   | { kind: 'compact-boundary'; preTokens: number; postTokens: number | null }
   | { kind: 'rate-limit'; facts: RateLimitFacts }
   /* A RESUMED conversation's own start, read back from the stored session
