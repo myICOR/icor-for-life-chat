@@ -3,7 +3,7 @@
   "version": "0.11.1",
   "private": true,
   "description": "ICOR for Life - AI Chat - the ICOR AI team inside your Obsidian vault.",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "LicenseRef-ICOR-Source-Available-1.0",
   "type": "module",
   "scripts": {
     "build": "node esbuild.config.mjs production",
