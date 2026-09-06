@@ -21,7 +21,10 @@ import { SubagentBus } from './state/subagents';
 import { ReplyActionRegistry } from './view/actions';
 import type { RenderHost } from './structured/render';
 import type { ItemView } from 'obsidian';
-import { availableProviders, missingProviderMessage, providerFor, providerMaturity, providerName } from './provider/registry';
+import { availableProviders, missingProviderMessage, providerFor, providerMaturity } from './provider/registry';
+import { catalogFor, parseCatalogCache, withCatalog } from './model/catalogCache';
+import type { CatalogCache } from './model/catalogCache';
+import { needsAdoption } from './view/leafRoute';
 import { providerFromFrontmatter, resumableSessionId } from './archive/resume';
 import { shortAge } from './view/dom';
 import { ChatView } from './view/ChatView';
@@ -86,8 +89,17 @@ export default class IcorChatPlugin extends Plugin {
    * tab says so; it is never backfilled with a guess. */
   modelCatalog: ModelChoice[] = [];
 
+  /* THE LAST CATALOGUE EACH RUNTIME REPORTED, on disk beside data.json so a
+   * model can be chosen before the first message of a new session (Tom,
+   * 2026-09-06). Measured data only: written when a session's own catalogue
+   * call answers, never seeded. Its own file rather than a setting, because a
+   * setting is something the user chose and this is something the runtime
+   * said. See model/catalogCache.ts. */
+  private catalogCache: CatalogCache = {};
+
   override async onload(): Promise<void> {
     await this.loadSettings();
+    await this.loadCatalogCache();
     installMemory(this);
     // Each runtime prepares the host once, before anything can launch a query
     // (the Claude provider installs the renderer AbortSignal shim here).
@@ -180,7 +192,8 @@ export default class IcorChatPlugin extends Plugin {
         }
         if (!here) {
           menu.addItem((item) =>
-            item.setTitle(`Resume needs ${providerName(archived.provider)}, which is not here`).setIcon('bot').setDisabled(true),
+            // One fact, one sentence: the same words the Notice path speaks (Flint, 2026-09-06).
+            item.setTitle(missingProviderMessage(archived.provider)).setIcon('bot').setDisabled(true),
           );
         }
         for (const other of this.detectedRuntimes()) {
@@ -276,6 +289,55 @@ export default class IcorChatPlugin extends Plugin {
    */
   modelFor(provider: ProviderId): string {
     return provider === 'claude' ? this.settings.model : '';
+  }
+
+  /* ------------------------------------------------- the catalogue cache */
+
+  private get catalogCachePath(): string {
+    return `${this.app.vault.configDir}/plugins/${this.manifest.id}/model-catalog.json`;
+  }
+
+  private async loadCatalogCache(): Promise<void> {
+    try {
+      const adapter = this.app.vault.adapter;
+      if (!(await adapter.exists(this.catalogCachePath))) return;
+      this.catalogCache = parseCatalogCache(JSON.parse(await adapter.read(this.catalogCachePath)));
+    } catch {
+      // An unreadable cache is an absent cache: the menu waits for the session.
+      this.catalogCache = {};
+    }
+  }
+
+  /** A session reported its runtime's catalogue: keep it for the next pane. */
+  async rememberCatalog(provider: ProviderId, models: ModelChoice[]): Promise<void> {
+    if (!models.length) return;
+    this.catalogCache = withCatalog(this.catalogCache, provider, models, new Date());
+    try {
+      await this.app.vault.adapter.write(this.catalogCachePath, JSON.stringify(this.catalogCache, null, 2));
+    } catch {
+      // The in-memory copy still serves this Obsidian run.
+    }
+  }
+
+  /**
+   * THE LIST A PANE CAN OFFER BEFORE ITS SESSION EXISTS. The runtime's own
+   * pre-launch listing first (Codex answers from its service; Claude Code
+   * has none and answers empty), then the last list that runtime reported
+   * in an earlier session. Empty when neither exists, and the menu says so.
+   */
+  async preLaunchCatalog(provider: ProviderId): Promise<ModelChoice[]> {
+    const runtime = providerFor(provider);
+    let live: ModelChoice[] = [];
+    try {
+      live = runtime ? await runtime.models(this.vaultPath) : [];
+    } catch {
+      live = [];
+    }
+    if (live.length) {
+      void this.rememberCatalog(provider, live);
+      return live;
+    }
+    return catalogFor(this.catalogCache, provider) ?? [];
   }
 
   /** The configured executable path for a runtime; empty means search. */
@@ -639,7 +701,26 @@ export default class IcorChatPlugin extends Plugin {
        reveal is also what EXPANDS a collapsed right sidebar - without it the
        open would land in a drawer nobody can see. */
     await this.app.workspace.revealLeaf(leaf);
-    const view = leaf.view;
+    let view = leaf.view;
+    /* A REUSED PANE TAKES THE RUNTIME IT WAS ASKED FOR. The runtime rode the
+       view state only on a fresh leaf; a revealed empty pane kept its own, so
+       "Start new session with Codex" landed on the empty Claude pane and
+       stayed on Claude (Tom, 2026-09-06, with a screenshot). Adoption is the
+       pane's own guarded path, and a pane that turned occupied between the
+       route and the reveal refuses it, in which case a fresh leaf is minted
+       after all: the click never lands on the wrong runtime. */
+    if (view instanceof ChatView && needsAdoption(route.kind, resumeSessionId ?? null) && !view.adoptProvider(wanted)) {
+      const fresh = this.app.workspace.getRightLeaf(false) ?? this.app.workspace.getLeaf('split');
+      await fresh.setViewState({
+        type: VIEW_TYPE_CHAT,
+        active: true,
+        state: resumeSessionId ? { resumeSessionId, provider: wanted } : { provider: wanted, ...opts },
+      });
+      await this.app.workspace.revealLeaf(fresh);
+      view = fresh.view;
+      // A fresh leaf resumes through its own state, exactly like create-right.
+      resumeSessionId = undefined;
+    }
     if (view instanceof ChatView) {
       // A revealed pane that already holds the thread needs no resume; an
       // unoccupied pane being resumed into does.

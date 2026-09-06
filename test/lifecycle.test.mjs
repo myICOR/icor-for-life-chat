@@ -7,6 +7,7 @@ import {
   contextPreamble, withContext, selectionRangeLabel, MAX_SELECTION_CHARS,
   STRUCTURED_REPLY_PROMPT,
   routeChatLeaf,
+  needsAdoption,
 } from './build/pure.mjs';
 
 const req = { toolUseId: 't1', toolName: 'Bash', target: 'rm -rf /', title: 'Claude wants to run Bash' };
@@ -377,4 +378,27 @@ test('only an explicit Bypass counts as skipping permissions', () => {
 test('Ask is still what ships out of the box', () => {
   assert.equal(DEFAULT_SETTINGS.defaultPermissionMode, 'default',
     'offering Bypass in settings must not change what a fresh install starts in');
+});
+
+/* "Start new session with Codex" revealed the empty Claude pane and left it
+   on Claude (Tom, 2026-09-06): the runtime rode the view state only on a
+   fresh leaf. A reused pane adopts; a fresh one needs nothing; a pane that
+   already holds the thread is never moved. */
+test('a reused pane adopts the requested runtime; a fresh one and a revealed thread do not', () => {
+  assert.equal(needsAdoption('create-right', null), false);
+  assert.equal(needsAdoption('create-right', 's1'), false);
+  assert.equal(needsAdoption('reveal', null), true, 'new session into an empty pane adopts');
+  assert.equal(needsAdoption('reveal', 's1'), false, 'a pane that holds the thread keeps its runtime');
+  assert.equal(needsAdoption('resume-into', 's1'), true, 'the id belongs to the runtime that minted it');
+});
+
+test('the launcher adopts through the pane, and the pane refuses once anything is held', () => {
+  const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+  assert.match(main, /needsAdoption\(route\.kind, resumeSessionId \?\? null\) && !view\.adoptProvider\(wanted\)/);
+  const view = readFileSync(new URL('../src/view/ChatView.ts', import.meta.url), 'utf8');
+  const body = view.slice(view.indexOf('  adoptProvider(provider: ProviderId): boolean {'));
+  assert.match(body.slice(0, 200), /if \(this\.session \|\| this\.resumeSessionId \|\| this\.store\.state\.sessionId\) return false;/);
+  // The pick made before a session lands in the launch, not only on a live one.
+  assert.match(view, /model: launchModelFor\(this\.chosenModel, this\.plugin\.modelFor\(this\.provider\)\)/);
+  assert.match(view, /this\.chosenModel = model;\s*\n\s*await this\.session\?\.setModel\(model\);/);
 });

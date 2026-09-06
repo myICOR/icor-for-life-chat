@@ -869,9 +869,11 @@ export class Composer {
     const catalog = this.catalog;
     if (!catalog || !catalog.length) {
       /* No catalogue is not an empty catalogue, and it is certainly not a
-         reason to offer a list assembled here. The menu says which one it is. */
+         reason to offer a list assembled here. The menu says which one it is.
+         Since 0.11.1 the last list a runtime reported is kept between
+         sessions, so this line is read once per runtime per machine. */
       menu.addItem((item) =>
-        item.setTitle('Model list arrives when the session starts').setDisabled(true),
+        item.setTitle('No model list yet. It arrives with the first session and is kept for next time.').setDisabled(true),
       );
       this.showMenu(menu, evt);
       return;

@@ -117,18 +117,37 @@ function rowIsCut(el: HTMLElement): boolean {
   return false;
 }
 
+/* ONE ROW AT FIRST PAINT: a fresh row measures itself alone on the next
+   frame. Every row at once goes through `remeasureRows` below, which batches
+   the layout reads. */
 function measureRow(el: HTMLElement): void {
-  // A hidden row measures zero everywhere and must keep the answer it had.
-  if (el.clientHeight === 0) return;
-  // Measured at REST, in the three-column shape a fitting row has: the door's
-  // own track must not be what cuts the row it exists to open.
-  const wasExpanded = el.hasClass('is-expanded');
-  el.removeClass('is-expanded', 'is-expandable');
-  const cut = rowIsCut(el);
-  if (wasExpanded) el.addClass('is-expanded');
-  el.toggleClass('is-expandable', cut);
-  if (!cut) el.removeClass('is-expanded');
-  paintRow(el);
+  remeasureAll([el]);
+}
+
+/* THREE PASSES, NEVER ONE PER ROW. The first shape of this did write (strip
+   the classes), read (scrollWidth) and write (toggle) inside one loop, which
+   forces the engine to lay the pane out again for every card row on every
+   resize frame: a pane drag over a long conversation paid one synchronous
+   layout per row per frame (Flint's read of 0.11.0, 2026-09-06). Now every
+   row is stripped to its rest shape first, every row is read next, and every
+   row is painted last, so one drag frame costs one layout. A hidden row
+   measures zero everywhere and keeps the answer it had; an open row keeps
+   its open state across the measure, as before. */
+function remeasureAll(rows: HTMLElement[]): void {
+  const visible = rows.filter((el) => el.clientHeight !== 0);
+  const wasExpanded = visible.map((el) => el.hasClass('is-expanded'));
+  // Write: measured at REST, in the shape a fitting row has, so the door's
+  // own track is never what cuts the row it exists to open.
+  for (const el of visible) el.removeClass('is-expanded', 'is-expandable');
+  // Read.
+  const cut = visible.map((el) => rowIsCut(el));
+  // Write.
+  visible.forEach((el, i) => {
+    const isCut = cut[i] === true;
+    if (wasExpanded[i] && isCut) el.addClass('is-expanded');
+    el.toggleClass('is-expandable', isCut);
+    paintRow(el);
+  });
 }
 
 function paintRow(el: HTMLElement): void {
@@ -148,9 +167,11 @@ function paintRow(el: HTMLElement): void {
 
 /** Re-measure every card row under `root`. The cut is a function of width. */
 export function remeasureRows(root: HTMLElement): void {
+  const rows: HTMLElement[] = [];
   for (const el of Array.from(root.querySelectorAll('.aic-srow'))) {
-    if (el.instanceOf(HTMLElement)) measureRow(el);
+    if (el.instanceOf(HTMLElement)) rows.push(el);
   }
+  remeasureAll(rows);
 }
 
 class Renderer {

@@ -50,3 +50,18 @@ export function routeChatLeaf<T>(
   }
   return { kind: 'create-right' };
 }
+
+/**
+ * WHETHER THE REVEALED PANE MUST TAKE THE REQUESTED RUNTIME. Only a fresh
+ * pane rode its runtime in the view state; a reused one kept whatever it had,
+ * so "Start new session with Codex" revealed the empty Claude pane and left
+ * it on Claude (Tom, 2026-09-06, with a screenshot). A pane being resumed
+ * into must adopt before the resume, since the id belongs to the runtime
+ * that minted it. A reveal during a resume returns a pane that already holds
+ * the thread, and a thread is never moved.
+ */
+export function needsAdoption(kind: LeafRoute<unknown>['kind'], resumeSessionId: string | null): boolean {
+  if (kind === 'create-right') return false;
+  if (kind === 'resume-into') return true;
+  return resumeSessionId === null;
+}

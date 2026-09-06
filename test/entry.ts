@@ -30,6 +30,7 @@ export * from '../src/archive/resume';
 export * from '../src/provider/claude/renderer-compat';
 export * from '../src/state/subagents';
 export * from '../src/view/leafRoute';
+export * from '../src/model/catalogCache';
 export { userTextOf } from '../src/provider/claude/normalize';
 export * from '../src/view/composer/slash';
 export * from '../src/view/composer/mention';

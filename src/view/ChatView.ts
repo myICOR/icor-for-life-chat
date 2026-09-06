@@ -35,6 +35,7 @@ import { isPinned, pinFirstPrompt, pinsFromState, pinsToState, togglePin, unpin 
 import type { PinnedPrompt } from '../model/pins';
 import type { TrayChip } from './composer/Composer';
 import { missingProviderMessage, providerFor } from '../provider/registry';
+import { launchModelFor } from '../model/catalogCache';
 import { isProviderId } from '../provider/types';
 import type { Provider, ProviderId, ProviderSession, SessionHooks, SessionStore } from '../provider/types';
 import { splitExtraPath } from '../provider/cli';
@@ -103,6 +104,13 @@ export class ChatView extends ItemView {
   private turnCounter = 0;
   /** One catalogue fetch per session; a resumed tab re-asks on its own init. */
   private modelCatalogLoaded = false;
+  /* THE MODEL PICKED BEFORE THE SESSION EXISTS. `changeModel` used to reach
+     only a live session, so a pick made before the first message went
+     nowhere and the launch took the settings value: the same defect the
+     permission mode had, in the model's clothes (Tom, 2026-09-06). The
+     picker writes here; the launcher reads here. Cleared when the runtime
+     changes, since a model id means something to one runtime. */
+  private chosenModel: string | null = null;
   private readonly taskPrompts = new Map<string, string>();
   private chipTray: HTMLElement | null = null;
   private startedAt = Date.now();
@@ -299,6 +307,7 @@ export class ChatView extends ItemView {
         if (model) this.composer?.presetModel(model);
       });
     }
+    void this.offerCatalog();
 
     this.store.subscribe((event) => this.onEvent(event));
     this.registerEvent(
@@ -817,8 +826,21 @@ export class ChatView extends ItemView {
      session id means something to exactly one runtime, and the composer
      trigger goes dark the moment a session exists. */
   private changeProvider(provider: ProviderId): void {
-    if (this.session || this.resumeSessionId || this.store.state.sessionId) return;
+    this.adoptProvider(provider);
+  }
+
+  /**
+   * THE PANE TAKES A RUNTIME, from the composer trigger or from the launcher
+   * revealing an empty pane for "Start new session with X" (Tom, 2026-09-06:
+   * that click used to land on the empty Claude pane and stay on Claude).
+   * Refused, with false, once anything to resume exists: a session id means
+   * something to exactly one runtime.
+   */
+  adoptProvider(provider: ProviderId): boolean {
+    if (this.session || this.resumeSessionId || this.store.state.sessionId) return false;
+    const changed = this.provider !== provider;
     this.provider = provider;
+    if (changed) this.chosenModel = null;
     this.composer?.setProvider(provider);
     this.composer?.setModeDetail(this.runtime?.modeLabel?.(this.permissionMode) ?? null);
     const runtime = this.runtime;
@@ -827,7 +849,20 @@ export class ChatView extends ItemView {
         if (model && this.provider === provider) this.composer?.presetModel(model);
       });
     }
+    void this.offerCatalog();
     this.app.workspace.requestSaveLayout();
+    return true;
+  }
+
+  /* THE MENU HAS A LIST BEFORE THE SESSION DOES. The runtime's pre-launch
+     listing, else the last list it reported (kept by the plugin), handed to
+     the composer only while it is still the pane's runtime and no session
+     has answered with something truer. */
+  private async offerCatalog(): Promise<void> {
+    const provider = this.provider;
+    const models = await this.plugin.preLaunchCatalog(provider);
+    if (!models.length || this.provider !== provider || this.modelCatalogLoaded) return;
+    this.composer?.setModelCatalog(models);
   }
 
   override async setState(state: unknown, result: unknown): Promise<void> {
@@ -1366,7 +1401,7 @@ export class ChatView extends ItemView {
         extra: splitExtraPath(settings.extraPath),
         configured: this.plugin.pathFor(this.provider),
       },
-      model: this.plugin.modelFor(this.provider),
+      model: launchModelFor(this.chosenModel, this.plugin.modelFor(this.provider)),
       effort: settings.effort,
       // This tab's mode, which the composer may already have changed.
       permissionMode: this.permissionMode,
@@ -1485,6 +1520,8 @@ export class ChatView extends ItemView {
       this.composer?.setModelCatalog(models);
       // The settings tab has no session to ask, so the plugin holds the answer.
       this.plugin.modelCatalog = models;
+      // And the next pane offers it before its own session exists.
+      void this.plugin.rememberCatalog(this.provider, models);
     }
   }
 
@@ -1511,6 +1548,9 @@ export class ChatView extends ItemView {
   }
 
   private async changeModel(model: string): Promise<void> {
+    // With no session this is the whole job: the pick is stored and the
+    // session launches with it as its model flag.
+    this.chosenModel = model;
     await this.session?.setModel(model);
   }
 

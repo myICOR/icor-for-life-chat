@@ -2,6 +2,7 @@ node_modules/
 main.js
 main.js.map
 data.json
+model-catalog.json
 .DS_Store
 *.log
 test/build/
