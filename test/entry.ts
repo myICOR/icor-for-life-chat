@@ -1,6 +1,7 @@
 /* The pure surface under test, bundled once so node:test can import it without
  * an Obsidian runtime. Only modules with no Obsidian import belong here. */
 export * from '../src/provider/claude/normalize';
+export * from '../src/provider/claude/usage';
 export * from '../src/provider/tooling';
 export * from '../src/provider/types';
 export * from '../src/provider/registry';
