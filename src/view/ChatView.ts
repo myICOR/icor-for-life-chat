@@ -2,10 +2,18 @@
  * else; it never imports a provider SDK, only the Provider seam that wraps
  * whichever runtime answers. */
 
-import { ItemView, MarkdownView, Notice, Platform, TFile, normalizePath, setTooltip } from 'obsidian';
+import { ItemView, MarkdownView, Notice, Platform, TFile, normalizePath, setIcon, setTooltip } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 import { VIEW_TYPE_CHAT } from '../constants';
 import { TERMINAL_VIEW_TYPE, handoffUnavailableReason, terminalHoldsSession, terminalInstalled, terminalLeafFor, terminalState } from './handoff';
+import { resolveExecutable } from '../provider/cli';
+import { remoteControlDisplayName } from '../remoteControl/displayName';
+import { remoteControlCommandLine } from '../remoteControl/command';
+import type { CommandPlatform } from '../remoteControl/command';
+import { remoteControlEligibility } from '../remoteControl/disqualifiers';
+import type { Eligibility } from '../remoteControl/disqualifiers';
+import { launchRemoteControlTerminal } from '../remoteControl/launch';
+import { realLaunchPorts } from '../remoteControl/adapters';
 import { ChatStore } from '../state/store';
 import { StreamRenderer } from './stream/StreamRenderer';
 import type { Composer } from './composer/Composer';
@@ -61,6 +69,9 @@ import { openTaskCount } from '../team/load';
 const REPLAY_CAP = 400;
 /** How much of the session file the archive reads back. */
 const ARCHIVE_READ_CAP = 5000;
+/** The plain state a session shows while handed off to a terminal running Remote Control. */
+const REMOTE_CONTROL_BANNER_TEXT =
+  'This chat is open in a terminal with Remote Control. Continue it in the Claude app on your phone, or bring it back here.';
 
 export class ChatView extends ItemView {
   private readonly store = new ChatStore();
@@ -127,6 +138,15 @@ export class ChatView extends ItemView {
      so the swap back and the launcher can both ask for the same thread
      without starting it twice. */
   private handoffAction: HTMLElement | null = null;
+  /* THE HAND-OFF TO REMOTE CONTROL. A different shape from the terminal
+     hand-off above: this pane keeps its OWN copy of the session id and stays
+     open, showing a plain state, instead of swapping its leaf away. Read
+     back from leaf state so a reopened tab keeps the banner rather than
+     silently reappearing over a session an external terminal still holds. */
+  private remoteControlAction: HTMLElement | null = null;
+  private remoteControlHandedOff = false;
+  /** The id handed off, kept even after `dispose()` clears the session's own. */
+  private remoteControlSessionId: string | null = null;
   private resuming: { id: string; done: Promise<void> } | null = null;
   /** Every provider session id this tab has held, oldest first. */
   private readonly sessionIds: string[] = [];
@@ -280,6 +300,8 @@ export class ChatView extends ItemView {
     this.addAction('bar-chart-3', 'Open AI team insights', () => void this.plugin.openInsights());
     this.handoffAction = this.addAction('terminal', 'Continue in the terminal', () => void this.continueInTerminal());
     this.paintHandoffAction();
+    this.remoteControlAction = this.addAction('smartphone', 'Continue on your phone', () => void this.onRemoteControlAction());
+    this.paintRemoteControlAction();
     /* LANDING BACK FROM THE TERMINAL. `Back to chat` swaps the leaf with
        `{ resumeSessionId, provider }` and nothing else, and the pane used to
        land on its home screen with the id stored and nothing replayed. A swap
@@ -662,6 +684,173 @@ export class ChatView extends ItemView {
     });
   }
 
+  /* ------------------------------------------------------ remote control */
+
+  /**
+   * The disqualifier check, read fresh every time: `authSource` off the LIVE
+   * session (`'unknown'` until its own init message has answered - never
+   * guessed either way before then), the env this pane's own child process
+   * would inherit, and the version `detect()` already cached for this
+   * runtime this session (`plugin.detections`, refreshed at load and on path
+   * changes - never re-parsed here).
+   */
+  private remoteControlEligibilityNow(): Eligibility {
+    return remoteControlEligibility({
+      authSource: this.session?.authSource ?? 'unknown',
+      childEnv: process.env,
+      cliVersion: this.plugin.detections.claude?.version ?? null,
+    });
+  }
+
+  private remoteControlPlatform(): CommandPlatform {
+    return Platform.isWin ? 'win32' : Platform.isMacOS ? 'darwin' : 'linux';
+  }
+
+  /**
+   * The note this pane is attached to right now, or null. "Started from a
+   * note" is read at the moment the member clicks, as the note the pane's own
+   * context-awareness would otherwise attach to the next message - the same
+   * signal `submit()` already reads, not a second, separately-tracked origin.
+   */
+  private remoteControlNoteTitle(): string | null {
+    return this.context?.basename ?? null;
+  }
+
+  private paintRemoteControlAction(): void {
+    const el = this.remoteControlAction;
+    if (!el) return;
+    const applicable = Platform.isDesktopApp && this.plugin.settings.remoteControl;
+    el.toggleClass('aic-rc-hidden', !applicable);
+    if (!applicable) return;
+
+    if (this.remoteControlHandedOff) {
+      setIcon(el, 'corner-down-left');
+      el.toggleClass('aic-rc-off', false);
+      el.setAttr('aria-disabled', 'false');
+      const label = 'Bring it back';
+      el.setAttr('aria-label', label);
+      setTooltip(el, label);
+      return;
+    }
+
+    setIcon(el, 'smartphone');
+    const sessionId = this.heldSessionId;
+    if (!sessionId) {
+      const label = 'Send a message first: a fresh pane has no session to hand over';
+      el.setAttr('aria-label', label);
+      el.setAttr('aria-disabled', 'true');
+      el.toggleClass('aic-rc-off', true);
+      setTooltip(el, label);
+      return;
+    }
+    const { enabled, reasons } = this.remoteControlEligibilityNow();
+    const label = enabled ? 'Continue on your phone' : reasons.join(' ');
+    el.setAttr('aria-label', label);
+    el.setAttr('aria-disabled', enabled ? 'false' : 'true');
+    el.toggleClass('aic-rc-off', !enabled);
+    setTooltip(el, label);
+  }
+
+  private onRemoteControlAction(): void {
+    if (this.remoteControlHandedOff) void this.bringItBack();
+    else void this.continueOnPhone();
+  }
+
+  /** A terminal emulator on PATH, found the same way every executable in this
+   * plugin is; null when none is (`launchRemoteControlTerminal` then copies
+   * instead of guessing at a binary name). Linux only - darwin and win32
+   * spawn a fixed, always-present system binary (`osascript`, `cmd`). */
+  private linuxTerminalPath(): string | null {
+    try {
+      return resolveExecutable('x-terminal-emulator', '', {
+        platform: 'linux',
+        home: this.plugin.homeDir,
+        path: process.env.PATH ?? '',
+        extra: [],
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Hand this conversation to a real interactive terminal running Remote
+   * Control, so the member's phone shows the same chat under their own
+   * Claude account. Up to disposal this mirrors `continueInTerminal`'s own
+   * contract (interrupt, wait, dispose, archive); the difference starts
+   * there - this pane keeps its leaf and shows a plain state rather than
+   * swapping away, because a member can still read (never send into) the
+   * transcript here while the phone side is live.
+   */
+  async continueOnPhone(): Promise<void> {
+    if (!Platform.isDesktopApp) {
+      new Notice('Remote Control opens a terminal on desktop only.');
+      return;
+    }
+    if (!this.plugin.settings.remoteControl) return;
+    const sessionId = this.heldSessionId;
+    if (!sessionId) {
+      new Notice('Send a message first: a fresh pane has no session to hand over.');
+      return;
+    }
+    const { enabled, reasons } = this.remoteControlEligibilityNow();
+    if (!enabled) {
+      new Notice(reasons.join(' '));
+      return;
+    }
+    if (this.store.state.status === 'streaming') {
+      await this.session?.interrupt();
+      const idle = await this.awaitIdle(10_000);
+      if (!idle) {
+        new Notice('The turn is still running; try again once it has stopped.');
+        return;
+      }
+    }
+    const platform = this.remoteControlPlatform();
+    const displayName = remoteControlDisplayName(this.app.vault.getName(), this.remoteControlNoteTitle());
+    const commandLine = remoteControlCommandLine(
+      this.plugin.pathFor(this.provider),
+      displayName,
+      sessionId,
+      platform,
+    );
+    const linuxTerminalPath = platform === 'linux' ? this.linuxTerminalPath() : null;
+
+    // The SDK writer must be gone before the terminal's CLI writer starts -
+    // the same rule `continueInTerminal` keeps, section 4 of the hand-off
+    // contract generalised past its one terminal.
+    this.session?.dispose();
+    this.session = null;
+    await this.archive();
+
+    this.remoteControlHandedOff = true;
+    this.remoteControlSessionId = sessionId;
+    this.app.workspace.requestSaveLayout();
+    this.paintRemoteControlAction();
+    this.stream?.renderHandoffBanner({
+      text: REMOTE_CONTROL_BANNER_TEXT,
+      buttonLabel: 'Bring it back',
+      onClick: () => void this.bringItBack(),
+    });
+
+    await launchRemoteControlTerminal(
+      { commandLine, cwd: this.plugin.vaultPath, platform, isDesktopApp: true, linuxTerminalPath },
+      realLaunchPorts(this.app),
+    );
+  }
+
+  /** Resumes the same session id headless again; the transcript is shared, so any phone messages come along. */
+  async bringItBack(): Promise<void> {
+    const sessionId = this.remoteControlSessionId ?? this.heldSessionId;
+    if (!sessionId) return;
+    this.remoteControlHandedOff = false;
+    this.remoteControlSessionId = null;
+    this.stream?.renderHandoffBanner(null);
+    this.app.workspace.requestSaveLayout();
+    this.paintRemoteControlAction();
+    await this.resume(sessionId);
+  }
+
   /* ----------------------------------------------------------- the memory */
 
   /**
@@ -819,6 +1008,9 @@ export class ChatView extends ItemView {
       provider: this.provider,
       pins: pinsToState(this.pins),
       ...(this.continuedFrom ? { continuedFrom: this.continuedFrom } : {}),
+      ...(this.remoteControlHandedOff
+        ? { remoteControlHandedOff: true, remoteControlSessionId: this.remoteControlSessionId }
+        : {}),
     };
   }
 
@@ -898,6 +1090,14 @@ export class ChatView extends ItemView {
       const folder = (state as { continuedFrom?: unknown }).continuedFrom;
       if (typeof folder === 'string' && folder) this.continuedFrom = folder;
     }
+    if (state && typeof state === 'object' && 'remoteControlHandedOff' in state) {
+      const handedOff = (state as { remoteControlHandedOff?: unknown }).remoteControlHandedOff === true;
+      const heldId = (state as { remoteControlSessionId?: unknown }).remoteControlSessionId;
+      if (handedOff && typeof heldId === 'string' && heldId) {
+        this.remoteControlHandedOff = true;
+        this.remoteControlSessionId = heldId;
+      }
+    }
     if (state && typeof state === 'object' && 'pins' in state) {
       /* Read back before the replay runs, so the replay finds pins already
          there and leaves the first-prompt rule alone: the stored tray is the
@@ -906,9 +1106,22 @@ export class ChatView extends ItemView {
       this.renderPins();
     }
     await super.setState(state, result as Parameters<ItemView['setState']>[1]);
+    // A pane restored still handed off to Remote Control repaints its history
+    // and its banner - READ ONLY - rather than starting a second live writer
+    // on a session an external terminal may still hold. `replay` alone never
+    // touches `ensureSession`/`start`.
+    if (this.remoteControlHandedOff && this.remoteControlSessionId && this.stream
+      && !this.session && this.app.workspace.layoutReady) {
+      await this.replay(this.remoteControlSessionId);
+      this.paintRemoteControlAction();
+      this.stream.renderHandoffBanner({
+        text: REMOTE_CONTROL_BANNER_TEXT,
+        buttonLabel: 'Bring it back',
+        onClick: () => void this.bringItBack(),
+      });
     // The view is already open (the stream exists) and a thread arrived by
     // state: the hand-off's way back. See the note in onOpen for the rule.
-    if (arrivedId && this.stream && !this.session && this.app.workspace.layoutReady) {
+    } else if (arrivedId && this.stream && !this.session && this.app.workspace.layoutReady) {
       await this.resume(arrivedId);
     }
   }
@@ -1446,6 +1659,13 @@ export class ChatView extends ItemView {
   }
 
   private async submit(text: string, attachments: Attachment[] = []): Promise<void> {
+    if (this.remoteControlHandedOff) {
+      // Two live writers on one session file fork it silently; the terminal's
+      // CLI is the only writer while this pane is handed off.
+      new Notice('This chat is open in a terminal with Remote Control. Bring it back before sending here.');
+      this.composer?.setStreaming(false);
+      return;
+    }
     const session = this.ensureSession();
     if (!session) {
       this.composer?.setStreaming(false);
@@ -1603,6 +1823,7 @@ export class ChatView extends ItemView {
       this.turnSignal();
     }
     if (event.kind === 'session') this.paintHandoffAction();
+    if (event.kind === 'session') this.paintRemoteControlAction();
     if (event.kind === 'session') {
       // The provider's own command list. The composer's placeholder has always
       // promised "/ runs commands"; this is what finally keeps the promise.

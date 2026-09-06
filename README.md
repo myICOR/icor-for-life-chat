@@ -268,6 +268,34 @@ anything of ours. This reflects OpenAI's published Codex documentation and
 terms as of 4 September 2026; they can change without notice, so treat the
 date as the point this was checked.
 
+## Continue on your phone
+
+Every chat you run here already has a Claude Code session behind it. On
+desktop, the "Continue on your phone" button in the pane's header opens that
+same session in a real terminal with Claude Code's own Remote Control turned
+on, so the exact same conversation appears in the Claude app on your phone,
+under your own account. The pane stays open and shows a plain notice while
+this is happening; sending a message from here is blocked until you bring
+the chat back, because two live writers on one session would fork it
+silently. "Bring it back" resumes it here, headless, with anything you sent
+from your phone already in the transcript.
+
+This needs a Claude Pro or Max plan and Claude Code signed in with your own
+Claude account, not an API key: Remote Control only works with a claude.ai
+sign-in. It also needs a current Claude Code (2.1.154 or newer) and none of
+Claude Code's own telemetry environment variables turned off, since Remote
+Control rides that same traffic. The button explains which of these is
+missing rather than failing quietly.
+
+Nothing about this adds a new account, a new server, or a new place your
+data goes. The plugin never runs the terminal command itself: it hands the
+exact line to a terminal pane, or to the terminal your operating system
+already has, and you (or the button, once you have read it) press Enter.
+From there it is the same unmodified Claude Code binary talking to the same
+Anthropic account it always did; nothing leaves this machine except through
+your own Claude account, the same as every other conversation in this
+plugin.
+
 ## Safety
 
 - Permission mode starts at **Ask**. Every tool call that wants a decision gets

@@ -49,3 +49,9 @@ export { defaultModelFromConfig, signedInFrom } from '../src/provider/codex/inde
 export * from '../src/archive/handover';
 export * from '../src/archive/resume';
 export * from '../src/view/handoff';
+export * from '../src/provider/claude/authSource';
+export * from '../src/remoteControl/version';
+export * from '../src/remoteControl/displayName';
+export * from '../src/remoteControl/disqualifiers';
+export * from '../src/remoteControl/command';
+export * from '../src/remoteControl/launch';
