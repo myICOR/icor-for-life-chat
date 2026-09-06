@@ -3254,3 +3254,9 @@
 .view-action.aic-handoff-off { color: var(--text-faint); cursor: not-allowed; }
 
 /* ==== END REGION T1 ==== */
+
+/* ==== REGION R1: card rows that open (labels never crushed, values unfold) ==== */
+/* ==== END REGION R1 ==== */
+
+/* ==== REGION S1: background tasks, usage windows, alpha runtimes ==== */
+/* ==== END REGION S1 ==== */
