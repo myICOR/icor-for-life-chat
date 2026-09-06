@@ -549,6 +549,21 @@ async function mountStates(root: HTMLElement): Promise<void> {
   new Composer(bareHost, { streaming: false, mode: 'default', model: '', effort: 'medium' }, noop);
   bareHost.setAttr('data-face', face(bareHost));
 
+  /* THE ALPHA WORD on a runtime chip (Tom, 2026-09-06): every runtime but
+     Claude Code wears it, on the chip and in its name for AT. Two composers,
+     one on Codex and one on Claude, so "Claude gets none of it" is measured
+     rather than assumed. */
+  const runtimes = [
+    { id: 'claude' as const, displayName: 'Claude Code', alpha: false },
+    { id: 'codex' as const, displayName: 'Codex', alpha: true },
+  ];
+  const alphaHost = probe.createDiv({ cls: 'aic-provider-alpha-probe' });
+  const onCodex = new Composer(alphaHost, { streaming: false, mode: 'default', model: '', effort: 'medium', provider: 'codex' }, noop);
+  onCodex.setProviders(runtimes);
+  const stableHost = probe.createDiv({ cls: 'aic-provider-stable-probe' });
+  const onClaude = new Composer(stableHost, { streaming: false, mode: 'default', model: '', effort: 'medium', provider: 'claude' }, noop);
+  onClaude.setProviders(runtimes);
+
   /* The STREAMING composer: the click-only `.aic-stop` control, which only
      exists mid-turn, and the pill reading Queue. A queued well beside it so
      the QUEUED mark is measured too. */
@@ -649,6 +664,23 @@ async function mountStates(root: HTMLElement): Promise<void> {
   const speck = probe.createDiv({ cls: 'aic-facts aic-facts-speck' });
   new Statusline(speck).render(
     { ...emptyState(), sessionId: 'a-session-that-started', contextWindow: 1000, contextTokens: 10 } as unknown as ChatState,
+    Date.UTC(2026, 7, 30, 0, 6),
+  );
+
+  /* TWO PLAN WINDOWS AT ONCE (2026-09-06): the 5-hour and the 7-day window
+     each as its own cell under the one plan switch, nearest horizon first.
+     Both arrive as separate events on the wire; the state keeps both. */
+  const windowsHost = probe.createDiv({ cls: 'aic-windows-host' });
+  windowsHost.setCssStyles({ width: '900px' });
+  const windows = windowsHost.createDiv({ cls: 'aic-facts aic-facts-windows' });
+  new Statusline(windows).render(
+    {
+      ...emptyState(), sessionId: 'a-session-that-started',
+      rateLimitWindows: {
+        seven_day: { window: 'seven_day', utilization: 0.4, resetsAt: null, status: 'allowed' },
+        five_hour: { window: 'five_hour', utilization: 0.9, resetsAt: null, status: 'allowed_warning' },
+      },
+    } as unknown as ChatState,
     Date.UTC(2026, 7, 30, 0, 6),
   );
 

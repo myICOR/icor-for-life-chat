@@ -3272,15 +3272,17 @@
   color: var(--aic-dim);
 }
 
-/* S1.2 the ALPHA kicker on a runtime chip and in its menu: one word in the
-   warning ink and no fill, because it is a caution about the runtime and not
-   a state of the conversation. */
+/* S1.2 the ALPHA kicker on a runtime chip: one word, no fill, in the chip's
+   own quiet ink. It was drafted in the warning ink and measured 3.85:1 on the
+   stock light wash, under the text floor; the caution is carried by the WORD
+   and by the chip's accessible name, never by hue, which is this stylesheet's
+   own rule anyway. */
 .aic-root.aic-root .aic-provider-alpha {
   font-family: var(--aic-mono);
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--aic-warning);
+  color: var(--aic-dim);
 }
 
 /* ==== END REGION S1 ==== */

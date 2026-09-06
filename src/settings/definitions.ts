@@ -22,6 +22,7 @@
 import type { ChatSettings } from '../model/settings';
 import type { ModelChoice } from '../model/types';
 import type { Detection, ProviderId } from '../provider/types';
+import { ALPHA_NOTE, providerMaturity } from '../provider/registry';
 import { FACT_SETTING_KEYS, MEASURED_NOTE, NARROW_NOTE } from '../model/settings';
 import { DROP_GROUPS, FACT_NAMES, FACT_TOOLTIPS, RENDER_ORDER } from '../model/facts';
 import type { FactId } from '../model/facts';
@@ -113,7 +114,9 @@ function detectionNote(input: DefinitionInput, id: ProviderId, displayName: stri
     : d === null
       ? `${displayName}: detection has not run.`
       : d.hint;
-  return { name: displayName, desc, note: true };
+  // Every runtime but Claude Code is Alpha, and the settings row says so first.
+  const prefix = providerMaturity(id) === 'alpha' ? `${ALPHA_NOTE} ` : '';
+  return { name: displayName, desc: `${prefix}${desc}`, note: true };
 }
 
 /* THE INSTALL ROW, only for a runtime detection did not find. A runtime that

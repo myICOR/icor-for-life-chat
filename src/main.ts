@@ -21,7 +21,7 @@ import { SubagentBus } from './state/subagents';
 import { ReplyActionRegistry } from './view/actions';
 import type { RenderHost } from './structured/render';
 import type { ItemView } from 'obsidian';
-import { availableProviders, configureArchiveIndex, missingProviderMessage, providerFor, providerName } from './provider/registry';
+import { availableProviders, configureArchiveIndex, missingProviderMessage, providerFor, providerMaturity, providerName } from './provider/registry';
 import { providerFromFrontmatter, resumableSessionId } from './archive/resume';
 import { shortAge } from './view/dom';
 import { ChatView } from './view/ChatView';
@@ -328,10 +328,10 @@ export default class IcorChatPlugin extends Plugin {
   }
 
   /** The runtimes detection actually found, Claude first. Never a guess. */
-  detectedProviders(): Array<{ id: ProviderId; displayName: string }> {
+  detectedProviders(): Array<{ id: ProviderId; displayName: string; alpha: boolean }> {
     return availableProviders()
       .filter((p) => this.detections[p.id]?.found === true)
-      .map((p) => ({ id: p.id, displayName: p.displayName }));
+      .map((p) => ({ id: p.id, displayName: p.displayName, alpha: providerMaturity(p.id) === 'alpha' }));
   }
 
   private detectedRuntimes(): Provider[] {

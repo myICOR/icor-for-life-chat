@@ -589,6 +589,18 @@ ${HELPERS}
         hidden: svg.getAttribute('aria-hidden'),
       });
     }
+    /* The runtime chip's Alpha word: present on Codex, absent on Claude, and
+       carried into the chip's accessible name so it is not hue-only. */
+    const chipOf = (sel) => {
+      const btn = document.querySelector(sel + ' .aic-provider-btn');
+      return btn ? {
+        alpha: !!btn.querySelector('.aic-provider-alpha'),
+        alphaText: (btn.querySelector('.aic-provider-alpha')?.textContent || '').trim(),
+        label: btn.getAttribute('aria-label') || '',
+        text: (btn.textContent || '').trim(),
+      } : null;
+    };
+    out.runtimeChip = { alpha: chipOf('.aic-provider-alpha-probe'), stable: chipOf('.aic-provider-stable-probe') };
     out.strip = {
       primary: strip('.aic-facts'),
       absent: strip('.aic-facts-absent'),
@@ -605,6 +617,7 @@ ${HELPERS}
         value: (document.querySelector('.aic-facts-speck .aic-fact-value')?.textContent || '').trim(),
       } : null,
       full: strip('.aic-facts-full'),
+      windows: strip('.aic-facts-windows'),
       crushed: strip('.aic-facts-crushed'),
       recovered: strip('.aic-facts-recovered'),
       narrow: strip('.aic-facts-narrow'),
@@ -1849,6 +1862,30 @@ test('THE LADDER: a narrow pane removes WHOLE facts, and never a budget', () => 
     // rendered with full authority.
     assert.ok(n.overhang <= 0.5,
       `${room}: the last surviving fact overhangs the strip by ${n.overhang}px - it is being clipped`);
+  });
+});
+
+test('the plan budget renders one cell per measured window, 5H before 7D, whole', () => {
+  forEachRoom((s, room) => {
+    const w = s.base.strip.windows;
+    assert.ok(w, `${room}: the two-window strip is not mounted - the per-window law is unguarded`);
+    assert.equal(w.cells, 2, `${room}: two measured windows rendered ${w.cells} cells`);
+    assert.deepEqual(w.ids, ['plan', 'plan'], `${room}: both cells belong to the one plan switch`);
+    assert.ok(w.text.indexOf('5H') !== -1 && w.text.indexOf('7D') !== -1, `${room}: the strip reads "${w.text}"`);
+    assert.ok(w.text.indexOf('5H') < w.text.indexOf('7D'), `${room}: the nearer horizon renders second`);
+    assert.ok(w.overhang <= 0.5, `${room}: the second window overhangs the strip`);
+  });
+});
+
+test('every runtime but Claude Code wears the Alpha word, and says it in words too', () => {
+  forEachRoom((s, room) => {
+    const chip = s.base.runtimeChip;
+    assert.ok(chip && chip.alpha && chip.stable, `${room}: the runtime chip probes are not mounted`);
+    assert.equal(chip.alpha.alpha, true, `${room}: the Codex chip carries no Alpha word`);
+    assert.equal(chip.alpha.alphaText, 'ALPHA', `${room}: the Codex chip reads "${chip.alpha.alphaText}"`);
+    assert.match(chip.alpha.label, /Alpha: not fully tested yet/, `${room}: the Alpha caution is hue-only - the name reads "${chip.alpha.label}"`);
+    assert.equal(chip.stable.alpha, false, `${room}: Claude Code was given the Alpha word`);
+    assert.doesNotMatch(chip.stable.label, /Alpha/, `${room}: Claude Code's name carries the caution`);
   });
 });
 
