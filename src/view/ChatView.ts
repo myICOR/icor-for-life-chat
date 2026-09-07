@@ -2,7 +2,7 @@
  * else; it never imports a provider SDK, only the Provider seam that wraps
  * whichever runtime answers. */
 
-import { ItemView, MarkdownView, Notice, Platform, TFile, normalizePath, setIcon, setTooltip } from 'obsidian';
+import { ItemView, MarkdownView, Menu, Notice, Platform, TFile, normalizePath, setIcon, setTooltip } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 import { VIEW_TYPE_CHAT } from '../constants';
 import { TERMINAL_VIEW_TYPE, handoffUnavailableReason, terminalHoldsSession, terminalInstalled, terminalLeafFor, terminalState } from './handoff';
@@ -15,6 +15,9 @@ import type { Eligibility } from '../remoteControl/disqualifiers';
 import { launchRemoteControlTerminal } from '../remoteControl/launch';
 import { realLaunchPorts } from '../remoteControl/adapters';
 import { heldSessionsHas } from '../remoteControl/held';
+import { handoffActionPaint, paneHeaderTarget, remoteControlActionPaint } from './paneActions';
+import type { ActionPaint, RemoteControlPaintState } from './paneActions';
+import { iconButton } from './dom';
 import { isSessionId } from '../model/sessionId';
 import { ChatStore } from '../state/store';
 import { StreamRenderer } from './stream/StreamRenderer';
@@ -147,6 +150,20 @@ export class ChatView extends ItemView {
      silently reappearing over a session an external terminal still holds. */
   private remoteControlAction: HTMLElement | null = null;
   private remoteControlHandedOff = false;
+  /* THE PANE'S OWN COPY OF THE THREE HEADER ACTIONS (Tom, 2026-09-07): Obsidian
+     hides `.view-header` entirely in a sidebar, and a chat opens in the right
+     sidebar by default (`leafRoute.ts`), so the host icons above are
+     unreachable there without ever being disabled or hidden BY THIS PLUGIN -
+     the host hides their container. `paneHeaderEl` is a second row, painted
+     inside `.aic-root` itself (never inside the host header, so a theme that
+     hides the header cannot hide this too), shown only while
+     `paneHeaderTargetNow()` says 'in-pane' - see `trackPaneHeaderVisibility`.
+     Each in-pane button is painted by the exact same call that paints its
+     host twin, in `paintHandoffAction`/`paintRemoteControlAction` below, so
+     the two can never show a different label for the same state. */
+  private paneHeaderEl: HTMLElement | null = null;
+  private handoffActionInPane: HTMLElement | null = null;
+  private remoteControlActionInPane: HTMLElement | null = null;
   /** The id handed off, kept even after `dispose()` clears the session's own. */
   private remoteControlSessionId: string | null = null;
   private resuming: { id: string; done: Promise<void> } | null = null;
@@ -221,6 +238,29 @@ export class ChatView extends ItemView {
 
   override getIcon(): string {
     return 'messages-square';
+  }
+
+  /**
+   * Both hand-offs, also in the pane's own "More options" menu - a keyboard
+   * user, or anyone whose theme buries the header icons some other way,
+   * still has a path (Tom, 2026-09-07, fix step 2). Same paint objects the
+   * header icons use, so a disabled row here names the exact same reason a
+   * disabled icon would have shown.
+   */
+  override onPaneMenu(menu: Menu, source: string): void {
+    super.onPaneMenu(menu, source);
+    const handoffPaint = handoffActionPaint(this.handoffReason());
+    menu.addItem((item) => {
+      item.setTitle(handoffPaint.label).setIcon(handoffPaint.icon).setDisabled(handoffPaint.disabled);
+      if (!handoffPaint.disabled) item.onClick(() => void this.continueInTerminal());
+    });
+    if (Platform.isDesktopApp && this.plugin.settings.remoteControl) {
+      const rcPaint = remoteControlActionPaint(this.remoteControlPaintStateNow());
+      menu.addItem((item) => {
+        item.setTitle(rcPaint.label).setIcon(rcPaint.icon).setDisabled(rcPaint.disabled);
+        if (!rcPaint.disabled) item.onClick(() => this.onRemoteControlAction());
+      });
+    }
   }
 
   override async onOpen(): Promise<void> {
@@ -308,11 +348,26 @@ export class ChatView extends ItemView {
     this.stream.renderEmptyState(this.emptyTeamBlock());
     this.renderPins();
     void this.fillResumeRows().then(() => this.fillMemory());
+    /* THE IN-PANE ROW FIRST, so it is the first child of `.aic-root` and the
+       host actions' click handlers exist by the time either surface can
+       reach them. `pane.root` (== `this.contentEl`) is emptied and rebuilt
+       once, by `buildPane` above, and never again for the life of this view -
+       prepending here is stable for the pane's whole lifetime. */
+    this.paneHeaderEl = pane.root.createDiv({ cls: 'aic-pane-header' });
+    pane.root.prepend(this.paneHeaderEl);
+    iconButton(this.paneHeaderEl, 'bar-chart-3', 'Open AI team insights', () => void this.plugin.openInsights());
     this.addAction('bar-chart-3', 'Open AI team insights', () => void this.plugin.openInsights());
     this.handoffAction = this.addAction('terminal', 'Continue in the terminal', () => void this.continueInTerminal());
+    this.handoffActionInPane = iconButton(
+      this.paneHeaderEl, 'terminal', 'Continue in the terminal', () => void this.continueInTerminal(),
+    );
     this.paintHandoffAction();
     this.remoteControlAction = this.addAction('smartphone', 'Continue on your phone', () => void this.onRemoteControlAction());
+    this.remoteControlActionInPane = iconButton(
+      this.paneHeaderEl, 'smartphone', 'Continue on your phone', () => void this.onRemoteControlAction(),
+    );
     this.paintRemoteControlAction();
+    this.trackPaneHeaderVisibility();
     /* LANDING BACK FROM THE TERMINAL. `Back to chat` swaps the leaf with
        `{ resumeSessionId, provider }` and nothing else, and the pane used to
        land on its home screen with the id stored and nothing replayed. A swap
@@ -629,15 +684,26 @@ export class ChatView extends ItemView {
     return handoffUnavailableReason(this.provider, this.heldSessionId, terminalInstalled(this.app));
   }
 
-  private paintHandoffAction(): void {
-    const el = this.handoffAction;
+  /**
+   * Applies ONE computed descriptor to whichever concrete element is handed
+   * in - the host's `addAction` icon, or this pane's own button. Neither
+   * caller below re-derives icon/label/disabled; both paint the same object,
+   * which is the whole guarantee that the two surfaces cannot say different
+   * things about the same state (Tom, 2026-09-07).
+   */
+  private paintAction(el: HTMLElement | null, paint: ActionPaint, offClass: string): void {
     if (!el) return;
-    const reason = this.handoffReason();
-    const label = reason ?? 'Continue in the terminal';
-    el.setAttr('aria-label', label);
-    el.setAttr('aria-disabled', reason ? 'true' : 'false');
-    el.toggleClass('aic-handoff-off', reason !== null);
-    setTooltip(el, label);
+    setIcon(el, paint.icon);
+    el.setAttr('aria-label', paint.label);
+    el.setAttr('aria-disabled', paint.disabled ? 'true' : 'false');
+    el.toggleClass(offClass, paint.disabled);
+    setTooltip(el, paint.label);
+  }
+
+  private paintHandoffAction(): void {
+    const paint = handoffActionPaint(this.handoffReason());
+    this.paintAction(this.handoffAction, paint, 'aic-handoff-off');
+    this.paintAction(this.handoffActionInPane, paint, 'aic-handoff-off');
   }
 
   /**
@@ -727,39 +793,35 @@ export class ChatView extends ItemView {
     return this.context?.basename ?? null;
   }
 
+  /** Remote Control's current state, as `remoteControlActionPaint` reads it. */
+  private remoteControlPaintStateNow(): RemoteControlPaintState {
+    if (this.remoteControlHandedOff) return { kind: 'handed-off' };
+    const sessionId = this.heldSessionId;
+    if (!sessionId) return { kind: 'no-session' };
+    const { enabled, reasons } = this.remoteControlEligibilityNow();
+    return enabled ? { kind: 'eligible' } : { kind: 'ineligible', reasons };
+  }
+
+  /** True while "Continue on your phone" would act right now - not handed off, and eligible. */
+  canContinueOnPhoneNow(): boolean {
+    if (!Platform.isDesktopApp || !this.plugin.settings.remoteControl) return false;
+    return this.remoteControlPaintStateNow().kind === 'eligible';
+  }
+
+  /** True while this pane shows the Remote Control hand-off banner (the phone side is live). */
+  isHandedOffToPhone(): boolean {
+    return this.remoteControlHandedOff;
+  }
+
   private paintRemoteControlAction(): void {
-    const el = this.remoteControlAction;
-    if (!el) return;
     const applicable = Platform.isDesktopApp && this.plugin.settings.remoteControl;
-    el.toggleClass('aic-rc-hidden', !applicable);
+    this.remoteControlAction?.toggleClass('aic-rc-hidden', !applicable);
+    this.remoteControlActionInPane?.toggleClass('aic-rc-hidden', !applicable);
     if (!applicable) return;
 
-    if (this.remoteControlHandedOff) {
-      setIcon(el, 'corner-down-left');
-      el.toggleClass('aic-rc-off', false);
-      el.setAttr('aria-disabled', 'false');
-      const label = 'Bring it back';
-      el.setAttr('aria-label', label);
-      setTooltip(el, label);
-      return;
-    }
-
-    setIcon(el, 'smartphone');
-    const sessionId = this.heldSessionId;
-    if (!sessionId) {
-      const label = 'Send a message first: a fresh pane has no session to hand over';
-      el.setAttr('aria-label', label);
-      el.setAttr('aria-disabled', 'true');
-      el.toggleClass('aic-rc-off', true);
-      setTooltip(el, label);
-      return;
-    }
-    const { enabled, reasons } = this.remoteControlEligibilityNow();
-    const label = enabled ? 'Continue on your phone' : reasons.join(' ');
-    el.setAttr('aria-label', label);
-    el.setAttr('aria-disabled', enabled ? 'false' : 'true');
-    el.toggleClass('aic-rc-off', !enabled);
-    setTooltip(el, label);
+    const paint = remoteControlActionPaint(this.remoteControlPaintStateNow());
+    this.paintAction(this.remoteControlAction, paint, 'aic-rc-off');
+    this.paintAction(this.remoteControlActionInPane, paint, 'aic-rc-off');
   }
 
   private onRemoteControlAction(): void {
@@ -1037,6 +1099,44 @@ export class ChatView extends ItemView {
     }
     this.registerEvent(this.app.workspace.on('resize', measure));
     this.registerEvent(this.app.workspace.on('layout-change', measure));
+  }
+
+  /**
+   * Which surface should paint the three actions right now, in the exact
+   * shape `paneActions.ts`'s pure `paneHeaderTarget` decides: `sideSplit` is
+   * this leaf's structural home (`getRoot()` is the left or right sidedock,
+   * true before layout has run once), `hostHeaderHidden` is a live read of
+   * the host's own `.view-header` (catches a theme that hides it some other
+   * way, sidebar or not). Read fresh on every call - never cached, because
+   * both facts can change under a pane that never closes (dragged out of the
+   * sidebar, a theme swapped mid-session).
+   */
+  private paneHeaderTargetNow() {
+    const root = this.leaf.getRoot();
+    const { leftSplit, rightSplit } = this.app.workspace;
+    const sideSplit = root === leftSplit || root === rightSplit;
+    const viewHeader = this.containerEl.querySelector(':scope > .view-header');
+    const hostHeaderHidden = viewHeader !== null && window.getComputedStyle(viewHeader).display === 'none';
+    return paneHeaderTarget({ sideSplit, hostHeaderHidden });
+  }
+
+  /**
+   * The in-pane row shows only while the host header is unreachable - never
+   * both at once (Tom, 2026-09-07: "no duplicates" when the host header IS
+   * visible). The host's own icons need no matching toggle here: Obsidian's
+   * `display: none` on a hidden `.view-header` already removes them from
+   * view AND from the tab order, so there is nothing to duplicate on that
+   * side - only this pane's own row needs a conditional.
+   */
+  private paintPaneHeaderVisibility(): void {
+    const inPane = this.paneHeaderTargetNow() === 'in-pane';
+    this.paneHeaderEl?.toggleClass('is-hidden', !inPane);
+  }
+
+  /** Measured at layout time and on every `layout-change`, per the brief's own check list. */
+  private trackPaneHeaderVisibility(): void {
+    this.paintPaneHeaderVisibility();
+    this.registerEvent(this.app.workspace.on('layout-change', () => this.paintPaneHeaderVisibility()));
   }
 
   /**

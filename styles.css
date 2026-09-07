@@ -3310,6 +3310,37 @@
 
 /* ==== END REGION U1 ==== */
 
+/* ==== REGION V1: pane header (Obsidian hides .view-header in a sidebar) ==== */
+
+/* The in-pane copy of the three header actions, the pane's own FIRST child -
+   above rung 0 (the pin tray), never inside the host header. Right-aligned
+   and quiet, the same register as the header icons it stands in for; hidden
+   by default and shown only while `paintPaneHeaderVisibility` says the host
+   header is unreachable, so a main-area pane with a visible host header never
+   shows two copies of the same three actions. */
+.aic-root.aic-root .aic-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--aic-hairline-subtle);
+}
+.aic-root.aic-root .aic-pane-header.is-hidden { display: none; }
+
+/* T1/U1's own "unavailable, here's why on hover" and "fully hidden" treatment,
+   carried over to the in-pane button: same classes, same `paintAction` call,
+   so a theme that never hides the header pays nothing extra and a sidebar
+   pane reads exactly as faint/hidden as the header icon would have. */
+.aic-root.aic-root .aic-pane-header .aic-icon-btn.aic-handoff-off,
+.aic-root.aic-root .aic-pane-header .aic-icon-btn.aic-rc-off {
+  color: var(--aic-faint);
+  cursor: not-allowed;
+}
+.aic-root.aic-root .aic-pane-header .aic-icon-btn.aic-rc-hidden { display: none; }
+
+/* ==== END REGION V1 ==== */
+
 /* ==== REGION R1: card rows that open (labels never crushed, values unfold) ==== */
 
 /* R1.1 the door. A chevron in the row's fourth column, and the column is

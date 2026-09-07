@@ -129,14 +129,44 @@ export default class IcorChatPlugin extends Plugin {
 
     /* THE HAND-OFF TO THE TERMINAL (contract: icor-terminal/docs/handoff.md).
        Enabled only when the active chat can be handed over; the reason it
-       cannot is on the header action's own label. */
+       cannot is on the header action's own label. Renamed 2026-09-07 (Tom):
+       the id, and every hotkey bound to it, is unchanged - only the palette
+       words moved to match the other two hand-off commands below. */
     this.addCommand({
       id: 'continue-in-terminal',
-      name: 'Continue this conversation in the terminal',
+      name: 'Continue in the terminal',
       checkCallback: (checking) => {
         const view = this.handoffCandidate();
         if (!view) return false;
         if (!checking) void view.continueInTerminal();
+        return true;
+      },
+    });
+
+    /* THE HAND-OFF TO REMOTE CONTROL, its two directions as two commands
+       (Tom, 2026-09-07, sidebar fix step 2): a sidebar hides the header icon
+       that offers either one, so a keyboard user needs a path that never
+       depended on seeing it. Same eligibility the header icon and the pane
+       menu read - `canContinueOnPhoneNow()` / `isHandedOffToPhone()` wrap the
+       identical state `paneActions.ts` paints from. */
+    this.addCommand({
+      id: 'continue-on-phone',
+      name: 'Continue on your phone',
+      checkCallback: (checking) => {
+        const view = this.remoteControlCandidate();
+        if (!view) return false;
+        if (!checking) void view.continueOnPhone();
+        return true;
+      },
+    });
+
+    this.addCommand({
+      id: 'bring-it-back',
+      name: 'Bring it back',
+      checkCallback: (checking) => {
+        const view = this.bringItBackCandidate();
+        if (!view) return false;
+        if (!checking) void view.bringItBack();
         return true;
       },
     });
@@ -644,6 +674,33 @@ export default class IcorChatPlugin extends Plugin {
       if (leaf.view instanceof ChatView) return leaf.view;
     }
     return null;
+  }
+
+  /**
+   * `handoffCandidate`'s own shape, for "Continue on your phone": the active
+   * pane when it is eligible right now, else the ONE open pane that is - two
+   * eligible panes and no active one is ambiguous, same reasoning as the
+   * terminal hand-off above.
+   */
+  remoteControlCandidate(): ChatView | null {
+    const active = this.app.workspace.getActiveViewOfType(ChatView);
+    if (active) return active.canContinueOnPhoneNow() ? active : null;
+    const able: ChatView[] = [];
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_CHAT)) {
+      if (leaf.view instanceof ChatView && leaf.view.canContinueOnPhoneNow()) able.push(leaf.view);
+    }
+    return able.length === 1 ? able[0] ?? null : null;
+  }
+
+  /** The same shape again, for "Bring it back": the active pane if it is the one handed off, else the one that is. */
+  bringItBackCandidate(): ChatView | null {
+    const active = this.app.workspace.getActiveViewOfType(ChatView);
+    if (active) return active.isHandedOffToPhone() ? active : null;
+    const able: ChatView[] = [];
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_CHAT)) {
+      if (leaf.view instanceof ChatView && leaf.view.isHandedOffToPhone()) able.push(leaf.view);
+    }
+    return able.length === 1 ? able[0] ?? null : null;
   }
 
   /** Open and in-progress task counts from the Tasks room, or null when the room is absent. */
