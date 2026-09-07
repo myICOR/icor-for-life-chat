@@ -57,10 +57,11 @@ import { toolPurpose, toolTarget } from '../tooling';
 import { launchPermissions } from './launch';
 import { ApprovalBroker, toPermissionAnswer } from './permissions';
 import type {
-  ApprovalChoice, ProviderSession, SessionConfig, SessionHooks, SessionImage,
+  ApprovalChoice, AuthSource, ProviderSession, SessionConfig, SessionHooks, SessionImage,
 } from '../types';
 import type { EffortName, ModelChoice, PermissionModeName, RateLimitFacts } from '../../model/types';
 import { usageEvents } from './usage';
+import { authSourceFromApiKeySource } from './authSource';
 
 export type { SessionConfig, SessionHooks, SessionImage } from '../types';
 
@@ -154,6 +155,8 @@ export class ChatSession implements ProviderSession {
   /** The status word the wire last gave each window; the usage report carries none. */
   private readonly wireStatus = new Map<RateLimitFacts['window'], RateLimitFacts['status']>();
   private usageInFlight = false;
+  /** Read off the system/init message's own `apiKeySource`; `'unknown'` until it arrives. */
+  private _authSource: AuthSource = 'unknown';
 
   constructor(
     private readonly config: SessionConfig,
@@ -165,6 +168,10 @@ export class ChatSession implements ProviderSession {
 
   get aborted(): boolean {
     return this.abortController.signal.aborted;
+  }
+
+  get authSource(): AuthSource {
+    return this._authSource;
   }
 
   start(): void {
@@ -314,6 +321,9 @@ export class ChatSession implements ProviderSession {
       for await (const message of handle) {
         if (this.disposed) break;
         this.hooks.onRawMessage?.(message);
+        if (message.type === 'system' && message.subtype === 'init') {
+          this._authSource = authSourceFromApiKeySource(message.apiKeySource);
+        }
         for (const event of this.normalizer.normalize(message)) {
           if (event.kind === 'rate-limit' && event.facts.window !== 'unknown') {
             this.wireStatus.set(event.facts.window, event.facts.status);

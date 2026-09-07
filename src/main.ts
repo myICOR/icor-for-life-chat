@@ -41,6 +41,7 @@ import type { DetectEnvironment, Detection, Provider, ProviderId } from './provi
 import { splitExtraPath } from './provider/cli';
 import { handoverText } from './archive/handover';
 import { installMemory } from './team/memory';
+import { parseHeldSessions } from './remoteControl/held';
 
 /* The file-explorer BLOCK this plugin used to inject above the file tree - a
  * whole panel section, not an icon. It is gone for good; the name survives
@@ -97,9 +98,19 @@ export default class IcorChatPlugin extends Plugin {
    * said. See model/catalogCache.ts. */
   private catalogCache: CatalogCache = {};
 
+  /* THE CROSS-PANE REMOTE CONTROL REGISTRY (Vex H1, 2026-09-07). One set for
+   * the whole vault, not one per `ChatView`: a session `continueOnPhone` hands
+   * to an OS-level terminal is not an Obsidian leaf, so no leaf walk can see
+   * it the way `view/handoff.ts` sees a Terminal-plugin pane. Persisted to a
+   * file beside `data.json` so a reload does not forget a session an external
+   * terminal still has open; cleared only by `bringItBack`. See
+   * `remoteControl/held.ts` for the pure parsing/lookup this wraps. */
+  readonly remoteControlHeld = new Set<string>();
+
   override async onload(): Promise<void> {
     await this.loadSettings();
     await this.loadCatalogCache();
+    await this.loadRemoteControlHeld();
     installMemory(this);
     // Each runtime prepares the host once, before anything can launch a query
     // (the Claude provider installs the renderer AbortSignal shim here).
@@ -317,6 +328,52 @@ export default class IcorChatPlugin extends Plugin {
     } catch {
       // The in-memory copy still serves this Obsidian run.
     }
+  }
+
+  /* ------------------------------------------------ remote control registry */
+
+  private get remoteControlHeldPath(): string {
+    return `${this.app.vault.configDir}/plugins/${this.manifest.id}/remote-control-held.json`;
+  }
+
+  private async loadRemoteControlHeld(): Promise<void> {
+    try {
+      const adapter = this.app.vault.adapter;
+      if (!(await adapter.exists(this.remoteControlHeldPath))) return;
+      const ids = parseHeldSessions(JSON.parse(await adapter.read(this.remoteControlHeldPath)));
+      for (const id of ids) this.remoteControlHeld.add(id);
+    } catch {
+      // An unreadable registry is an empty one: no session reads as held that
+      // isn't. A session an external terminal genuinely still has open just
+      // cannot be brought back with the one-click path until the member does
+      // it in the terminal themselves - the safe direction, over a phantom
+      // hold that refuses a resume nothing is actually running any more.
+    }
+  }
+
+  private async saveRemoteControlHeld(): Promise<void> {
+    try {
+      await this.app.vault.adapter.write(
+        this.remoteControlHeldPath,
+        JSON.stringify(Array.from(this.remoteControlHeld), null, 2),
+      );
+    } catch {
+      // The in-memory registry still guards this Obsidian run.
+    }
+  }
+
+  /** `ChatView.continueOnPhone` calls this right after painting the hand-off:
+   * this id is now live in an external terminal and must refuse a second
+   * writer until `releaseRemoteControlHold` says otherwise. */
+  async holdForRemoteControl(sessionId: string): Promise<void> {
+    this.remoteControlHeld.add(sessionId);
+    await this.saveRemoteControlHeld();
+  }
+
+  /** `ChatView.bringItBack` calls this, and only there - the registry's one clear path. */
+  async releaseRemoteControlHold(sessionId: string): Promise<void> {
+    this.remoteControlHeld.delete(sessionId);
+    await this.saveRemoteControlHeld();
   }
 
   /**

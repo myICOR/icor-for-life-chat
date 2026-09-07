@@ -153,6 +153,8 @@ export class StreamRenderer {
   private readonly wells = new Map<string, { el: HTMLElement; pin: HTMLElement }>();
   private group: ToolGroup | null = null;
   private emptyEl: HTMLElement | null = null;
+  /** The Remote Control hand-off's own banner, appended as the transcript's own last block. */
+  private handoffBannerEl: HTMLElement | null = null;
   /* THE WORKING INDICATOR, one per renderer, reused for the whole turn.
    *
    * It used to be a bare "thinking..." line that appeared on the first thinking
@@ -326,6 +328,29 @@ export class StreamRenderer {
   private clearEmptyState(): void {
     this.emptyEl?.remove();
     this.emptyEl = null;
+  }
+
+  /**
+   * The plain state a session shows while handed off to a terminal running
+   * Remote Control: the ONE thing the pane says, and the one control back.
+   * Appended as the transcript's own last block regardless of whether the
+   * empty state is showing - a handed-off session usually has history behind
+   * it. Idempotent: calling again while a banner exists replaces it in place
+   * rather than stacking a second one; `null` removes it.
+   */
+  renderHandoffBanner(banner: { text: string; buttonLabel: string; onClick: () => void } | null): void {
+    this.handoffBannerEl?.remove();
+    this.handoffBannerEl = null;
+    if (!banner) return;
+    const el = this.column.createDiv({ cls: 'aic-rc-banner' });
+    el.createDiv({ cls: 'aic-rc-banner-text', text: banner.text });
+    // `aic-text-btn` is the plugin's own existing shared pill button (already
+    // registered in the reserved control-reset list every other room draws
+    // from); this region only adds the banner's own layout around it.
+    const btn = el.createEl('button', { cls: 'aic-text-btn aic-rc-banner-btn', type: 'button', text: banner.buttonLabel });
+    btn.addEventListener('click', banner.onClick);
+    this.handoffBannerEl = el;
+    el.scrollIntoView({ block: 'nearest' });
   }
 
   apply(event: ChatEvent): void {
@@ -1212,6 +1237,27 @@ export class StreamRenderer {
     deny.addEventListener('click', () => choose('deny'));
     once.addEventListener('click', () => choose('allow-once'));
     always.addEventListener('click', () => choose('allow-always'));
+  }
+
+  /**
+   * Remote Control hand-off (Vex L1): a row still awaiting a decision at the
+   * moment `ChatView.continueOnPhone` disposes the session has nowhere left
+   * to send that decision - the buttons are DISABLED in place, not removed,
+   * so the row and its "waiting on you" gutter dot stay legible and honest
+   * (a decision was asked for; it is only unavailable HERE now) rather than
+   * quietly vanishing or staying clickable into a silent no-op.
+   */
+  disablePendingApprovals(): void {
+    for (const row of this.tools.values()) {
+      if (row.status !== 'awaiting-approval') continue;
+      const controls = row.rightEl.querySelector<HTMLElement>('.aic-approval');
+      if (!controls) continue;
+      for (const btn of Array.from(controls.querySelectorAll('button'))) {
+        btn.disabled = true;
+      }
+      controls.setAttr('aria-disabled', 'true');
+      setTooltip(controls, 'Decide this in the terminal - the session moved to Remote Control.');
+    }
   }
 
   private settleRunningRows(): void {

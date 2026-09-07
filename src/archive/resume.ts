@@ -8,8 +8,7 @@
  * written across several lines are all the same fact wearing different clothes.
  */
 
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { SESSION_ID_PATTERN as UUID } from '../model/sessionId';
 
 /** Every session id in a frontmatter value, in order, ids only. */
 export function sessionIdsFromFrontmatter(value: unknown): string[] {

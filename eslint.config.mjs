@@ -36,7 +36,7 @@ export default defineConfig([
          scattering disables: these are product names and an env var, not
          capitalisation mistakes. */
       'obsidianmd/ui/sentence-case': ['warn', {
-        brands: ['Claude Code', 'ICOR', 'Obsidian', 'AI Sessions', 'Bypass'],
+        brands: ['Claude Code', 'ICOR', 'Obsidian', 'AI Sessions', 'Bypass', 'Remote Control'],
         acronyms: ['PATH', 'AI', 'CLI'],
       }],
     },

@@ -3281,6 +3281,35 @@
 
 /* ==== END REGION T1 ==== */
 
+/* ==== REGION U1: Remote Control hand-off ==== */
+
+/* The header action, same treatment as T1's: the host's faint ink for
+   "unavailable, here's why on hover", and fully hidden (not just faint) when
+   the setting is off or the app is not desktop - a button offering to open a
+   terminal that will never work on mobile is not a disabled affordance, it
+   is a wrong one. */
+.view-action.aic-rc-off { color: var(--text-faint); cursor: not-allowed; }
+.view-action.aic-rc-hidden { display: none; }
+
+/* The plain state, appended as the transcript's own last block. A quiet card
+   rather than a message bubble - it is the pane talking, not the model. */
+.aic-root.aic-root .aic-rc-banner {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--aic-hairline-subtle);
+  border-radius: var(--aic-r-standard);
+  background: var(--aic-surface);
+}
+.aic-rc-banner-text {
+  color: var(--aic-paper);
+  line-height: 1.5;
+}
+.aic-root.aic-root .aic-rc-banner-btn {
+  margin-top: 10px;
+}
+
+/* ==== END REGION U1 ==== */
+
 /* ==== REGION R1: card rows that open (labels never crushed, values unfold) ==== */
 
 /* R1.1 the door. A chevron in the row's fourth column, and the column is

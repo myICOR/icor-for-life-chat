@@ -38,6 +38,20 @@ export function isProviderId(value: unknown): value is ProviderId {
   return typeof value === 'string' && (PROVIDER_IDS as readonly string[]).includes(value);
 }
 
+/**
+ * How the session is signed in, in the plugin's own words rather than any one
+ * runtime's. `'subscription'` is a claude.ai sign-in (a Pro/Max plan or the
+ * Console's own OAuth); `'api-key'` is a literal key (env var, `--api-key`,
+ * or a project/org credential) with no claude.ai account behind it.
+ * `'unknown'` is a live session's honest default until its own init message
+ * has answered - and a runtime that never reports the fact at all, forever.
+ * Remote Control (`src/remoteControl/`) is the first consumer: it needs
+ * `'subscription'`, and reads `'unknown'` as "not disqualified", never as a
+ * silent pass - the same measured-or-absent rule `Detection.signedIn`
+ * already keeps.
+ */
+export type AuthSource = 'subscription' | 'api-key' | 'unknown';
+
 /** What a provider found on this machine. Every field is a measurement or null. */
 export interface Detection {
   found: boolean;
@@ -120,6 +134,12 @@ export interface ProviderSession {
   /** Resolves when the message pump has finished. Tests and unload. */
   drain(): Promise<void>;
   readonly aborted: boolean;
+  /**
+   * Optional: absent for a runtime that never reports this (Codex leaves it
+   * unset). Present, it is `'unknown'` until the session's own init message
+   * has answered - never guessed either way in the meantime.
+   */
+  readonly authSource?: AuthSource;
 }
 
 export interface SessionSummary {
