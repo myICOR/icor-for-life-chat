@@ -839,6 +839,13 @@ export class ChatView extends ItemView {
     // contract generalised past its one terminal.
     this.session?.dispose();
     this.session = null;
+    // Vex NEW-1 (LOW, 2026-09-07 re-verification): the sync half of the hold
+    // must land before archive()'s await, not after - otherwise a resume()
+    // from a second pane landing inside archive()'s disk-write latency sees
+    // an empty registry and slips through. `holdForRemoteControl` below still
+    // runs post-archive to persist the hold to disk; this line only closes
+    // the in-memory window.
+    this.plugin.remoteControlHeld.add(sessionId);
     await this.archive();
 
     this.remoteControlHandedOff = true;
