@@ -26,6 +26,25 @@ export const TELEMETRY_DISQUALIFYING_VARS = [
   'DISABLE_GROWTHBOOK',
 ] as const;
 
+/**
+ * Set when the CLI talks to something other than api.anthropic.com directly -
+ * Remote Control has no claude.ai backend to pair a session with in any of
+ * these shapes (code.claude.com/docs/en/remote-control, fetched 2026-09-07:
+ * "This happens on Amazon Bedrock, Google Cloud's Agent Platform, and
+ * Microsoft Foundry"). Bedrock and Vertex each have one documented boolean
+ * toggle; Microsoft Foundry has no single equivalent (code.claude.com/docs/en/
+ * env-vars names four Foundry-specific vars and no `CLAUDE_CODE_USE_FOUNDRY`),
+ * so any one of its own config vars being set is the tell.
+ */
+export const ROUTING_DISQUALIFYING_VARS = [
+  'CLAUDE_CODE_USE_BEDROCK',
+  'CLAUDE_CODE_USE_VERTEX',
+  'ANTHROPIC_FOUNDRY_BASE_URL',
+  'ANTHROPIC_FOUNDRY_RESOURCE',
+  'ANTHROPIC_FOUNDRY_API_KEY',
+  'ANTHROPIC_FOUNDRY_AUTH_TOKEN',
+] as const;
+
 export interface EligibilityInput {
   authSource: AuthSource;
   /** The env the launched child would inherit - in practice, `process.env` itself. */
@@ -40,10 +59,20 @@ export interface Eligibility {
   reasons: string[];
 }
 
-function isSet(value: string | undefined): boolean {
+function isSet(value: string | undefined): value is string {
   if (typeof value !== 'string') return false;
   const v = value.trim().toLowerCase();
   return v !== '' && v !== '0' && v !== 'false';
+}
+
+/** True only when `value` parses as a URL AND its host is api.anthropic.com. */
+function pointsAtAnthropicApi(value: string): boolean {
+  try {
+    return new URL(value).hostname.toLowerCase() === 'api.anthropic.com';
+  } catch {
+    // Unparsable is not api.anthropic.com either - fails closed.
+    return false;
+  }
 }
 
 export function remoteControlEligibility(input: EligibilityInput): Eligibility {
@@ -57,6 +86,20 @@ export function remoteControlEligibility(input: EligibilityInput): Eligibility {
   if (setVars.length > 0) {
     reasons.push(
       `${setVars.join(', ')} ${setVars.length === 1 ? 'is' : 'are'} set, which turns off the traffic Remote Control needs.`,
+    );
+  }
+
+  const routedAway = ROUTING_DISQUALIFYING_VARS.filter((name) => isSet(input.childEnv[name]));
+  if (routedAway.length > 0) {
+    reasons.push(
+      `${routedAway.join(', ')} ${routedAway.length === 1 ? 'is' : 'are'} set: Remote Control needs Claude Code talking to api.anthropic.com directly.`,
+    );
+  }
+
+  const baseUrl = input.childEnv.ANTHROPIC_BASE_URL;
+  if (isSet(baseUrl) && !pointsAtAnthropicApi(baseUrl)) {
+    reasons.push(
+      `ANTHROPIC_BASE_URL is set to ${baseUrl}, not api.anthropic.com: Remote Control needs the direct Anthropic API.`,
     );
   }
 

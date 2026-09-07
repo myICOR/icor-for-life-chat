@@ -55,3 +55,5 @@ export * from '../src/remoteControl/displayName';
 export * from '../src/remoteControl/disqualifiers';
 export * from '../src/remoteControl/command';
 export * from '../src/remoteControl/launch';
+export * from '../src/remoteControl/held';
+export * from '../src/model/sessionId';

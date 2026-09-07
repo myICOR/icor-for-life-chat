@@ -14,6 +14,8 @@ import { remoteControlEligibility } from '../remoteControl/disqualifiers';
 import type { Eligibility } from '../remoteControl/disqualifiers';
 import { launchRemoteControlTerminal } from '../remoteControl/launch';
 import { realLaunchPorts } from '../remoteControl/adapters';
+import { heldSessionsHas } from '../remoteControl/held';
+import { isSessionId } from '../model/sessionId';
 import { ChatStore } from '../state/store';
 import { StreamRenderer } from './stream/StreamRenderer';
 import type { Composer } from './composer/Composer';
@@ -269,6 +271,15 @@ export class ChatView extends ItemView {
 
     this.stream = new StreamRenderer(this.app, this, this.column, '', {
       onApproval: (toolUseId, choice) => {
+        // A stale button after the hand-off (Vex L1): `disablePendingApprovals`
+        // greys these out the moment a hand-off paints, but a click that
+        // still lands here must say so rather than silently no-op. Scoped to
+        // the hand-off specifically - a null session for any OTHER reason
+        // keeps the original silent no-op, unchanged.
+        if (!this.session && this.remoteControlHandedOff) {
+          new Notice('Decide this in the terminal - the session moved to Remote Control.');
+          return;
+        }
         this.session?.answerApproval(toolUseId, choice);
       },
       structured: () => this.plugin.settings.structuredReplies,
@@ -798,6 +809,13 @@ export class ChatView extends ItemView {
       new Notice(reasons.join(' '));
       return;
     }
+    // Vex M1/command-build entry: the id is about to ride into a real
+    // command line and a real terminal window - refuse a shape that is not
+    // what Claude Code itself ever mints rather than build a command around it.
+    if (!isSessionId(sessionId)) {
+      new Notice('This conversation has no valid session id to hand off.');
+      return;
+    }
     if (this.store.state.status === 'streaming') {
       await this.session?.interrupt();
       const idle = await this.awaitIdle(10_000);
@@ -807,7 +825,7 @@ export class ChatView extends ItemView {
       }
     }
     const platform = this.remoteControlPlatform();
-    const displayName = remoteControlDisplayName(this.app.vault.getName(), this.remoteControlNoteTitle());
+    const displayName = remoteControlDisplayName(this.app.vault.getName(), this.remoteControlNoteTitle(), platform);
     const commandLine = remoteControlCommandLine(
       this.plugin.pathFor(this.provider),
       displayName,
@@ -825,8 +843,16 @@ export class ChatView extends ItemView {
 
     this.remoteControlHandedOff = true;
     this.remoteControlSessionId = sessionId;
+    // The cross-pane guard (Vex H1): this id is now live in an external
+    // terminal, so `resume()` on every OTHER pane must refuse it starting
+    // now, not after this async write settles - `Set.add` is synchronous,
+    // the awaited part is only the on-disk persistence surviving a reload.
+    await this.plugin.holdForRemoteControl(sessionId);
     this.app.workspace.requestSaveLayout();
     this.paintRemoteControlAction();
+    // Any row still awaiting a decision has nowhere left to send it (Vex L1):
+    // the SDK session it would have answered was just disposed above.
+    this.stream?.disablePendingApprovals();
     this.stream?.renderHandoffBanner({
       text: REMOTE_CONTROL_BANNER_TEXT,
       buttonLabel: 'Bring it back',
@@ -835,8 +861,37 @@ export class ChatView extends ItemView {
 
     await launchRemoteControlTerminal(
       { commandLine, cwd: this.plugin.vaultPath, platform, isDesktopApp: true, linuxTerminalPath },
-      realLaunchPorts(this.app),
+      {
+        ...realLaunchPorts(this.app),
+        // The terminal never actually opened (Flint MEDIUM - a denied macOS
+        // Automation grant is the traced case): undo the hand-off this
+        // function already painted rather than leave the pane claiming a
+        // hand-off nothing is running. Fires asynchronously, after this
+        // function has returned - the same `bringItBack` a member would
+        // press themselves is the correct recovery, because nothing ever
+        // reached the terminal for a second writer to fight with.
+        onSpawnFailure: () => void this.bringItBack(),
+      },
     );
+  }
+
+  /**
+   * Read-only: paint this pane as showing a session Remote Control (or
+   * another pane's read of it) already holds, without ever calling
+   * `ensureSession`/`start` - the guard in `resume()` and the restore branch
+   * in `setState()` both funnel here, so "a held session shows the banner
+   * instead of resuming" is one code path, not two that can drift.
+   */
+  private async showHandoffReadOnly(sessionId: string): Promise<void> {
+    this.remoteControlHandedOff = true;
+    this.remoteControlSessionId = sessionId;
+    await this.replay(sessionId);
+    this.paintRemoteControlAction();
+    this.stream?.renderHandoffBanner({
+      text: REMOTE_CONTROL_BANNER_TEXT,
+      buttonLabel: 'Bring it back',
+      onClick: () => void this.bringItBack(),
+    });
   }
 
   /** Resumes the same session id headless again; the transcript is shared, so any phone messages come along. */
@@ -845,6 +900,9 @@ export class ChatView extends ItemView {
     if (!sessionId) return;
     this.remoteControlHandedOff = false;
     this.remoteControlSessionId = null;
+    // The registry's one clear path (Vex H1): from this line on, any other
+    // pane's `resume()` is free to take this id again.
+    await this.plugin.releaseRemoteControlHold(sessionId);
     this.stream?.renderHandoffBanner(null);
     this.app.workspace.requestSaveLayout();
     this.paintRemoteControlAction();
@@ -1060,8 +1118,13 @@ export class ChatView extends ItemView {
   override async setState(state: unknown, result: unknown): Promise<void> {
     let arrivedId: string | null = null;
     if (state && typeof state === 'object' && 'resumeSessionId' in state) {
+      // Vex M1: a restored leaf's own state is not member-editable text the
+      // way an archived note's frontmatter is, but it is still an entry point
+      // a session id reaches without ever passing through `quotePosix` until
+      // the command is actually built - the same rejection behaviour as a
+      // missing id, never a guess at repairing a malformed one.
       const id = (state as { resumeSessionId?: unknown }).resumeSessionId;
-      if (typeof id === 'string' && id) {
+      if (isSessionId(id)) {
         this.resumeSessionId = id;
         arrivedId = id;
       }
@@ -1093,7 +1156,7 @@ export class ChatView extends ItemView {
     if (state && typeof state === 'object' && 'remoteControlHandedOff' in state) {
       const handedOff = (state as { remoteControlHandedOff?: unknown }).remoteControlHandedOff === true;
       const heldId = (state as { remoteControlSessionId?: unknown }).remoteControlSessionId;
-      if (handedOff && typeof heldId === 'string' && heldId) {
+      if (handedOff && isSessionId(heldId)) {
         this.remoteControlHandedOff = true;
         this.remoteControlSessionId = heldId;
       }
@@ -1108,17 +1171,12 @@ export class ChatView extends ItemView {
     await super.setState(state, result as Parameters<ItemView['setState']>[1]);
     // A pane restored still handed off to Remote Control repaints its history
     // and its banner - READ ONLY - rather than starting a second live writer
-    // on a session an external terminal may still hold. `replay` alone never
-    // touches `ensureSession`/`start`.
+    // on a session an external terminal may still hold. `showHandoffReadOnly`
+    // (`replay` alone, never `ensureSession`/`start`) is the one path this and
+    // `resume()`'s own cross-pane guard both use.
     if (this.remoteControlHandedOff && this.remoteControlSessionId && this.stream
       && !this.session && this.app.workspace.layoutReady) {
-      await this.replay(this.remoteControlSessionId);
-      this.paintRemoteControlAction();
-      this.stream.renderHandoffBanner({
-        text: REMOTE_CONTROL_BANNER_TEXT,
-        buttonLabel: 'Bring it back',
-        onClick: () => void this.bringItBack(),
-      });
+      await this.showHandoffReadOnly(this.remoteControlSessionId);
     // The view is already open (the stream exists) and a thread arrived by
     // state: the hand-off's way back. See the note in onOpen for the rule.
     } else if (arrivedId && this.stream && !this.session && this.app.workspace.layoutReady) {
@@ -1344,6 +1402,17 @@ export class ChatView extends ItemView {
       const held = terminalLeafFor(this.app, sessionId);
       if (held) await this.app.workspace.revealLeaf(held);
       new Notice('This session is open in a terminal pane');
+      return;
+    }
+    /* THE SAME GUARD FOR REMOTE CONTROL (Vex H1): an id the plugin-level
+       registry says is live in an external terminal is never resumed from a
+       DIFFERENT pane either - the recent-sessions picker on a fresh, empty
+       pane calls this directly, bypassing `main.ts`'s own dedup entirely.
+       Shown read-only instead of just refused: a member reaching for this
+       thread from a second pane sees the same "it's on your phone" banner
+       the original pane shows, not a dead end. */
+    if (this.provider === 'claude' && heldSessionsHas(this.plugin.remoteControlHeld, sessionId)) {
+      await this.showHandoffReadOnly(sessionId);
       return;
     }
     const done = (async (): Promise<void> => {

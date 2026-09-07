@@ -250,7 +250,7 @@ export function settingDefinitions(input: DefinitionInput): GroupDefinition[] {
         { name: 'Team strip', desc: 'Show who on the AI team did the work in this conversation, with their share of activity (tool calls and messages). Appears only in a vault with a 06 AI Team folder.', control: { type: 'toggle', key: 'factTeamStrip' } },
         {
           name: 'Continue chats on your phone (Remote Control)',
-          desc: 'Shows a button on every chat that opens it in a terminal with Remote Control on, so the same chat appears in the Claude app on your phone under your own Claude account. Needs a Claude Pro or Max plan and Claude Code signed in with your Claude account.',
+          desc: 'Shows a button on every chat that opens it in a terminal with Remote Control on, so the same chat appears in the Claude app on your phone under your own Claude account. With the ICOR for Life - Terminal plugin installed, the command is typed and waits for Enter; without it, the terminal that opens runs the command right away. Once handed off, permission prompts come from your own Claude Code, on desktop and phone, not from this plugin. Needs a Claude Pro, Max, Team or Enterprise plan (Team and Enterprise need the owner\'s Remote Control toggle turned on) and Claude Code signed in with your Claude account, not an API key.',
           control: { type: 'toggle', key: 'remoteControl' },
         },
         { name: 'Mark the tab when a turn finishes', desc: 'A dot on the chat tab when a turn ends while you are looking elsewhere. It clears when you come back.', control: { type: 'toggle', key: 'finishBadge' } },

@@ -1239,6 +1239,27 @@ export class StreamRenderer {
     always.addEventListener('click', () => choose('allow-always'));
   }
 
+  /**
+   * Remote Control hand-off (Vex L1): a row still awaiting a decision at the
+   * moment `ChatView.continueOnPhone` disposes the session has nowhere left
+   * to send that decision - the buttons are DISABLED in place, not removed,
+   * so the row and its "waiting on you" gutter dot stay legible and honest
+   * (a decision was asked for; it is only unavailable HERE now) rather than
+   * quietly vanishing or staying clickable into a silent no-op.
+   */
+  disablePendingApprovals(): void {
+    for (const row of this.tools.values()) {
+      if (row.status !== 'awaiting-approval') continue;
+      const controls = row.rightEl.querySelector<HTMLElement>('.aic-approval');
+      if (!controls) continue;
+      for (const btn of Array.from(controls.querySelectorAll('button'))) {
+        btn.disabled = true;
+      }
+      controls.setAttr('aria-disabled', 'true');
+      setTooltip(controls, 'Decide this in the terminal - the session moved to Remote Control.');
+    }
+  }
+
   private settleRunningRows(): void {
     for (const [id, row] of this.tools) {
       // A background task outlives the turn on purpose; its notification
