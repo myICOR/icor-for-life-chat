@@ -278,23 +278,32 @@ under your own account. The pane stays open and shows a plain notice while
 this is happening; sending a message from here is blocked until you bring
 the chat back, because two live writers on one session would fork it
 silently. "Bring it back" resumes it here, headless, with anything you sent
-from your phone already in the transcript.
+from your phone already in the transcript. End the terminal session first
+(Ctrl+C, or `/exit`) before pressing "Bring it back": resuming the same
+session in two places at once interleaves messages from both into one
+transcript.
 
-This needs a Claude Pro or Max plan and Claude Code signed in with your own
-Claude account, not an API key: Remote Control only works with a claude.ai
-sign-in. It also needs a current Claude Code (2.1.154 or newer) and none of
-Claude Code's own telemetry environment variables turned off, since Remote
-Control rides that same traffic. The button explains which of these is
-missing rather than failing quietly.
+This needs a Claude Pro, Max, Team or Enterprise plan (Team and Enterprise
+need the account owner's Remote Control toggle turned on first) and Claude
+Code signed in with your own Claude account, not an API key: Remote Control
+only works with a claude.ai sign-in. It also needs a current Claude Code
+(2.1.154 or newer), none of Claude Code's own telemetry environment
+variables turned off, since Remote Control rides that same traffic, and
+Claude Code talking to the Anthropic API directly rather than Amazon
+Bedrock, Google Cloud's Agent Platform, Microsoft Foundry, or a custom
+`ANTHROPIC_BASE_URL`. The button explains which of these is missing rather
+than failing quietly.
 
 Nothing about this adds a new account, a new server, or a new place your
-data goes. The plugin never runs the terminal command itself: it hands the
-exact line to a terminal pane, or to the terminal your operating system
-already has, and you (or the button, once you have read it) press Enter.
-From there it is the same unmodified Claude Code binary talking to the same
-Anthropic account it always did; nothing leaves this machine except through
-your own Claude account, the same as every other conversation in this
-plugin.
+data goes. With the ICOR for Life - Terminal plugin installed, the command
+is typed into a new terminal pane and waits for you to read it and press
+Enter - the plugin never runs it for you. Without that plugin, on macOS,
+Windows and Linux, the button opens a terminal window and runs the command
+immediately, the moment the window opens, the same as if you had typed that
+exact line yourself and pressed Enter. From there it is the same unmodified
+Claude Code binary talking to the same Anthropic account it always did;
+nothing leaves this machine except through your own Claude account, the
+same as every other conversation in this plugin.
 
 ## Safety
 
@@ -305,6 +314,10 @@ plugin.
   that mode.
 - Sessions are read scoped to this vault. The plugin does not enumerate work
   from your other projects.
+- **This applies to the plugin's own Ask-by-default broker only.** Once you
+  press "Continue on your phone", permission enforcement passes to your own
+  Claude Code CLI's configured defaults - on your desktop terminal and on
+  your phone alike - not to this plugin's broker.
 
 ## Settings
 
