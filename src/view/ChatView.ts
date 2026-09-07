@@ -18,7 +18,7 @@ import { repaintDecisions } from '../structured/render';
 import { renderChipTray } from './SubagentView';
 import { ArchiveWriter } from '../archive/writer';
 import { archiveRoot, factVisibility } from '../model/settings';
-import { SDK_VERSION } from '../constants';
+import { SDK_VERSION, STRUCTURED_REPLY_PROMPT } from '../constants';
 import {
   listFolders, listProperties, listTags, readContext, resolveFolder, resolveProperty, resolveTag,
   resolveWikilink, selectionRangeLabel, withContext,
@@ -38,7 +38,15 @@ import { missingProviderMessage, providerFor } from '../provider/registry';
 import { launchModelFor } from '../model/catalogCache';
 import { isProviderId } from '../provider/types';
 import type { Provider, ProviderId, ProviderSession, SessionHooks, SessionStore } from '../provider/types';
-import { splitExtraPath } from '../provider/cli';
+import { authTruthLine, describeAuthTruth } from '../provider/types';
+import { splitExtraPath } from '../provider/extraPath';
+import {
+  DEFAULT_MODEL_FOR, MODEL_PROVIDER_NAMES, WriteApprovalGate, activeApiKey,
+  anthropicModelDisplayName, createModelProvider, loadOwnKeySettings, resolveTransports, runOwnKeyTurn,
+} from '../engine';
+import type { EngineChoice, EngineMessage, OwnKeyHooks, OwnKeySettings } from '../engine';
+import { renderEngineStatus } from './EngineStatus';
+import { vaultToolsContextFor } from './ownKeyVault';
 import type { ChatEvent, EffortName, PermissionModeName, TurnContext, TurnImage } from '../model/types';
 import { NO_FOLLOW_UPS, followUpSent, selfStartedTurn, turnAborted, turnEnded } from '../model/followups';
 import type { FollowUpState } from '../model/followups';
@@ -164,11 +172,42 @@ export class ChatView extends ItemView {
    * sight and cleared when the leaf is looked at again. Held as the element
    * the class went on, so the clear never has to find it. */
   private badgedTab: HTMLElement | null = null;
+  /* THE OWN-KEY ENGINE (`chat-mobile-engine-spec-v1.md` §3/§4, Felix,
+   * 2026-09-06). Fixed for the life of this tab, the same way `provider` is:
+   * chosen at construction, never switched mid-conversation. `engine` is
+   * ORTHOGONAL to `provider` - the own-key engine is not a `ProviderId`
+   * (Mack's own-key facade in `src/engine/` is a deliberately separate seam
+   * from `src/provider/`) - so a tab on the own-key engine still carries a
+   * `provider` value nothing ever opens; `ensureSession()` is simply never
+   * called for one. */
+  private readonly engine: EngineChoice;
+  /** The running message list `runOwnKeyTurn` reads and returns; empty until
+   * the first message. Never touched when `engine !== 'own-key'`. */
+  private ownKeyHistory: EngineMessage[] = [];
+  /** "Write tools ask once per session" (spec §5): one gate for the whole
+   * conversation, not one per call - the same object every turn reuses. */
+  private readonly ownKeyWriteGate = new WriteApprovalGate();
+  /** The running turn's abort controller, for Stop. Null when idle. */
+  private ownKeyAbort: AbortController | null = null;
+  /** Serialises own-key turns sent while one is already running - the
+   * software equivalent of the CLI's own mid-turn queue (§5.1 of the
+   * composer note above `paintTail`), since a raw API call has no queue of
+   * its own to hold a follow-up in. */
+  private ownKeyChain: Promise<void> = Promise.resolve();
+  /** Rung above the pins; painted by `renderEngineStatus`. Null until `onOpen`. */
+  private engineStatusEl: HTMLElement | null = null;
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: IcorChatPlugin) {
     super(leaf);
     this.permissionMode = plugin.settings.defaultPermissionMode;
     this.provider = plugin.settings.defaultProvider;
+    /* Mobile has no Node runtime and so no Claude Code / Codex child process
+     * to spawn at all - the radio in Settings offers only "My own API key"
+     * there (`EngineSection.ts`) and this constructor honours that even if
+     * a stale desktop choice is sitting in local storage from before the
+     * device changed. Desktop reads the member's own radio, defaulting to
+     * Claude Code the way every pane before this feature did. */
+    this.engine = Platform.isDesktopApp ? loadOwnKeySettings(this.app).engine : 'own-key';
   }
 
   /** The runtime behind this tab. Never a Claude type: the seam is the whole contract. */
@@ -176,8 +215,12 @@ export class ChatView extends ItemView {
     return providerFor(this.provider);
   }
 
-  /** The runtime's session record, or null for a protocol without one. */
+  /** The runtime's session record, or null for a protocol without one.
+   * Always null on the own-key engine: it has no `ProviderId` runtime
+   * behind it, so `this.provider`'s store would be a stranger's - a Claude
+   * or Codex session list this conversation never wrote a line into. */
   private get sessionStore(): SessionStore | null {
+    if (this.engine === 'own-key') return null;
     return this.runtime?.store ?? null;
   }
 
@@ -187,6 +230,38 @@ export class ChatView extends ItemView {
     if (runtime) return runtime;
     this.store.apply({ kind: 'error', message: missingProviderMessage(this.provider), stream: null });
     return null;
+  }
+
+  /** The own-key engine's model, in words - `anthropicModelDisplayName` when
+   * the price table names it, the raw id otherwise (always true for
+   * OpenRouter, whose free-text model field this table never carries). */
+  private ownKeyModelLabel(settings: OwnKeySettings): string {
+    const model = settings.model.trim() || DEFAULT_MODEL_FOR[settings.provider];
+    return settings.provider === 'anthropic' ? (anthropicModelDisplayName(model) ?? model) : model;
+  }
+
+  /**
+   * The one line above the pins (`chat-mobile-engine-spec-v1.md` §4's "one
+   * line ... in the chat header"): which engine this conversation runs on,
+   * and for Claude Code, the desktop auth truth. Repainted after `onOpen`
+   * and again the moment a Claude session's `system`/`init` message answers
+   * `authSource` (see `onEvent`'s `'session'` case).
+   */
+  private refreshEngineStatus(): void {
+    if (!this.engineStatusEl) return;
+    if (this.engine === 'own-key') {
+      const settings = loadOwnKeySettings(this.app);
+      renderEngineStatus(
+        this.engineStatusEl,
+        `My own key engine: ${MODEL_PROVIDER_NAMES[settings.provider]}, ${this.ownKeyModelLabel(settings)}.`,
+      );
+      return;
+    }
+    // This TAB's own truth only - never a value borrowed from another open
+    // conversation, which could be running with a different sign-in.
+    const found = this.plugin.detections.claude?.found;
+    const state = describeAuthTruth(found, this.session?.authSource ?? 'unknown');
+    renderEngineStatus(this.engineStatusEl, authTruthLine(state));
   }
 
   override getViewType(): string {
@@ -219,6 +294,9 @@ export class ChatView extends ItemView {
         provider: this.provider,
         // A resumed pane is already a conversation; a fresh one may still choose.
         providerLocked: this.resumeSessionId !== null,
+        // The own-key engine has no runtime picker, no permission modes and
+        // no reasoning effort - see `ComposerState.hideRuntimeControls`'s own doc.
+        hideRuntimeControls: this.engine === 'own-key',
       },
       callbacks: {
         onSubmit: (text, attachments) => void this.submit(text, attachments),
@@ -246,6 +324,8 @@ export class ChatView extends ItemView {
     this.composer = pane.composer;
     this.badge = pane.badge;
     this.statusline = pane.statusline;
+    this.engineStatusEl = pane.engineStatus;
+    this.refreshEngineStatus();
 
     this.stream = new StreamRenderer(this.app, this, this.column, '', {
       onApproval: (toolUseId, choice) => {
@@ -1452,6 +1532,7 @@ export class ChatView extends ItemView {
   }
 
   private async submit(text: string, attachments: Attachment[] = []): Promise<void> {
+    if (this.engine === 'own-key') return this.submitOwnKey(text, attachments);
     const session = this.ensureSession();
     if (!session) {
       this.composer?.setStreaming(false);
@@ -1513,7 +1594,145 @@ export class ChatView extends ItemView {
     this.scrollToBottom();
   }
 
+  /**
+   * The own-key engine's `submit()`. Everything up to "send it" is the SAME
+   * bookkeeping the Claude/Codex path does - the transcript entry, the
+   * context refs, the pin, the `user-turn` event - because the view's
+   * vocabulary does not change with the engine; only what answers it does.
+   * Kept as its own method rather than a branch inside `submit()` because
+   * the two paths diverge completely at the one line that matters (`session.send`
+   * vs `runOwnKeyTurnNow`), and a single method trying to hold both reads
+   * worse than two short ones.
+   */
+  private async submitOwnKey(text: string, attachments: Attachment[]): Promise<void> {
+    if (attachments.length > 0) {
+      // The own-key engine's own message shape (`EngineContentPart`) has no
+      // image block at all - not a mobile-only limit, true on every
+      // platform this engine runs on today (spec §6).
+      new Notice('Images are not supported yet with your own API key.');
+    }
+    const ctx = this.plugin.settings.contextAwareness && this.contextPinned ? this.context : null;
+    const index = this.turnCounter;
+    this.turnCounter += 1;
+    this.transcript.push({ role: 'user', text, index, at: Date.now() });
+    this.badge?.dismissToolbar();
+    const refs = [...this.refs.map((r) => this.refreshRef(r)), ...this.linkedRefs(text)];
+    this.refs = [];
+    const contexts: TurnContext[] = [];
+    if (ctx) contexts.push({ kind: 'active', label: ctx.basename, count: 1, path: ctx.path });
+    for (const ref of refs) {
+      if (ref.kind !== 'note') this.sentGroups.set(ref.label, ref);
+      contexts.push({
+        kind: ref.kind,
+        label: ref.label,
+        count: ref.paths.length,
+        path: ref.kind === 'note' ? ref.id : null,
+      });
+    }
+    // Same rule as the Claude path: a send while a turn runs is a follow-up,
+    // marked QUEUED, and answered as its own turn once the running one ends
+    // (`ownKeyChain` below is what actually holds it).
+    const queued = this.store.state.status === 'streaming';
+    if (queued) this.followUps = followUpSent(this.followUps);
+    this.store.apply({
+      kind: 'user-turn',
+      text,
+      contextNote: ctx ? ctx.basename : null,
+      contextPath: ctx ? ctx.path : null,
+      images: [],
+      contexts,
+      queued,
+      key: String(index),
+      stream: null,
+    });
+    this.pins = pinFirstPrompt(this.pins, { key: String(index), text, index });
+    this.renderPins();
+    this.refreshDecisions();
+    this.refreshContext();
+    this.scrollToBottom();
+
+    const prompt = withContext(text, ctx, refs);
+    this.ownKeyChain = this.ownKeyChain.then(() => this.runOwnKeyTurnNow(prompt));
+    await this.ownKeyChain;
+  }
+
+  /** One own-key model-API round trip (`runOwnKeyTurn`'s whole tool loop),
+   * chained by `submitOwnKey` so two sends never race the same history. */
+  private async runOwnKeyTurnNow(prompt: string): Promise<void> {
+    const settings = loadOwnKeySettings(this.app);
+    const apiKey = activeApiKey(settings);
+    if (!apiKey.trim()) {
+      this.store.apply({
+        kind: 'error',
+        message: 'There is no API key set for this device yet. Add one under Settings → AI engine on this device.',
+        stream: null,
+      });
+      return;
+    }
+    const provider = createModelProvider(settings.provider, apiKey, resolveTransports());
+    const model = settings.model.trim() || DEFAULT_MODEL_FOR[settings.provider];
+    /* The card-format instruction is the plugin's only system prompt on the
+     * Claude Code engine too (`docs/architecture.md`'s "one sentence" - see
+     * `constants.ts`'s STRUCTURED_REPLY_PROMPT); the own-key engine adds one
+     * short paragraph of its own naming the six vault tools and pointing at
+     * CLAUDE.md / AGENTS.md, because nothing else here ever tells this
+     * engine's model it is answering inside a vault at all - the Claude Code
+     * CLI gets that for free from its own cwd + settingSources, and the
+     * own-key engine has no CLI underneath it to get it from. Short on
+     * purpose: a member is billed per token for this line on every turn. */
+    const system = [
+      'You are answering inside an Obsidian vault, through the "own-key" engine of the ' +
+        'ICOR for Life - AI Chat plugin (a direct model API call, not Claude Code). You have six ' +
+        'tools scoped to this vault: read_note, search_notes, list_folder, current_note, ' +
+        'append_to_note, create_note. No shell, no filesystem outside the vault. The vault root ' +
+        'usually carries a CLAUDE.md and/or AGENTS.md describing how this vault is organised and ' +
+        'how its team works; read one with read_note when the question calls for that context.',
+      this.plugin.settings.structuredReplies ? STRUCTURED_REPLY_PROMPT : '',
+    ].filter(Boolean).join('\n\n');
+    const controller = new AbortController();
+    this.ownKeyAbort = controller;
+    this.composer?.setStreaming(true);
+    const hooks: OwnKeyHooks = {
+      onEvent: (event) => this.store.apply(event),
+      onApprovalRequest: (request) =>
+        this.store.apply({
+          kind: 'tool-approval',
+          toolUseId: request.toolUseId,
+          name: request.toolName,
+          target: request.target,
+          purpose: request.purpose,
+          stream: null,
+        }),
+      onApprovalSettled: (toolUseId, choice) =>
+        this.store.apply({ kind: 'tool-approval-resolved', toolUseId, allowed: choice !== 'deny', stream: null }),
+    };
+    try {
+      const result = await runOwnKeyTurn(
+        this.ownKeyHistory,
+        prompt,
+        {
+          provider,
+          toolCtx: vaultToolsContextFor(this.app, () => this.lastMarkdownView),
+          system,
+          model,
+          maxTokens: settings.maxTokens,
+        },
+        hooks,
+        this.ownKeyWriteGate,
+        controller.signal,
+      );
+      this.ownKeyHistory = result.history;
+      this.stream?.appendOwnKeyCostLine(result.cost.estimatedUsd);
+    } finally {
+      if (this.ownKeyAbort === controller) this.ownKeyAbort = null;
+    }
+  }
+
   private async stop(): Promise<void> {
+    if (this.engine === 'own-key') {
+      this.ownKeyAbort?.abort();
+      return;
+    }
     await this.session?.interrupt();
   }
 
@@ -1615,6 +1834,18 @@ export class ChatView extends ItemView {
       this.composer?.setSlashCommands(event.slashCommands);
       // A session exists: the runtime is a fact now, and the trigger says so.
       this.composer?.lockProvider();
+    }
+    if (event.kind === 'session' && event.provider === 'claude') {
+      // The `system`/`init` message that produced THIS `session` event is
+      // the same one `ChatSession` reads `apiKeySource` off of
+      // (`provider/claude/session.ts`'s `consume()`), synchronously, before
+      // the normaliser ever emits this event - so `this.session.authSource`
+      // is already the answer by the time this line runs.
+      const source = this.session?.authSource;
+      if (source) {
+        this.plugin.noteClaudeAuthSource(source);
+        this.refreshEngineStatus();
+      }
     }
     if (event.kind === 'session' && event.model) {
       this.composer?.setModel(event.model);

@@ -574,6 +574,16 @@ async function mountStates(root: HTMLElement): Promise<void> {
   const onClaude = new Composer(stableHost, { streaming: false, mode: 'default', model: '', effort: 'medium', provider: 'claude' }, noop);
   onClaude.setProviders(runtimes);
 
+  /* THE OWN-KEY ENGINE'S COMPOSER (`chat-mobile-engine-spec-v1.md` §3/§4,
+     Felix, 2026-09-06): `hideRuntimeControls` hides the runtime picker, the
+     permission-mode chip and the reasoning-effort chip - none of the three
+     means anything on that engine - while leaving the textarea and Send
+     pill exactly as they are on every other engine. Real Composer, real
+     `paint()`, so a control that SHOULD stay hidden and silently reappears
+     is a red build here rather than a hand-typed assumption. */
+  const ownKeyHost = probe.createDiv({ cls: 'aic-own-key-composer-probe' });
+  new Composer(ownKeyHost, { streaming: false, mode: 'default', model: '', effort: 'medium', hideRuntimeControls: true }, noop);
+
   /* The STREAMING composer: the click-only `.aic-stop` control, which only
      exists mid-turn, and the pill reading Queue. A queued well beside it so
      the QUEUED mark is measured too. */

@@ -11,7 +11,12 @@
 
 import { FileSystemAdapter, Menu, Notice, Platform, Plugin, TFile, setIcon } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
-import { homedir } from 'node:os';
+/* `node:os` is NOT imported at module scope on purpose (2026-09-06, mobile
+ * hardening): this file is the plugin's entry point, loaded on every
+ * platform including Obsidian mobile, which has no Node runtime at all. A
+ * top-of-file `import` would `require('node:os')` the instant the plugin
+ * loads; the `get homeDir()` getter below defers that call and never makes
+ * it off the desktop, where `Platform.isDesktopApp` guards it. */
 import { INK_PLUGIN_ATTR, INK_PLUGIN_NAME, VIEW_TYPE_CHAT, VIEW_TYPE_INSIGHTS, VIEW_TYPE_SUBAGENT } from './constants';
 import { SubagentView } from './view/SubagentView';
 import { InsightsView } from './view/InsightsView';
@@ -37,8 +42,8 @@ import { DEFAULT_SETTINGS, archiveRoot, pathSettingKey, settingsFrom } from './m
 import { offerInstall } from './provider/install';
 import type { ChatSettings } from './model/settings';
 import type { ModelChoice } from './model/types';
-import type { DetectEnvironment, Detection, Provider, ProviderId } from './provider/types';
-import { splitExtraPath } from './provider/cli';
+import type { AuthSource, DetectEnvironment, Detection, Provider, ProviderId } from './provider/types';
+import { splitExtraPath } from './provider/extraPath';
 import { handoverText } from './archive/handover';
 import { installMemory } from './team/memory';
 
@@ -77,6 +82,27 @@ export default class IcorChatPlugin extends Plugin {
    * answers and the settings tab prints them differently. */
   detections: Partial<Record<ProviderId, Detection>> = {};
 
+  /**
+   * The desktop auth truth (`chat-mobile-engine-spec-v1.md` §4), as the LAST
+   * value any open chat tab's Claude session has reported. In memory only -
+   * never written to `data.json`, never refreshed on its own: "nothing in
+   * the plugin stores or refreshes any Claude sign-in" is the spec's own
+   * rule, and a persisted value would be a stale guess the moment the
+   * member changes how Claude Code is signed in on this machine outside
+   * Obsidian entirely. Settings reads this for its own line; a chat tab's
+   * OWN header line reads its own session directly instead
+   * (`ChatView.refreshEngineStatus`), never this shared value, since a
+   * second open conversation could be running under a different sign-in.
+   */
+  lastClaudeAuthSource: AuthSource = 'unknown';
+
+  /** Called by a `ChatView` the moment its own Claude session answers
+   * `apiKeySource`. See `lastClaudeAuthSource`'s own doc for why this is the
+   * one thing about a Claude sign-in the plugin remembers at all. */
+  noteClaudeAuthSource(source: AuthSource): void {
+    this.lastClaudeAuthSource = source;
+  }
+
   /* THE PROVIDER'S OWN MODEL CATALOGUE, cached the first time a session
    * reports it, and empty until then.
    *
@@ -101,9 +127,19 @@ export default class IcorChatPlugin extends Plugin {
     await this.loadSettings();
     await this.loadCatalogCache();
     installMemory(this);
-    // Each runtime prepares the host once, before anything can launch a query
-    // (the Claude provider installs the renderer AbortSignal shim here).
-    for (const provider of availableProviders()) provider.install?.();
+    /* Claude Code and Codex are desktop CLIs, spawned as a child process;
+     * neither can exist on mobile, which cannot spawn one. Probing for them
+     * there would do nothing useful and would force `provider/registry.ts`
+     * to load the Agent SDK / `node:fs` / `node:child_process` the instant
+     * the plugin loads - which throws outright on a platform with no Node
+     * runtime at all (2026-09-06, mobile hardening; registry.ts carries the
+     * lazy-load side of this same fix). `refreshDetections()` carries the
+     * same guard so a later re-trigger (settings "Check again") is safe too. */
+    if (Platform.isDesktopApp) {
+      // Each runtime prepares the host once, before anything can launch a
+      // query (the Claude provider installs the renderer AbortSignal shim here).
+      for (const provider of availableProviders()) provider.install?.();
+    }
     void this.refreshDetections();
 
     this.registerView(VIEW_TYPE_CHAT, (leaf) => new ChatView(leaf, this));
@@ -372,6 +408,21 @@ export default class IcorChatPlugin extends Plugin {
 
   /** Run every runtime's detection and remember the answers. */
   async refreshDetections(): Promise<void> {
+    /* Neither runtime can be found on mobile - both spawn a child process,
+     * and mobile has no process to spawn - so every id reads honestly "not
+     * found" without ever loading the Claude/Codex modules (see the note in
+     * onload() and in registry.ts). Never a guess: this states a real fact
+     * about the platform, the same way `Detection.signedIn: null` states a
+     * real fact about what a desktop detection cannot know either. */
+    if (!Platform.isDesktopApp) {
+      for (const provider of availableProviders()) {
+        this.detections[provider.id] = {
+          found: false, path: null, version: null, signedIn: null,
+          hint: `${provider.displayName} is a desktop app and is not available on phones and tablets.`,
+        };
+      }
+      return;
+    }
     await Promise.all(
       availableProviders().map(async (provider) => {
         try {
@@ -601,8 +652,12 @@ export default class IcorChatPlugin extends Plugin {
   }
 
   get homeDir(): string {
+    // Off the desktop there is no Claude Code / Codex spawn path to resolve
+    // a home directory for, and no Node runtime to ask - see the import note
+    // at the top of this file.
+    if (!Platform.isDesktopApp) return '';
     try {
-      return homedir();
+      return (require('node:os') as typeof import('node:os')).homedir();
     } catch {
       return '';
     }

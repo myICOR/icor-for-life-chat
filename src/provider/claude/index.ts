@@ -14,6 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { installRendererCompat } from './renderer-compat';
 import { ChatSession } from './session';
 import { claudeStore, resolvedDefaultModel } from './store';
+import { CLAUDE_DISPLAY_NAME, CLAUDE_ID, CLAUDE_INSTALLATION } from './meta';
 import { CliNotFoundError, buildChildEnv, candidatePaths, resolveCliPath } from '../cli';
 import type { PathEnvironment } from '../cli';
 import type { DetectEnvironment, Detection, Provider, SessionConfig, SessionHooks } from '../types';
@@ -43,12 +44,9 @@ function isExecutableFile(path: string): boolean {
 }
 
 export const claudeProvider: Provider = {
-  id: 'claude',
-  displayName: 'Claude Code',
-  installation: {
-    command: 'curl -fsSL https://claude.ai/install.sh | bash',
-    page: 'https://code.claude.com/docs/en/setup',
-  },
+  id: CLAUDE_ID,
+  displayName: CLAUDE_DISPLAY_NAME,
+  installation: CLAUDE_INSTALLATION,
   store: claudeStore,
 
   /* Before anything can launch a query. See renderer-compat.ts for why: the

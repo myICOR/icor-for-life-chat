@@ -6,6 +6,7 @@ export * from '../src/provider/tooling';
 export * from '../src/provider/types';
 export * from '../src/provider/registry';
 export * from '../src/provider/cli';
+export * from '../src/provider/extraPath';
 export * from '../src/provider/claude/permissions';
 export * from '../src/state/store';
 export * from '../src/model/types';

@@ -20,6 +20,7 @@ import { codexStore } from './store';
 import { codexModeLabel } from './modes';
 import { configureLaunch, setHandshakeVersion, stopService, withService } from './service';
 import { CODEX_INSTALL_HINT } from './host';
+import { CODEX_DISPLAY_NAME, CODEX_ID, CODEX_INSTALLATION } from './meta';
 import { buildChildEnv, candidatePathsFor, resolveExecutable } from '../cli';
 import type { PathEnvironment } from '../cli';
 import type { DetectEnvironment, Detection, Provider, SessionConfig, SessionHooks } from '../types';
@@ -88,12 +89,9 @@ export function signedInFrom(result: unknown): boolean | null {
 }
 
 export const codexProvider: Provider = {
-  id: 'codex',
-  displayName: 'Codex',
-  installation: {
-    command: 'npm install -g @openai/codex',
-    page: 'https://developers.openai.com/codex/cli',
-  },
+  id: CODEX_ID,
+  displayName: CODEX_DISPLAY_NAME,
+  installation: CODEX_INSTALLATION,
   store: codexStore,
 
   install(): void {

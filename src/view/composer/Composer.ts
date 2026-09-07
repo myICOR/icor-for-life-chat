@@ -171,6 +171,20 @@ export interface ComposerState {
   provider?: ProviderId;
   /** True once the conversation exists: a conversation belongs to one runtime. */
   providerLocked?: boolean;
+  /**
+   * True on the own-key engine (`chat-mobile-engine-spec-v1.md` §3/§4,
+   * Felix, 2026-09-06): hides the runtime picker, the permission-mode chip
+   * and the reasoning-effort chip. None of the three means anything there -
+   * the own-key engine is not a `ProviderId` at all (Mack's own-key facade
+   * is a deliberately separate seam, `src/engine/`), it has no permission
+   * modes (only the write-tool approval the engine's `WriteApprovalGate`
+   * already handles through the same approval UI), and no reasoning-effort
+   * concept. The provider (Anthropic / OpenRouter) and model for this engine
+   * are chosen once in Settings, not per message, and are shown instead in
+   * the pane's own engine-status line (`src/view/EngineStatus.ts`), which
+   * has room for the billing framing a composer pill does not.
+   */
+  hideRuntimeControls?: boolean;
 }
 
 export class Composer {
@@ -1019,7 +1033,46 @@ export class Composer {
     this.textarea.setCssStyles({ height: `${Math.min(this.textarea.scrollHeight, 260)}px` });
   }
 
+  /** The thumbs / send / stop tail, shared by both `paint()` paths so the
+   * own-key engine's early return cannot drift from the normal one. */
+  private paintTail(): void {
+    this.renderThumbs();
+
+    this.sendBtn.empty();
+    /* The pill names what will happen, and it never turns into Stop. "Queue"
+       is the measured word: the CLI holds a mid-turn message and answers it
+       after the running turn. The disabled state is the field's, not the turn's. */
+    const queueing = this.state.streaming;
+    this.sendBtn.toggleClass('is-queue', queueing);
+    this.sendBtn.setText(queueing ? 'Queue' : 'Send');
+    this.sendBtn.disabled =
+      this.textarea.value.trim().length === 0 && this.attachments.length === 0;
+    this.sendBtn.setAttr(
+      'aria-label',
+      queueing ? 'Queue this message for the running turn' : 'Send the message',
+    );
+    // `hidden`, not a class: the property is the one thing no theme can restyle.
+    this.stopBtn.hidden = !this.state.streaming;
+  }
+
   private paint(): void {
+    /* THE OWN-KEY ENGINE HIDES THREE CHIPS RATHER THAN REPURPOSING THEM.
+     * A picker that still opened and offered nothing true (a "runtime" that
+     * is not a `ProviderId`, a "permission mode" the engine never reads, an
+     * "effort" rung it has no concept of) would be the exact control-that-
+     * lies failure mode `providerLocked` already exists to avoid one control
+     * over. Absence is not silently hiding capability: the engine-status
+     * line above the stream says which engine and model this conversation
+     * uses, in words, every time. */
+    const hideRuntime = this.state.hideRuntimeControls === true;
+    this.providerBtn.hidden = hideRuntime;
+    this.modeEl.hidden = hideRuntime;
+    if (hideRuntime) {
+      this.effortBtn.hidden = true;
+      this.modelBtn.hidden = true;
+      this.paintTail();
+      return;
+    }
     const providerName = this.providerName();
     const alpha = this.providerAlpha();
     this.providerBtn.empty();
@@ -1085,23 +1138,7 @@ export class Composer {
     setTooltip(this.effortBtn, 'Reasoning effort');
     this.effortBtn.setAttr('aria-label', `Reasoning effort: ${effort?.label ?? 'Medium'}`);
 
-    this.renderThumbs();
-
-    this.sendBtn.empty();
-    /* The pill names what will happen, and it never turns into Stop. "Queue"
-       is the measured word: the CLI holds a mid-turn message and answers it
-       after the running turn. The disabled state is the field's, not the turn's. */
-    const queueing = this.state.streaming;
-    this.sendBtn.toggleClass('is-queue', queueing);
-    this.sendBtn.setText(queueing ? 'Queue' : 'Send');
-    this.sendBtn.disabled =
-      this.textarea.value.trim().length === 0 && this.attachments.length === 0;
-    this.sendBtn.setAttr(
-      'aria-label',
-      queueing ? 'Queue this message for the running turn' : 'Send the message',
-    );
-    // `hidden`, not a class: the property is the one thing no theme can restyle.
-    this.stopBtn.hidden = !this.state.streaming;
+    this.paintTail();
   }
 
   /** The awareness tray. Zero context renders nothing. */

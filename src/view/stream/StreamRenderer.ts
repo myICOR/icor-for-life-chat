@@ -11,7 +11,7 @@
 import { Component, MarkdownRenderer, Menu, setIcon, setTooltip } from 'obsidian';
 import type { App } from 'obsidian';
 import type { ChatEvent, ToolStatus, TurnContext, TurnImage } from '../../model/types';
-import { dot, kicker, shortAge, shortDuration } from '../dom';
+import { dot, kicker, ownKeyCostLine, shortAge, shortDuration } from '../dom';
 import { activitySentence } from '../../model/activity';
 import type { BoundAction } from '../actions';
 import { fallbackPurpose } from '../../provider/tooling';
@@ -1276,6 +1276,26 @@ export class StreamRenderer {
   note(text: string): void {
     this.clearEmptyState();
     this.column.createDiv({ cls: 'aic-note', text });
+  }
+
+  /**
+   * The own-key engine's per-reply cost line (`chat-mobile-engine-spec-v1.md`
+   * §3/§4: "an estimated cost line under every reply on mobile"). Called
+   * directly by `ChatView.runOwnKeyTurnNow` once `runOwnKeyTurn` resolves,
+   * NOT routed through a `ChatEvent` kind: the event spine's `turn-end.usage.costUsd`
+   * is a plain `number` that Codex already fills with `0` for "nothing to
+   * report" (`provider/codex/normalize.ts`), and reusing that field here
+   * would print "about 0.00 USD" for a model this build has no price row
+   * for - the exact invented number the engine's own `cost.ts` refuses to
+   * produce (`estimateAnthropicCost` returns `null`, never a guess). This
+   * method's `costUsd: number | null` keeps that distinction alive all the
+   * way to the pixel: null renders NOTHING, not a zero.
+   */
+  appendOwnKeyCostLine(costUsd: number | null): void {
+    if (costUsd === null) return;
+    this.closeToolGroup();
+    const el = this.column.createDiv({ cls: 'aic-own-key-cost' });
+    el.setText(ownKeyCostLine(costUsd));
   }
 
   /**

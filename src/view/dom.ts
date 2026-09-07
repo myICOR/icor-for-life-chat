@@ -38,7 +38,7 @@ export function middot(parent: HTMLElement): HTMLElement {
 }
 
 export {
-  shortAge, shortDuration, compactNumber, displayPath,
+  shortAge, shortDuration, compactNumber, displayPath, ownKeyCostLine,
 } from '../model/format';
 
 export function clearChildren(el: HTMLElement): void {

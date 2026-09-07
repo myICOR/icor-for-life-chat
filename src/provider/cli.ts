@@ -8,7 +8,17 @@
  *
  * Everything here is a pure function over an explicit environment except
  * `resolveCliPath`, which is the one place that touches the filesystem. That
- * split is what lets the resolution rules be tested headless. */
+ * split is what lets the resolution rules be tested headless.
+ *
+ * This file's own top-level `node:fs` / `node:path` imports are safe on
+ * Obsidian mobile (2026-09-06, mobile hardening): this file is no longer
+ * imported eagerly by anything mobile loads. `ChatView.ts` and `main.ts` used
+ * to import `splitExtraPath` straight from here, which pulled these two
+ * builtins in the instant the plugin loaded on every platform; that one
+ * function moved to `./extraPath.ts`, which has no import of its own, and
+ * this file is now reached only through `provider/registry.ts`'s lazy
+ * `require('./claude')` / `require('./codex')` - a call that on mobile is
+ * written but never executed. See registry.ts's header for the whole shape. */
 
 import { existsSync, statSync } from 'node:fs';
 import { posix, win32 } from 'node:path';
@@ -267,9 +277,7 @@ export function buildChildEnv(
   return out;
 }
 
-export function splitExtraPath(raw: string): string[] {
-  return raw
-    .split(/[\n\r]+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
+// `splitExtraPath` moved to `./extraPath.ts` (2026-09-06, mobile hardening) -
+// see that file's header for why. Not re-exported from here: the whole point
+// was to give `ChatView.ts` / `main.ts` a path to it that never touches this
+// file's `node:fs` / `node:path` imports.

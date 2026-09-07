@@ -706,6 +706,23 @@ ${HELPERS}
       } : null;
     };
     out.runtimeChip = { alpha: chipOf('.aic-provider-alpha-probe'), stable: chipOf('.aic-provider-stable-probe') };
+    /* THE OWN-KEY ENGINE'S COMPOSER (the mobile-engine spec sections 3/4,
+       2026-09-06): hideRuntimeControls must hide the runtime picker, the
+       mode chip and both .aic-text-btn pills (model, effort - they share
+       one class, so both are counted rather than distinguished), while the
+       textarea and Send pill stay exactly as they are on every other engine.
+       No backticks in here: this map is inside a template literal. */
+    {
+      const ownKeyRow = one('.aic-own-key-composer-probe');
+      out.ownKeyComposer = ownKeyRow ? {
+        providerHidden: ownKeyRow.querySelector('.aic-provider-btn')?.hidden === true,
+        modeHidden: ownKeyRow.querySelector('.aic-seg')?.hidden === true,
+        textBtnCount: ownKeyRow.querySelectorAll('.aic-text-btn').length,
+        textBtnsHidden: Array.from(ownKeyRow.querySelectorAll('.aic-text-btn')).every((el) => el.hidden === true),
+        sendHidden: ownKeyRow.querySelector('.aic-send')?.hidden === true,
+        hasTextarea: !!ownKeyRow.querySelector('textarea.aic-input'),
+      } : null;
+    }
     out.strip = {
       primary: strip('.aic-facts'),
       absent: strip('.aic-facts-absent'),
@@ -1991,6 +2008,19 @@ test('every runtime but Claude Code wears the Alpha word, and says it in words t
     assert.match(chip.alpha.label, /Alpha: not fully tested yet/, `${room}: the Alpha caution is hue-only - the name reads "${chip.alpha.label}"`);
     assert.equal(chip.stable.alpha, false, `${room}: Claude Code was given the Alpha word`);
     assert.doesNotMatch(chip.stable.label, /Alpha/, `${room}: Claude Code's name carries the caution`);
+  });
+});
+
+test('the own-key engine hides the runtime, mode and effort chips, and touches nothing else', () => {
+  forEachRoom((s, room) => {
+    const c = s.base.ownKeyComposer;
+    assert.ok(c, `${room}: the own-key composer probe is not mounted`);
+    assert.equal(c.providerHidden, true, `${room}: the runtime picker is visible on the own-key engine`);
+    assert.equal(c.modeHidden, true, `${room}: the permission-mode chip is visible on the own-key engine`);
+    assert.equal(c.textBtnCount, 2, `${room}: expected the model and effort pills (2), found ${c.textBtnCount}`);
+    assert.equal(c.textBtnsHidden, true, `${room}: the model and/or effort pill is visible on the own-key engine`);
+    assert.equal(c.sendHidden, false, `${room}: Send disappeared on the own-key engine`);
+    assert.equal(c.hasTextarea, true, `${room}: the composer lost its input field on the own-key engine`);
   });
 });
 
