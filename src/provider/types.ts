@@ -76,6 +76,57 @@ export interface DetectEnvironment {
 
 export type ApprovalChoice = 'deny' | 'allow-once' | 'allow-always';
 
+/**
+ * The desktop auth-truth line, computed rather than left to whichever call
+ * site needs it next (`chat-mobile-engine-spec-v1.md` section 4, Felix,
+ * 2026-09-06). Lives here, not in `provider/claude/authSource.ts`, because
+ * `ChatView.ts` and `SettingsTab.ts` both show it and neither is allowed to
+ * import anything from `provider/claude/` (the hygiene gate that keeps the
+ * Agent SDK behind one seam). `AuthSource` already lived here for the same
+ * reason.
+ *
+ * Four states, and every one is a real, measured fact rather than a guess:
+ * - `not-found`: `Detection.found === false` for Claude Code. Not the same
+ *   claim as "not signed in" - `Detection.signedIn` is ALWAYS null for
+ *   Claude (only a live session can ever know that), so this function never
+ *   says "not signed in" for a fact it cannot see. The Providers section
+ *   already carries the install row for this case; this state exists so the
+ *   engine line never goes silent instead of lying.
+ * - `unknown`: Claude Code is on the machine but no session in this
+ *   Obsidian session has connected yet, so `apiKeySource` has never arrived.
+ * - `subscription` / `api-key`: read straight from `ProviderSession.authSource`
+ *   once a session's `system`/`init` message has answered it.
+ */
+export type AuthTruthState =
+  | { kind: 'not-found' }
+  | { kind: 'unknown' }
+  | { kind: 'subscription' }
+  | { kind: 'api-key' };
+
+/** `found` is `Detection.found` for Claude Code, or `undefined` before
+ * detection has run at all (settings tab, first paint). */
+export function describeAuthTruth(found: boolean | undefined, authSource: AuthSource): AuthTruthState {
+  if (found === false) return { kind: 'not-found' };
+  if (authSource === 'subscription') return { kind: 'subscription' };
+  if (authSource === 'api-key') return { kind: 'api-key' };
+  return { kind: 'unknown' };
+}
+
+/** The words for `AuthTruthState`, exactly once, so Settings and the chat
+ * header can never say something different for the same fact. */
+export function authTruthLine(state: AuthTruthState): string {
+  switch (state.kind) {
+    case 'subscription':
+      return 'Signed in through Claude Code: subscription';
+    case 'api-key':
+      return 'Signed in through Claude Code: API key (billed per use)';
+    case 'not-found':
+      return "Claude Code is not signed in on this computer. Install it under Settings → Providers, then run `claude` in a terminal to sign in.";
+    case 'unknown':
+      return 'Signed in through Claude Code. Send a message to see whether it is your subscription or an API key.';
+  }
+}
+
 export interface PendingApproval {
   toolUseId: string;
   toolName: string;
@@ -106,6 +157,16 @@ export interface SessionConfig {
   resumeSessionId: string | null;
   /** The plugin's own version, for a runtime that identifies its client on a handshake. */
   pluginVersion?: string;
+  /**
+   * Desktop auth truth (`chat-mobile-engine-spec-v1.md` section 4). Off by
+   * default: the Claude child's spawn env is stripped of `ANTHROPIC_API_KEY`,
+   * `ANTHROPIC_AUTH_TOKEN` and `CLAUDE_CODE_OAUTH_TOKEN` so it falls back to
+   * whatever sign-in Claude Code itself keeps on the machine - normally the
+   * member's subscription. True re-allows those three through, for a member
+   * who has deliberately set Claude Code up with an API key instead. Read
+   * only by the Claude provider; every other provider ignores it.
+   */
+  allowEnvApiKey?: boolean;
 }
 
 export interface SessionHooks {
@@ -135,9 +196,11 @@ export interface ProviderSession {
   drain(): Promise<void>;
   readonly aborted: boolean;
   /**
-   * Optional: absent for a runtime that never reports this (Codex leaves it
-   * unset). Present, it is `'unknown'` until the session's own init message
-   * has answered - never guessed either way in the meantime.
+   * Where THIS session's credential came from, once the runtime has said -
+   * absent until then, and absent forever for a provider that never learns
+   * one. Settings and the chat header read this to show the desktop auth
+   * truth (`chat-mobile-engine-spec-v1.md` section 4); nothing computes it
+   * from anything but the runtime's own report.
    */
   readonly authSource?: AuthSource;
 }

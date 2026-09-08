@@ -34,3 +34,18 @@ export function compactNumber(n: number): string {
 export function displayPath(path: string, home: string): string {
   return home && path.startsWith(home) ? `~${path.slice(home.length)}` : path;
 }
+
+/**
+ * The own-key engine's per-reply cost line (`chat-mobile-engine-spec-v1.md`
+ * section 3/4, `StreamRenderer.appendOwnKeyCostLine`). "about 0.004 USD" for
+ * a fraction of a cent, "about 0.02 USD" once cent precision stops losing
+ * the figure. `null` (an unpriced model, or nothing the wire reported)
+ * renders NOTHING - the caller never calls this for null, and this function
+ * never turns one into a string, because "about 0.00 USD" would be the
+ * exact invented number `engine/cost.ts`'s own price table refuses to
+ * produce.
+ */
+export function ownKeyCostLine(costUsd: number): string {
+  const rounded = costUsd < 0.01 ? costUsd.toFixed(4) : costUsd.toFixed(2);
+  return `about ${rounded} USD`;
+}

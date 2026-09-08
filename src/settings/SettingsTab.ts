@@ -19,6 +19,7 @@ import { availableProviders } from '../provider/registry';
 import { controlKeys, isAction, isNote, settingDefinitions, validateRetention } from './definitions';
 import type { ActionDefinition, ControlSpec, DefinitionInput, GroupDefinition, ItemDefinition } from './definitions';
 import { offerInstall } from '../provider/install';
+import { EngineSettingsSection } from './EngineSection';
 
 /* The 1.13 shapes, derived from the class rather than imported by name.
    `SettingDefinitionItem` and friends are `@since 1.13.0`, and the manifest
@@ -34,8 +35,19 @@ type Group = Extract<Definition, { type: 'group' | 'list' }>;
 type GroupItem = NonNullable<Group['items']>[number];
 
 export class ChatSettingsTab extends PluginSettingTab {
+  /* `chat-mobile-engine-spec-v1.md` §3 - the own-key engine's whole settings
+   * block. Its own class, not a row in `settingDefinitions()`'s table: it
+   * reads and writes `OwnKeySettings` (per-device `localStorage`, never
+   * `data.json`), which is exactly the thing that table's hygiene test
+   * exists to keep OUT of a `ChatSettings` row. See EngineSection.ts's
+   * header for the whole reasoning. One instance, mounted on both render
+   * paths below, so the key field's reveal/testing state survives a
+   * search-driven re-render on 1.13 the way any other row's state would. */
+  private readonly engineSection: EngineSettingsSection;
+
   constructor(app: App, private readonly plugin: IcorChatPlugin) {
     super(app, plugin);
+    this.engineSection = new EngineSettingsSection(app);
   }
 
   private input(): DefinitionInput {
@@ -49,10 +61,44 @@ export class ChatSettingsTab extends PluginSettingTab {
     };
   }
 
+  /* Both render paths end here when the settings window closes. The pasted
+     key's draft lives in `engineSection`, not in the DOM Obsidian tears down,
+     so it is cleared by hand (Vex A-2, 0.13.0). */
+  override hide(): void {
+    this.engineSection.discardDraft();
+    super.hide();
+  }
+
   /* ------------------------------------------------ 1.13: declarative */
 
   override getSettingDefinitions(): Definitions {
-    return settingDefinitions(this.input()).map((group) => this.toGroup(group));
+    return [this.engineGroup(), ...settingDefinitions(this.input()).map((group) => this.toGroup(group))];
+  }
+
+  /**
+   * The one group `definitions.ts` never carries, because it is Obsidian-
+   * dependent, stateful, and writes somewhere other than `data.json` - see
+   * `EngineSection.ts`'s header. Built as a single `render`-only item, the
+   * same escape hatch a note item already uses (`toItem`'s `isNote` branch)
+   * to take over `setting.settingEl`'s DOM wholesale rather than being
+   * bound to one `ControlSpec`.
+   */
+  private engineGroup(): Group {
+    return {
+      type: 'group',
+      heading: '00 · AI engine on this device',
+      cls: 'aic-settings-group',
+      items: [
+        {
+          name: '',
+          render: (setting: Setting) => {
+            setting.setName('');
+            setting.settingEl.addClass('aic-settings-engine-host');
+            this.engineSection.render(setting.settingEl);
+          },
+        },
+      ],
+    };
   }
 
   private toGroup(group: GroupDefinition): Group {
@@ -126,6 +172,10 @@ export class ChatSettingsTab extends PluginSettingTab {
     containerEl.empty();
     containerEl.addClass('aic-settings');
     containerEl.setAttr(INK_PLUGIN_ATTR, INK_PLUGIN_NAME);
+    const engineHead = containerEl.createDiv({ cls: 'aic-settings-section' });
+    engineHead.createSpan({ cls: 'aic-settings-index', text: '00' });
+    engineHead.createSpan({ cls: 'aic-settings-name', text: 'AI ENGINE ON THIS DEVICE' });
+    this.engineSection.render(containerEl.createDiv({ cls: 'aic-settings-engine-host' }));
     for (const group of settingDefinitions(this.input())) {
       const head = containerEl.createDiv({ cls: 'aic-settings-section' });
       head.createSpan({ cls: 'aic-settings-index', text: group.index });

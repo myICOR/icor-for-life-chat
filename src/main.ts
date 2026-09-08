@@ -11,7 +11,12 @@
 
 import { FileSystemAdapter, Menu, Notice, Platform, Plugin, TFile, setIcon } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
-import { homedir } from 'node:os';
+/* `node:os` is NOT imported at module scope on purpose (2026-09-06, mobile
+ * hardening): this file is the plugin's entry point, loaded on every
+ * platform including Obsidian mobile, which has no Node runtime at all. A
+ * top-of-file `import` would `require('node:os')` the instant the plugin
+ * loads; the `get homeDir()` getter below defers that call and never makes
+ * it off the desktop, where `Platform.isDesktopApp` guards it. */
 import { INK_PLUGIN_ATTR, INK_PLUGIN_NAME, VIEW_TYPE_CHAT, VIEW_TYPE_INSIGHTS, VIEW_TYPE_SUBAGENT } from './constants';
 import { SubagentView } from './view/SubagentView';
 import { InsightsView } from './view/InsightsView';
@@ -37,11 +42,12 @@ import { DEFAULT_SETTINGS, archiveRoot, pathSettingKey, settingsFrom } from './m
 import { offerInstall } from './provider/install';
 import type { ChatSettings } from './model/settings';
 import type { ModelChoice } from './model/types';
-import type { DetectEnvironment, Detection, Provider, ProviderId } from './provider/types';
-import { splitExtraPath } from './provider/cli';
+import type { AuthSource, DetectEnvironment, Detection, Provider, ProviderId } from './provider/types';
+import { splitExtraPath } from './provider/extraPath';
 import { handoverText } from './archive/handover';
 import { installMemory } from './team/memory';
 import { parseHeldSessions } from './remoteControl/held';
+import { OWN_KEY_STORAGE_KEY, effectiveBackend, loadOwnKeySettings, migratePlaintextKeys, secretStorageOf } from './engine';
 
 /* The file-explorer BLOCK this plugin used to inject above the file tree - a
  * whole panel section, not an icon. It is gone for good; the name survives
@@ -78,6 +84,27 @@ export default class IcorChatPlugin extends Plugin {
    * answers and the settings tab prints them differently. */
   detections: Partial<Record<ProviderId, Detection>> = {};
 
+  /**
+   * The desktop auth truth (`chat-mobile-engine-spec-v1.md` §4), as the LAST
+   * value any open chat tab's Claude session has reported. In memory only -
+   * never written to `data.json`, never refreshed on its own: "nothing in
+   * the plugin stores or refreshes any Claude sign-in" is the spec's own
+   * rule, and a persisted value would be a stale guess the moment the
+   * member changes how Claude Code is signed in on this machine outside
+   * Obsidian entirely. Settings reads this for its own line; a chat tab's
+   * OWN header line reads its own session directly instead
+   * (`ChatView.refreshEngineStatus`), never this shared value, since a
+   * second open conversation could be running under a different sign-in.
+   */
+  lastClaudeAuthSource: AuthSource = 'unknown';
+
+  /** Called by a `ChatView` the moment its own Claude session answers
+   * `apiKeySource`. See `lastClaudeAuthSource`'s own doc for why this is the
+   * one thing about a Claude sign-in the plugin remembers at all. */
+  noteClaudeAuthSource(source: AuthSource): void {
+    this.lastClaudeAuthSource = source;
+  }
+
   /* THE PROVIDER'S OWN MODEL CATALOGUE, cached the first time a session
    * reports it, and empty until then.
    *
@@ -108,13 +135,28 @@ export default class IcorChatPlugin extends Plugin {
   readonly remoteControlHeld = new Set<string>();
 
   override async onload(): Promise<void> {
+    // BEFORE loadSettings: `settingsFrom` copies every stored field into
+    // memory, and a plaintext key it copied would be written straight back
+    // by the next saveSettings. The migration reads and cleans the raw file
+    // first, so the settings reader never sees a key at all.
+    await this.migrateOwnKeyPlaintext();
     await this.loadSettings();
     await this.loadCatalogCache();
     await this.loadRemoteControlHeld();
     installMemory(this);
-    // Each runtime prepares the host once, before anything can launch a query
-    // (the Claude provider installs the renderer AbortSignal shim here).
-    for (const provider of availableProviders()) provider.install?.();
+    /* Claude Code and Codex are desktop CLIs, spawned as a child process;
+     * neither can exist on mobile, which cannot spawn one. Probing for them
+     * there would do nothing useful and would force `provider/registry.ts`
+     * to load the Agent SDK / `node:fs` / `node:child_process` the instant
+     * the plugin loads - which throws outright on a platform with no Node
+     * runtime at all (2026-09-06, mobile hardening; registry.ts carries the
+     * lazy-load side of this same fix). `refreshDetections()` carries the
+     * same guard so a later re-trigger (settings "Check again") is safe too. */
+    if (Platform.isDesktopApp) {
+      // Each runtime prepares the host once, before anything can launch a
+      // query (the Claude provider installs the renderer AbortSignal shim here).
+      for (const provider of availableProviders()) provider.install?.();
+    }
     void this.refreshDetections();
 
     this.registerView(VIEW_TYPE_CHAT, (leaf) => new ChatView(leaf, this));
@@ -459,6 +501,21 @@ export default class IcorChatPlugin extends Plugin {
 
   /** Run every runtime's detection and remember the answers. */
   async refreshDetections(): Promise<void> {
+    /* Neither runtime can be found on mobile - both spawn a child process,
+     * and mobile has no process to spawn - so every id reads honestly "not
+     * found" without ever loading the Claude/Codex modules (see the note in
+     * onload() and in registry.ts). Never a guess: this states a real fact
+     * about the platform, the same way `Detection.signedIn: null` states a
+     * real fact about what a desktop detection cannot know either. */
+    if (!Platform.isDesktopApp) {
+      for (const provider of availableProviders()) {
+        this.detections[provider.id] = {
+          found: false, path: null, version: null, signedIn: null,
+          hint: `${provider.displayName} is a desktop app and is not available on phones and tablets.`,
+        };
+      }
+      return;
+    }
     await Promise.all(
       availableProviders().map(async (provider) => {
         try {
@@ -715,8 +772,12 @@ export default class IcorChatPlugin extends Plugin {
   }
 
   get homeDir(): string {
+    // Off the desktop there is no Claude Code / Codex spawn path to resolve
+    // a home directory for, and no Node runtime to ask - see the import note
+    // at the top of this file.
+    if (!Platform.isDesktopApp) return '';
     try {
-      return homedir();
+      return (require('node:os') as typeof import('node:os')).homedir();
     } catch {
       return '';
     }
@@ -844,6 +905,34 @@ export default class IcorChatPlugin extends Plugin {
          session, on a fresh pane and a reused one alike. */
       if (resumeSessionId && route.kind !== 'reveal') await view.resume(resumeSessionId);
       view.focusComposer();
+    }
+  }
+
+  /**
+   * The suite-wide secrets contract's migration on load (0.13.0): a
+   * plaintext provider key found in `data.json` or in the pre-release
+   * local-storage record goes into Obsidian's keychain and the field is
+   * blanked. Only when the keychain is the effective backend - never the
+   * other way round, never into the env file on its own. `data.json` has
+   * never carried a key in this plugin (`test/engine-secrets.test.mjs`
+   * proves the shape), so the data.json half is the contract's guard and
+   * the local-storage half is the one that can ever find something.
+   * Nothing here names, logs or shows a value; `migratePlaintextKeys`
+   * returns which providers moved and the cleaned record, nothing else.
+   */
+  private async migrateOwnKeyPlaintext(): Promise<void> {
+    const store = secretStorageOf(this.app);
+    if (!store) return;
+    const settings = loadOwnKeySettings(this.app);
+    if (effectiveBackend(settings.secretsBackend, store) !== 'secret-storage') return;
+    try {
+      const data = migratePlaintextKeys(await this.loadData(), store);
+      if (data.cleaned) await this.saveData(data.cleaned);
+      const local = migratePlaintextKeys(this.app.loadLocalStorage(OWN_KEY_STORAGE_KEY), store);
+      if (local.cleaned) this.app.saveLocalStorage(OWN_KEY_STORAGE_KEY, local.cleaned);
+    } catch {
+      // A failed migration leaves the record as it was; the settings tab's
+      // status lines will say where a key is, and the next load tries again.
     }
   }
 

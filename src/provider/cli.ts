@@ -8,7 +8,19 @@
  *
  * Everything here is a pure function over an explicit environment except
  * `resolveCliPath`, which is the one place that touches the filesystem. That
- * split is what lets the resolution rules be tested headless. */
+ * split is what lets the resolution rules be tested headless.
+ *
+ * This file's own top-level `node:fs` / `node:path` imports are safe on
+ * Obsidian mobile (2026-09-06, mobile hardening): this file is no longer
+ * imported eagerly by anything mobile loads. `ChatView.ts` and `main.ts` used
+ * to import `splitExtraPath` straight from here, which pulled these two
+ * builtins in the instant the plugin loaded on every platform; that one
+ * function moved to `./extraPath.ts`, which has no import of its own, and
+ * this file is now reached only through `provider/registry.ts`'s lazy
+ * `require('./claude')` / `require('./codex')` / `require('./cli')` (the
+ * last one for `ChatView.ts`'s Remote Control terminal lookup, 0.13.0) - a
+ * call that on mobile is written but never executed. See registry.ts's
+ * header for the whole shape. */
 
 import { existsSync, statSync } from 'node:fs';
 import { posix, win32 } from 'node:path';
@@ -232,23 +244,42 @@ export function resolveCliPath(
   throw new CliNotFoundError(candidates.length);
 }
 
-/** The env handed to the child: process env, PATH repaired, user extras merged. */
+/**
+ * Desktop auth truth (`chat-mobile-engine-spec-v1.md` section 4): a member's
+ * own environment can carry an Anthropic credential meant for some other
+ * tool, and Obsidian inherits the launching shell's env by default. Left
+ * alone, the Claude child would pick that up ahead of Claude Code's own
+ * sign-in with nothing on screen to say so - the exact "am I on my
+ * subscription or not" the desktop settings row exists to answer honestly.
+ * Stripped by default; `SessionConfig.allowEnvApiKey` re-allows them for a
+ * member who has deliberately set Claude Code up with an API key instead.
+ */
+export const STRIPPED_API_KEY_ENV_VARS: readonly string[] = [
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'CLAUDE_CODE_OAUTH_TOKEN',
+];
+
+/** The env handed to the child: process env, PATH repaired, user extras
+ * merged, the three credential vars stripped unless explicitly re-allowed. */
 export function buildChildEnv(
   base: NodeJS.ProcessEnv,
   env: PathEnvironment,
+  options: { allowEnvApiKey?: boolean } = {},
 ): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(base)) {
     if (typeof v === 'string') out[k] = v;
+  }
+  if (!options.allowEnvApiKey) {
+    for (const key of STRIPPED_API_KEY_ENV_VARS) delete out[key];
   }
   out.PATH = augmentPath({ ...env, path: base.PATH ?? env.path });
   if (env.platform === 'win32') out.Path = out.PATH;
   return out;
 }
 
-export function splitExtraPath(raw: string): string[] {
-  return raw
-    .split(/[\n\r]+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
+// `splitExtraPath` moved to `./extraPath.ts` (2026-09-06, mobile hardening) -
+// see that file's header for why. Not re-exported from here: the whole point
+// was to give `ChatView.ts` / `main.ts` a path to it that never touches this
+// file's `node:fs` / `node:path` imports.

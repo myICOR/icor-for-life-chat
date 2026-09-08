@@ -1,0 +1,12 @@
+data: {"id":"gen-1","object":"chat.completion.chunk","created":1,"model":"anthropic/claude-sonnet-5","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"gen-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"The capital"},"finish_reason":null}]}
+
+data: {"id":"gen-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":" of France is Paris."},"finish_reason":null}]}
+
+data: {"id":"gen-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: {"id":"gen-1","object":"chat.completion.chunk","choices":[],"usage":{"prompt_tokens":18,"completion_tokens":9,"total_tokens":27,"cost":0.00034}}
+
+data: [DONE]
+

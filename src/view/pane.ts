@@ -58,6 +58,14 @@ export interface PaneOptions {
 
 export interface Pane {
   root: HTMLElement;
+  /**
+   * A root-level sibling ABOVE rung 0, outside the four-rung census the same
+   * way `pins` already is (2026-09-06, own-key engine): one line stating
+   * which engine this conversation runs on, and for Claude Code, the
+   * desktop auth truth (`chat-mobile-engine-spec-v1.md` §4). `renderEngineStatus`
+   * owns `is-empty`; empty until `ChatView` has something measured to say.
+   */
+  engineStatus: HTMLElement;
   /** Rung 0. The pin tray above the stream; `renderPinTray` owns `is-empty`. */
   pins: HTMLElement;
   /** Rung 1. The scroll box; `.aic-column` is the width-capped child. */
@@ -87,10 +95,17 @@ export function buildPane(root: HTMLElement, opts: PaneOptions): Pane {
   root.addClass('aic-root');
   root.setAttr(INK_PLUGIN_ATTR, INK_PLUGIN_NAME);
 
-  /* RUNG 0, the pin tray, the root's FIRST child. It sits above the scroller
-     rather than inside it because its whole job is to stay put while the
-     stream moves: the prompt the conversation is about, always in sight.
-     Empty until something is pinned, and zero height while empty. */
+  /* THE ENGINE-STATUS LINE, the root's very first child - above even the pin
+     tray, because it is a fact about the WHOLE conversation (which engine,
+     whose credential) rather than about any one turn in it. Empty and zero
+     height until `ChatView` has something measured to say; see
+     `EngineStatus.ts`. */
+  const engineStatus = root.createDiv({ cls: 'aic-engine-status is-empty' });
+
+  /* RUNG 0, the pin tray, right after the engine-status line. It sits above
+     the scroller rather than inside it because its whole job is to stay put
+     while the stream moves: the prompt the conversation is about, always in
+     sight. Empty until something is pinned, and zero height while empty. */
   const pins = root.createDiv({ cls: 'aic-pins is-empty' });
 
   const scroller = root.createDiv({ cls: 'aic-stream' });
@@ -121,5 +136,5 @@ export function buildPane(root: HTMLElement, opts: PaneOptions): Pane {
   const facts = composer.factsEl;
   const statusline = opts.facts ? new Statusline(facts, opts.facts) : new Statusline(facts);
 
-  return { root, pins, scroller, column, dock, chipTray, teamStrip, composer, badge, statusline, facts };
+  return { root, engineStatus, pins, scroller, column, dock, chipTray, teamStrip, composer, badge, statusline, facts };
 }

@@ -3,9 +3,17 @@
  * `launch.ts` takes these as parameters instead, so the routing decision is
  * asserted headless; this file is what `ChatView` actually calls. */
 
-import { Notice } from 'obsidian';
+import { Notice, Platform } from 'obsidian';
 import type { App } from 'obsidian';
-import { spawn } from 'node:child_process';
+/* `node:child_process` is NOT imported at module scope on purpose (0.13.0,
+ * Flint finding 2 at the merge): `manifest.json` declares `isDesktopOnly:
+ * false`, so this file is evaluated on Obsidian mobile too, through
+ * `ChatView.ts`'s static import of `realLaunchPorts`. A top-of-file `import`
+ * would `require('node:child_process')` the instant the plugin loads, on a
+ * platform that has no Node runtime at all. `spawnDetached` below reaches for
+ * the module only when it runs, and only on the desktop; `test/mobile-load
+ * .test.mjs` measures the outcome against the built bundle. Same shape as
+ * `main.ts`'s `homeDir` getter and `provider/registry.ts`'s lazy loaders. */
 import type { ClipboardPort, LaunchPorts, NoticePort, SpawnPort, TerminalPluginPort } from './launch';
 
 const TERMINAL_PLUGIN_ID = 'icor-for-life-terminal';
@@ -33,6 +41,14 @@ export function terminalPluginPort(app: App): TerminalPluginPort | null {
  * caller. */
 export const nodeSpawnPort: SpawnPort = {
   spawnDetached(file, args, opts) {
+    // First statement, before the require: mobile has no child process to
+    // spawn and no module to load, and `launch.ts` never routes here off the
+    // desktop; this is the guard that makes that a fact rather than a hope.
+    if (!Platform.isDesktopApp) {
+      opts?.onError?.(new Error('Remote Control needs the desktop app: there is no terminal to open on this device.'));
+      return;
+    }
+    const { spawn } = require('node:child_process') as typeof import('node:child_process');
     const child = spawn(file, args, {
       cwd: opts?.cwd,
       detached: true,
