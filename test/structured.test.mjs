@@ -214,6 +214,8 @@ test('a code inside a longer token is not a mention', () => {
   assert.equal(mentionsCode('x4a3fk9 is a filename', '4a3fk'), false);
   assert.equal(mentionsCode('do 4a3fk now', '4a3fk'), true);
   assert.equal(mentionsCode('4a3fk.', '4a3fk'), true);
+  assert.equal(mentionsCode('4a3fk', '4a3fk'), true, 'start of text is a boundary');
+  assert.equal(mentionsCode('go 4A3FK', '4a3fk'), true, 'case does not matter');
 });
 
 test('resolution is derived, so the same inputs always give the same answer', () => {

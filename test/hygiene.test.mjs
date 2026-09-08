@@ -156,6 +156,30 @@ function tsFilesUnder(dir) {
   return out.sort();
 }
 
+test('no regex lookbehind anywhere under src, literal or string-built (iOS before 16.4 throws)', () => {
+  /* `obsidianmd/regex-lookbehind` reads regex LITERALS only. A pattern
+     assembled for `new RegExp(...)` carries the same `(?<` and throws the
+     same SyntaxError at construction time on iOS before 16.4, where 0.13.0,
+     the first mobile release, now runs (Flint, 2026-09-09, on
+     `structured/decisions.ts`'s `mentionsCode`). Grep the source text for
+     the two lookbehind openers in any form, so the string-built one cannot
+     hide from the linter again. */
+  const lookbehind = /\(\?<[=!]/;
+  const offenders = tsFilesUnder('src')
+    .map((f) => {
+      const lines = read(f).split('\n');
+      const hits = lines.map((line, i) => (lookbehind.test(line) ? `${f}:${i + 1}` : null)).filter(Boolean);
+      return hits;
+    })
+    .flat();
+  assert.deepEqual(offenders, [], `a regex lookbehind, which iOS before 16.4 refuses:\n  ${offenders.join('\n  ')}`);
+  // The instrument's own control: the exact pre-fix line, in both forms.
+  assert.ok(lookbehind.test('new RegExp(`(?<![a-z0-9])${code}(?![a-z0-9])`, \'i\')'), 'the string-built form is not seen');
+  assert.ok(lookbehind.test('/(?<=\\n)/'), 'the literal form is not seen');
+  assert.ok(!lookbehind.test('(^|[^a-z0-9])${code}(?![a-z0-9])'), 'the fixed line trips the gate');
+  assert.ok(!lookbehind.test('(?<name>x)'), 'a named group is not a lookbehind');
+});
+
 test('the Agent SDK is imported under src/provider/claude/ and nowhere else', () => {
   /* The seam is only a seam while it is the ONLY door. A second provider is
      a second folder; a view that reached for the SDK by name would make it a

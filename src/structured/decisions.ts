@@ -29,10 +29,16 @@ export interface TrackedDecision {
   mentions: number[];
 }
 
-/** Word-boundary match, so `4a3fk` inside `x4a3fk9` is not a mention. */
+/** Word-boundary match, so `4a3fk` inside `x4a3fk9` is not a mention.
+ * The left boundary is `(^|[^a-z0-9])`, not a lookbehind: the `RegExp`
+ * constructor throws on `(?<` on iOS before 16.4, and 0.13.0 is the first
+ * mobile release (Flint, 2026-09-09). A string-built pattern slips past
+ * `obsidianmd/regex-lookbehind`, which reads literals only; the hygiene
+ * gate in `test/hygiene.test.mjs` greps both forms. Only `.test()` is
+ * used, so the extra group changes no match index anyone reads. */
 export function mentionsCode(text: string, code: string): boolean {
   if (!isCode(code)) return false;
-  const pattern = new RegExp(`(?<![a-z0-9])${code}(?![a-z0-9])`, 'i');
+  const pattern = new RegExp(`(^|[^a-z0-9])${code}(?![a-z0-9])`, 'i');
   return pattern.test(text);
 }
 
