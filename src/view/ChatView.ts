@@ -41,8 +41,9 @@ import type { Provider, ProviderId, ProviderSession, SessionHooks, SessionStore 
 import { authTruthLine, describeAuthTruth } from '../provider/types';
 import { splitExtraPath } from '../provider/extraPath';
 import {
-  DEFAULT_MODEL_FOR, MODEL_PROVIDER_NAMES, WriteApprovalGate, activeApiKey,
-  anthropicModelDisplayName, createModelProvider, loadOwnKeySettings, resolveTransports, runOwnKeyTurn,
+  BACKEND_LABEL, DEFAULT_MODEL_FOR, MODEL_PROVIDER_NAMES, WriteApprovalGate,
+  anthropicModelDisplayName, createModelProvider, effectiveBackend, loadOwnKeySettings, missingKeyMessage,
+  readProviderKey, resolveTransports, runOwnKeyTurn, secretStorageOf,
 } from '../engine';
 import type { EngineChoice, EngineMessage, OwnKeyHooks, OwnKeySettings } from '../engine';
 import { renderEngineStatus } from './EngineStatus';
@@ -1660,13 +1661,26 @@ export class ChatView extends ItemView {
    * chained by `submitOwnKey` so two sends never race the same history. */
   private async runOwnKeyTurnNow(prompt: string): Promise<void> {
     const settings = loadOwnKeySettings(this.app);
-    const apiKey = activeApiKey(settings);
-    if (!apiKey.trim()) {
+    /* The key comes from the ONE backend the member chose (secrets.ts):
+     * Obsidian's keychain, or the env file in the vault. Never the other
+     * one as a fallback - a fallback is how a misconfiguration hides until
+     * it bills the wrong account. The error names the backend so a key
+     * sitting in the other place is found rather than retyped. */
+    const hosts = { store: secretStorageOf(this.app), env: this.app.vault.adapter, envFilePath: settings.envFilePath };
+    const backend = effectiveBackend(settings.secretsBackend, hosts.store);
+    let apiKey = '';
+    try {
+      apiKey = await readProviderKey(hosts, backend, settings.provider);
+    } catch (error) {
       this.store.apply({
         kind: 'error',
-        message: 'There is no API key set for this device yet. Add one under Settings → AI engine on this device.',
+        message: `Could not read the API key from ${BACKEND_LABEL[backend]}: ${error instanceof Error ? error.message : 'unknown error'}`,
         stream: null,
       });
+      return;
+    }
+    if (!apiKey) {
+      this.store.apply({ kind: 'error', message: missingKeyMessage(settings.provider, backend), stream: null });
       return;
     }
     const provider = createModelProvider(settings.provider, apiKey, resolveTransports());

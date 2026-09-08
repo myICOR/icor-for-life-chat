@@ -87,9 +87,10 @@ install from Anthropic. The Claude desktop app is not the same thing, and
 neither is claude.ai in a browser.** Having either of those gives this plugin
 nothing to talk to.
 
-The reason is simple: the plugin has no API key field and makes no network
-calls of its own. It finds the `claude` program already installed on your
-machine and runs it. If that program is not there, nothing happens, and that
+The reason is simple: on this engine the plugin has no API key field and
+makes no network calls of its own. It finds the `claude` program already
+installed on your machine and runs it. (The separate *My own API key* engine
+is the one exception; see "Where your keys live".) If that program is not there, nothing happens, and that
 is far and away the most common reason a fresh install appears to do nothing.
 
 #### 1. Install it
@@ -267,6 +268,55 @@ Your data goes to OpenAI under your own ChatGPT or API terms, not through
 anything of ours. This reflects OpenAI's published Codex documentation and
 terms as of 4 September 2026; they can change without notice, so treat the
 date as the point this was checked.
+
+## Where your keys live
+
+Most of this plugin needs no key at all: the Claude Code and Codex engines
+run a tool that is already signed in on your machine (see above). The one
+part that does hold a key is **My own API key** under *Settings, AI engine on
+this device*, where you paste an Anthropic or OpenRouter key and the plugin
+calls that provider directly, billed to your account, per use.
+
+That key lives in one of two places, and you choose which:
+
+- **Obsidian's keychain** (the default). Obsidian 1.11.4 and newer keeps
+  plugin secrets in its own keychain; you can see and delete them under
+  *Settings, General, Keychain*. Under the hood Obsidian encrypts them with
+  the platform's secure storage. The keychain is per device and Obsidian Sync
+  does not carry it, so a key entered on your Mac is not on your iPad; enter
+  it once per device. Every plugin in the vault can read every entry, which
+  is why the ids carry this plugin's name:
+  - `icor-for-life-chat-anthropic-api-key`
+  - `icor-for-life-chat-openrouter-api-key`
+- **An env file in the vault.** One `KEY=value` per line, `#` for comments,
+  no quotes, no `${VAR}` expansion. The default path is
+  `06 AI Team/AI Team Knowledge/.env` (the ICOR for Life scaffold's own env
+  file); change it under *Env file location*. The plugin reads
+  `ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY`, and when you save a key here
+  it rewrites only that one line and leaves every other byte of the file as
+  it was. Keep that file out of anything that syncs or publishes the vault.
+  On an Obsidian older than 1.11.4 this is the only choice and the dropdown
+  says so.
+
+The plugin reads the place you chose and only that place; it never falls
+back to the other one, because a fallback would hide a wrong setting until
+the day it billed the wrong account. The settings tab shows, per key, where a
+value exists ("stored in Obsidian's keychain", "stored in the env file", "not
+set") and offers a *Move to ...* button that copies the key into the place
+you chose and blanks the old one. Switching the dropdown alone moves nothing.
+The paste field is a password field that is emptied after *Save*; the plugin
+never shows a key back, not in a message, not in a log, not masked.
+
+Two disclosures, as the Obsidian developer policies ask:
+
+- **An account is required** for the own-key engine: an Anthropic account
+  (`console.anthropic.com`) or an OpenRouter account (`openrouter.ai`), with
+  a key you create there. The Claude Code and Codex engines need those tools
+  signed in with their own accounts, as described above.
+- **Network use.** With your own key the plugin sends your messages, the
+  notes you attach and the vault tool results to `api.anthropic.com` or
+  `openrouter.ai` over HTTPS, and nowhere else. *Test key* makes one tiny
+  request to the same host. Nothing is sent to myICOR.
 
 ## Safety
 

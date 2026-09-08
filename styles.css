@@ -3455,4 +3455,20 @@
 
 .aic-settings-engine-host { margin-bottom: 8px; }
 
+/* M1.6 where the keys live (0.13.0, the suite-wide secrets contract). The
+   per-key status row is a plain Setting whose description says WHERE a key
+   exists, never what it is; it takes the same dim ink as any description.
+   The missing-key sentence under the paste field is the one line that must
+   read as a problem, so it takes the destructive-text rung the test result
+   already uses for a failure, and no background fill. Empty when there is
+   nothing to say, and zero height then, like every other optional line. */
+.aic-own-key-status .setting-item-description { color: var(--aic-dim); }
+.aic-own-key-missing {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--aic-destructive-text);
+  margin: -4px 0 12px;
+}
+.aic-own-key-missing:empty { display: none; }
+
 /* ==== END REGION M1 ==== */

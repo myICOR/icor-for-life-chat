@@ -18,9 +18,20 @@ export { resolveTransports, StreamHttpError } from './transport';
 
 export {
   OWN_KEY_STORAGE_KEY, DEFAULT_OWN_KEY_SETTINGS,
-  loadOwnKeySettings, saveOwnKeySettings, activeApiKey, maskKey,
+  loadOwnKeySettings, saveOwnKeySettings,
 } from './credentials';
 export type { EngineChoice, OwnKeySettings, LocalStorageHost } from './credentials';
+
+/* Where the keys live (0.13.0, the suite-wide secrets contract): the two
+ * backends, the ids, and the one door for read / write / move / migrate. */
+export {
+  SECRETS_BACKENDS, BACKEND_LABEL, BACKEND_OPTIONS, SECRET_ID_FOR, SECRET_ID_RULE,
+  isSecretsBackend, secretStorageOf, effectiveBackend, readProviderKey, writeProviderKey, moveProviderKey,
+  keyPresence, presentIn, otherBackend, keyStatusLine, missingKeyMessage, migratePlaintextKeys,
+} from './secrets';
+export type { SecretsBackend, SecretStore, KeyHosts, KeyPresence, PlaintextMigration } from './secrets';
+export { DEFAULT_ENV_FILE_PATH, ENV_KEY_FOR, cleanVaultPath, parseEnvFile, upsertEnvLine, readEnvKey, writeEnvKey } from './envFile';
+export type { EnvFileHost } from './envFile';
 
 export { testProviderKey } from './testKey';
 export type { TestKeyResult } from './testKey';

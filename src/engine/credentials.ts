@@ -1,15 +1,18 @@
 /* PER-DEVICE STORAGE. `chat-mobile-engine-spec-v1.md` section 3: "Where keys
- * live: per device, in `app.saveLocalStorage`, never in `data.json`.
- * `data.json` replicates through Obsidian Sync; a key must never ride along.
- * Same rule Vex applies to Connect's tokens."
+ * live: per device ... never in `data.json`. `data.json` replicates through
+ * Obsidian Sync; a key must never ride along. Same rule Vex applies to
+ * Connect's tokens."
  *
- * Everything in this file - the whole "AI engine on this device" block, not
- * only the keys - lives here rather than in `ChatSettings`/`data.json` on
- * purpose: the engine choice and provider choice are themselves per-device
- * facts (a phone has its own key; Tom's Mac keeps using the desktop engine),
- * so splitting "the key stays local" from "the choice syncs" would still let
- * a synced default silently switch a member's phone onto an engine with no
- * key behind it.
+ * Since 0.13.0 the KEYS THEMSELVES are no longer in this record at all.
+ * They live in one of two backends (`secrets.ts`): Obsidian's keychain, or
+ * an env file in the vault. What stays here is the "AI engine on this
+ * device" block - the engine choice, the provider choice, the model, the
+ * budget, and now WHICH backend holds the keys and where the env file is.
+ * Those are per-device facts on purpose (a phone has its own key and, on an
+ * Obsidian without a keychain, its own backend; Tom's Mac keeps using the
+ * desktop engine), so splitting "the key stays local" from "the choice
+ * syncs" would still let a synced default silently switch a member's phone
+ * onto an engine, or a backend, with no key behind it.
  *
  * Only a TYPE import from 'obsidian' (`App`, erased at build time), never a
  * value one - `LocalStorageHost` is the two methods this file actually calls,
@@ -19,6 +22,9 @@
 import { PLUGIN_ID } from '../constants';
 import type { ModelProviderId } from './types';
 import { isModelProviderId } from './registry';
+import { DEFAULT_ENV_FILE_PATH, cleanVaultPath } from './envFile';
+import { isSecretsBackend } from './secrets';
+import type { SecretsBackend } from './secrets';
 
 export const OWN_KEY_STORAGE_KEY = `${PLUGIN_ID}:own-key-engine:v1`;
 
@@ -27,21 +33,25 @@ export type EngineChoice = 'claude-code' | 'own-key';
 export interface OwnKeySettings {
   engine: EngineChoice;
   provider: ModelProviderId;
-  anthropicApiKey: string;
-  openrouterApiKey: string;
   /** Empty = the provider's own default (`DEFAULT_MODEL_FOR` in registry.ts). */
   model: string;
   /** Max output tokens per reply. Section 3's budget guard; default 4,000. */
   maxTokens: number;
+  /** Which backend holds the provider keys. `secret-storage` out of the box;
+   * `effectiveBackend` in secrets.ts turns it into `env-file` on an Obsidian
+   * that has no keychain. */
+  secretsBackend: SecretsBackend;
+  /** The env-file backend's file, vault-relative. */
+  envFilePath: string;
 }
 
 export const DEFAULT_OWN_KEY_SETTINGS: OwnKeySettings = {
   engine: 'claude-code',
   provider: 'anthropic',
-  anthropicApiKey: '',
-  openrouterApiKey: '',
   model: '',
   maxTokens: 4000,
+  secretsBackend: 'secret-storage',
+  envFilePath: DEFAULT_ENV_FILE_PATH,
 };
 
 export interface LocalStorageHost {
@@ -58,42 +68,38 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 /** Untyped JSON from local storage becomes settings here, and nowhere else -
  * the same one-function-owns-the-shape rule `settingsFrom` follows for
  * `data.json` in `model/settings.ts`. Every missing or malformed field falls
- * back to its default rather than propagating `undefined` into a request. */
+ * back to its default rather than propagating `undefined` into a request.
+ * A pre-0.13.0 record's `anthropicApiKey` / `openrouterApiKey` fields are
+ * NOT read here: `migratePlaintextKeys` in secrets.ts moves them into the
+ * store at load and drops them, and this reader never learns they existed. */
 export function loadOwnKeySettings(app: LocalStorageHost): OwnKeySettings {
   const raw = app.loadLocalStorage(OWN_KEY_STORAGE_KEY);
   const partial = isRecord(raw) ? raw : {};
   const provider = isModelProviderId(partial.provider) ? partial.provider : DEFAULT_OWN_KEY_SETTINGS.provider;
+  const envFilePath = typeof partial.envFilePath === 'string' ? cleanVaultPath(partial.envFilePath) : '';
   return {
     engine: partial.engine === 'own-key' ? 'own-key' : DEFAULT_OWN_KEY_SETTINGS.engine,
     provider,
-    anthropicApiKey: typeof partial.anthropicApiKey === 'string' ? partial.anthropicApiKey : '',
-    openrouterApiKey: typeof partial.openrouterApiKey === 'string' ? partial.openrouterApiKey : '',
     model: typeof partial.model === 'string' ? partial.model : '',
     maxTokens:
       typeof partial.maxTokens === 'number' && Number.isFinite(partial.maxTokens) && partial.maxTokens > 0
         ? Math.trunc(partial.maxTokens)
         : DEFAULT_OWN_KEY_SETTINGS.maxTokens,
+    secretsBackend: isSecretsBackend(partial.secretsBackend) ? partial.secretsBackend : DEFAULT_OWN_KEY_SETTINGS.secretsBackend,
+    envFilePath: envFilePath || DEFAULT_OWN_KEY_SETTINGS.envFilePath,
   };
 }
 
+/** Writes the record. The shape is `OwnKeySettings` and only that: a caller
+ * cannot smuggle a key field in here, which is the point of the type. */
 export function saveOwnKeySettings(app: LocalStorageHost, settings: OwnKeySettings): void {
-  app.saveLocalStorage(OWN_KEY_STORAGE_KEY, settings);
-}
-
-/** The key for whichever provider is active, so a caller never has to switch
- * on `settings.provider` itself to find it. */
-export function activeApiKey(settings: OwnKeySettings): string {
-  return settings.provider === 'anthropic' ? settings.anthropicApiKey : settings.openrouterApiKey;
-}
-
-/**
- * Masked for any echo, log, or error string: first four characters and the
- * last two, nothing in between. Never the whole key, never zero characters
- * (an empty mask reading "(set)" is still true and gives away nothing).
- */
-export function maskKey(key: string): string {
-  const trimmed = key.trim();
-  if (!trimmed) return '(none)';
-  if (trimmed.length <= 8) return '*'.repeat(trimmed.length);
-  return `${trimmed.slice(0, 4)}…${trimmed.slice(-2)}`;
+  const record: OwnKeySettings = {
+    engine: settings.engine,
+    provider: settings.provider,
+    model: settings.model,
+    maxTokens: settings.maxTokens,
+    secretsBackend: settings.secretsBackend,
+    envFilePath: cleanVaultPath(settings.envFilePath) || DEFAULT_OWN_KEY_SETTINGS.envFilePath,
+  };
+  app.saveLocalStorage(OWN_KEY_STORAGE_KEY, record);
 }

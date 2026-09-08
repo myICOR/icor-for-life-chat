@@ -72,3 +72,7 @@ export * from '../src/engine/tools/vaultTools';
 export * from '../src/engine/toolLoop';
 export * from '../src/engine/credentials';
 export * from '../src/engine/testKey';
+/* The secrets contract (0.13.0): the env-file parser and writer, and the
+ * backend door, both pure - the store and the adapter are parameters. */
+export * from '../src/engine/envFile';
+export * from '../src/engine/secrets';

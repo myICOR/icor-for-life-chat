@@ -46,6 +46,7 @@ import type { AuthSource, DetectEnvironment, Detection, Provider, ProviderId } f
 import { splitExtraPath } from './provider/extraPath';
 import { handoverText } from './archive/handover';
 import { installMemory } from './team/memory';
+import { OWN_KEY_STORAGE_KEY, effectiveBackend, loadOwnKeySettings, migratePlaintextKeys, secretStorageOf } from './engine';
 
 /* The file-explorer BLOCK this plugin used to inject above the file tree - a
  * whole panel section, not an icon. It is gone for good; the name survives
@@ -124,6 +125,11 @@ export default class IcorChatPlugin extends Plugin {
   private catalogCache: CatalogCache = {};
 
   override async onload(): Promise<void> {
+    // BEFORE loadSettings: `settingsFrom` copies every stored field into
+    // memory, and a plaintext key it copied would be written straight back
+    // by the next saveSettings. The migration reads and cleans the raw file
+    // first, so the settings reader never sees a key at all.
+    await this.migrateOwnKeyPlaintext();
     await this.loadSettings();
     await this.loadCatalogCache();
     installMemory(this);
@@ -785,6 +791,34 @@ export default class IcorChatPlugin extends Plugin {
          session, on a fresh pane and a reused one alike. */
       if (resumeSessionId && route.kind !== 'reveal') await view.resume(resumeSessionId);
       view.focusComposer();
+    }
+  }
+
+  /**
+   * The suite-wide secrets contract's migration on load (0.13.0): a
+   * plaintext provider key found in `data.json` or in the pre-release
+   * local-storage record goes into Obsidian's keychain and the field is
+   * blanked. Only when the keychain is the effective backend - never the
+   * other way round, never into the env file on its own. `data.json` has
+   * never carried a key in this plugin (`test/engine-secrets.test.mjs`
+   * proves the shape), so the data.json half is the contract's guard and
+   * the local-storage half is the one that can ever find something.
+   * Nothing here names, logs or shows a value; `migratePlaintextKeys`
+   * returns which providers moved and the cleaned record, nothing else.
+   */
+  private async migrateOwnKeyPlaintext(): Promise<void> {
+    const store = secretStorageOf(this.app);
+    if (!store) return;
+    const settings = loadOwnKeySettings(this.app);
+    if (effectiveBackend(settings.secretsBackend, store) !== 'secret-storage') return;
+    try {
+      const data = migratePlaintextKeys(await this.loadData(), store);
+      if (data.cleaned) await this.saveData(data.cleaned);
+      const local = migratePlaintextKeys(this.app.loadLocalStorage(OWN_KEY_STORAGE_KEY), store);
+      if (local.cleaned) this.app.saveLocalStorage(OWN_KEY_STORAGE_KEY, local.cleaned);
+    } catch {
+      // A failed migration leaves the record as it was; the settings tab's
+      // status lines will say where a key is, and the next load tries again.
     }
   }
 
