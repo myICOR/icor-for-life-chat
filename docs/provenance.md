@@ -300,7 +300,7 @@ offers even that. A reader who wants that particular comfort will not find it
 here and should not pretend to have found it.
 
 **Authorship in git is a team working identity.** Commit authorship here uses
-this team's shared working identities at `team@myicor.com` and `tom@myicor.com`.
+this team's shared working identities.
 It is not a record of who held the keyboard for which subsystem. This record
 therefore cannot be used to demonstrate that any particular person or process
 wrote any particular file. It can only demonstrate what the files are.
