@@ -1,468 +1,101 @@
 # ICOR for Life - AI Chat
 
-Your AI team, inside the vault. Open a conversation next to your notes, ask a
-question, and get an answer from a model that is already reading the room: it
-knows which note you have open and which lines you have selected, and it works
-from your vault's own instructions rather than from anything the plugin puts in
-its mouth.
+**Your AI team, in the room with your notes.**
 
-The plugin is a window, not a second brain. Behaviour, identity and context
-rules live in your vault's `CLAUDE.md`, `AGENTS.md` and `.claude/`, which the
-Claude Code CLI reads natively from the working directory. ICOR for Life - AI Chat sends no
-system prompt of its own. There is exactly one exception and it is visible in
-settings: **Structured replies**, which is ON out of the box, appends a fixed
-format instruction so the answer comes back as ICOR cards, which the plugin
-then renders as native blocks instead of leaving as terminal text. It is the
-format the product is designed around, so it is the shape you get without
-opening settings at all. Turn it off and the plugin sends nothing of its own.
+Ask a question next to the note you are working on, and get an answer from a
+model that already knows which note is open and which lines you selected.
 
-**One option, not a lock-in.** This panel is one way to talk to your team, not
-the only one, and the vault stays yours either way. Run Claude Code in a
-terminal, run it inside the Terminal plugin, or install any other plugin you
-like alongside this suite. Nothing here takes that away. That openness is a
-reason to build on Obsidian rather than something to work around.
+Part of the [ICOR for Life](https://myicor.com) suite.
 
-**Beta release.** This plugin works and is in daily use in a real vault,
-but you will find rough edges. If something looks off, open an issue on
-this repo and it gets fixed fast.
+## What it is for
 
-## What it does
+Copying a note into a chat window strips the context that made it worth
+asking about. You paste the paragraph and lose the project it belongs to, the
+person it is about and the six other notes that would have changed the
+answer.
 
-- **A conversation per tab.** Open as many as you want; each one is its own
-  session and its own process. The robot in the ribbon starts one, and offers
-  your recent conversations to pick up instead.
-- **Continue in the terminal.** The terminal icon in the pane header hands a
-  Claude Code conversation to ICOR for Life - Terminal in the same pane, and
-  the terminal's `Back to chat` brings it back with its history. One view
-  holds a session at a time, so the two never write the same session file.
-- **Context awareness.** The composer shows a chip for the note you have open
-  and the range you have selected, so what the team receives is what you can
-  see. Dismiss the chip and nothing is attached.
-- **Follow-ups ride the running turn.** Type while the team works and press
-  Enter: the message is queued and answered as the next turn, never an
-  interruption. The well shows QUEUED until its turn begins. Stop is its own
-  button, a click, and it only exists while a turn is running.
-- **The vault is context.** Type `[[` or `@` to mention any note, with a live
-  preview of the highlighted note above the list. The `+` button adds the
-  active note, any note, a folder, a tag or a property value; a folder, tag or
-  property becomes one group chip with a count, and clicking it lists every
-  note in the group.
-- **Pinned prompts.** The first prompt of a conversation stays pinned above
-  the stream, folded to one line and unfolding on click. Pin any of your own
-  messages from its corner; pins stack and survive a reopen.
-- **Readable work.** Tool rows say what was done, never the shell command:
-  `Read 04 Inner World/...`, `Edited ...`, `Ran <what it was for>`. A row with
-  something to show opens onto the raw command and the result body. Approvals
-  never hide behind a chevron.
-- **The team shows its face.** In an ICOR for Life vault the strip above the
-  composer shows every agent that worked this session, with its avatar and its
-  share of the activity. The Insights tab charts tokens over time, sessions per
-  day, the most used agents and tools, and lists every archived session. A
-  vault without a team gets a one-click setup of the eight starter agents.
-- **Structured replies.** Cards, verdict rows, decision blocks with click-to-
-  insert codes, file rows that open in Obsidian or reveal in Finder.
-- **Subagents.** When the team spawns a subagent you get a live chip, and its
-  full transcript opens in its own tab.
-- **Session archive.** Every conversation can be written back into the vault as
-  a readable folder with a manifest, so the record is yours and a session can be
-  resumed from the folder alone.
-- **Resume from the vault.** An archived conversation note carries every session
-  id the thread ever had. Right-click it, or run *Resume this conversation with
-  the AI team*, and the chat reopens with that session loaded and its own
-  history painted above the seam.
+This is a window onto a model that is already in your vault. It reads your
+vault's own instructions, so your team behaves the way you wrote it, not the
+way a plugin decided.
 
-## Requirements
+**The plugin is a window, not a second brain.** Behaviour, identity and context
+rules live in your vault's own files. It sends no instructions of its own,
+with one visible exception in settings, which makes answers come back as ICOR
+cards instead of terminal text.
 
-- **Desktop Obsidian**, 1.4.0 or newer. The plugin launches a local process,
-  which mobile cannot do.
-- **The Claude Code command line tool**, installed and signed in on the same
-  machine. This is the one that trips people up, so it has its own section.
-- **Optional: the Codex CLI**, installed and signed in with `codex login`,
-  if you want Codex as a second runtime. See "Which account does this use?".
+## Before you start
 
-### The Claude Code command line tool
+**You need the Claude Code command line tool**, installed and signed in on
+this machine. This is the one thing that trips people up:
 
-**ICOR for Life - AI Chat needs the Claude Code command line tool, which is a separate
-install from Anthropic. The Claude desktop app is not the same thing, and
-neither is claude.ai in a browser.** Having either of those gives this plugin
-nothing to talk to.
+- The **Claude desktop app** is not the same thing.
+- **claude.ai** in a browser is not the same thing.
 
-The reason is simple: on this engine the plugin has no API key field and
-makes no network calls of its own. It finds the `claude` program already
-installed on your machine and runs it. (The separate *My own API key* engine
-is the one exception; see "Where your keys live".) If that program is not there, nothing happens, and that
-is far and away the most common reason a fresh install appears to do nothing.
+The plugin has no API key field on this engine. It finds the `claude` program
+already on your machine and talks to that. If it is not installed, nothing
+happens, and that is far and away the most common reason a fresh install
+appears to do nothing.
 
-#### 1. Install it
+Desktop Obsidian 1.4.0 or newer. Mobile cannot run a local program, so the
+plugin is desktop only.
 
-**macOS, Linux, WSL**
+Optionally, the Codex command line tool as a second engine.
 
-```bash
-curl -fsSL https://claude.ai/install.sh | bash
-```
+## Getting started
 
-**Windows PowerShell**
-
-```powershell
-irm https://claude.ai/install.ps1 | iex
-```
-
-Other supported methods: `brew install --cask claude-code` on macOS,
-`winget install Anthropic.ClaudeCode` on Windows, or
-`npm install -g @anthropic-ai/claude-code`. Anthropic also publishes signed
-apt, dnf and apk repositories for Linux.
-
-Anthropic's own setup page is the authority if these ever change:
-https://code.claude.com/docs/en/setup
-
-#### 2. Check that it worked
-
-Open a terminal and run:
-
-```bash
-claude --version
-```
-
-A working install prints a version number followed by `(Claude Code)`. If you
-get `command not found`, the command line tool is not installed yet, whatever
-else you may have from Anthropic. For a longer read-only diagnostic that does
-not start a session, run `claude doctor`.
-
-#### 3. Sign in
-
-Run `claude` once in a terminal and follow the browser prompt.
-
-Claude Code requires a Pro, Max, Team, Enterprise or Console account. The free
-Claude.ai plan does not include Claude Code access. You can also point Claude
-Code at a third-party API provider instead.
-
-The plugin takes no part in any of this. There is nowhere in its settings to
-put a credential, and it never sees, stores or transmits one.
-
-#### 4. If it works in a terminal but not in Obsidian
-
-This is the PATH trap, and it is expected rather than a bug. Obsidian launched
-from the Dock, the Start menu or a desktop icon never runs a login shell, so it
-starts with the operating system's bare default PATH. Every user-level install
-location is missing from it, and a `claude` that works perfectly in your
-terminal is invisible to the plugin.
-
-The plugin already handles the ordinary case. Before it looks, it appends the
-usual install directories to PATH without reordering or dropping anything
-already there, so entries you put first keep their precedence:
-
-- **macOS:** `/opt/homebrew/bin`, `/opt/homebrew/sbin`, `~/.local/bin`,
-  `~/.claude/local`, `~/.bun/bin`, `~/.npm-global/bin`, `~/.yarn/bin`,
-  `~/bin`, `/usr/local/bin`, `/usr/bin`, `/bin`
-- **Linux:** the same list, plus `/home/linuxbrew/.linuxbrew/bin`
-- **Windows:** `%LOCALAPPDATA%\Programs\claude`, `%APPDATA%\npm`,
-  `~\.local\bin`, `~\.bun\bin`
-
-If your install lives somewhere else, two settings under **Provider** fix it:
-
-- **Claude Code path.** The executable itself, for example
-  `/usr/local/bin/claude`. Leave it empty to search automatically. If you set
-  it and it does not point at a file, the plugin tells you exactly that rather
-  than failing vaguely.
-- **Extra PATH entries.** One directory per line, searched after your own PATH.
-
-To find the value to type in, run `which claude` on macOS or Linux, or
-`where claude` on Windows.
-
-When nothing is found at all, the plugin reports how many locations it searched
-and points you at the installer, rather than failing silently.
-
-On Windows the plugin prefers `claude.exe`. The `.cmd` and `.bat` shims cannot
-be launched without a shell, so an install that provides only a shim is
-reported as that specific problem instead of a generic error.
-
-Install commands and account requirements above were verified against
-Anthropic's published setup documentation on 30 August 2026. These change from
-time to time; the linked page is always the authority.
-
-## Which account does this use?
-
-ICOR for Life - AI Chat has no login of its own. It never sees, stores or
-transmits a credential of any kind. It runs a command line tool that is
-already installed and signed in on your machine, and that tool uses whatever
-authentication you set up yourself, directly with its maker. The plugin
-neither knows nor cares which plan or key you picked.
-
-Today that tool can be Claude Code, Codex, or any of four agents that speak
-the Agent Client Protocol. You choose per conversation, and only tools the
-plugin actually found on your machine are offered. A tool that is not found
-gets an `Install` button in settings and in the launcher: it puts the
-vendor's one-line install into a terminal pane (with the ICOR for Life -
-Terminal plugin) or onto the clipboard and opens the vendor's page. The
-plugin installs nothing itself; you press Enter, then `Check again`. A conversation
-belongs to the tool that had it: its session can be resumed by that tool
-alone, and handed to the other one only as a transcript to continue from,
-never as a resume.
-
-### Claude Code
-
-A Claude subscription (Pro, Max) and an Anthropic API key
-both work, because that choice is made inside Claude Code and not
-here. The plugin neither knows nor cares which you picked.
-
-Anthropic permits this. Their Claude Code legal page sets out the
-rule that third-party developers may not offer Claude.ai login or
-route requests through plan credentials, and then states that it
-"does not prevent an end user from signing in to the unmodified
-Claude Code binary with their own Claude subscription". This
-plugin ships no copy of Claude Code, modifies nothing, brokers no
-login and stores no token: you sign in to Anthropic's own CLI, in
-your own terminal, before the plugin is ever involved.
-
-Two things stay yours:
-
-- **Usage limits.** Anthropic states that the advertised Pro and
-  Max limits "assume ordinary, individual usage of Claude Code and
-  the Agent SDK". This plugin makes heavy sessions easy: many
-  tabs, subagents, long tool loops. Ordinary interactive work is
-  what the plans are for. Leaving it running unattended in a loop
-  is not, and that is the pattern that draws attention.
-- **Terms change.** This reflects Anthropic's published terms as
-  of 30 August 2026. They can change them, and they reserve the
-  right to enforce without prior notice. Their position on
-  third-party tools moved more than once during 2026, so treat
-  the date above as the point this was checked rather than a
-  settled answer, and check again if you are relying on it.
-
-If you would rather be billed per token than against a plan,
-configure an API key in Claude Code itself. Nothing changes here.
-
-### Codex
-
-The plugin talks to the Codex CLI through the App Server that ships inside
-the `codex` binary, which OpenAI documents as the surface for third-party
-clients. Install the CLI, run `codex login` in a terminal (a ChatGPT plan or
-an API key, your choice, made inside Codex), and the plugin finds it. The
-settings tab says what it found: the path, the version, and whether Codex
-reports itself signed in. When it does not, the plugin says so and names the
-command; it never signs you in and has no field for a key or a token.
-
-What the plugin does with Codex: it spawns your own unmodified install with
-the vault as its working directory, identifies itself to it by its own name,
-streams the replies, shows every command and file change as a row, and puts
-the approvals Codex raises in front of you. What it never does: call a login
-method, read Codex's credential files, set an API key or identity variable
-for the process, pool or rotate accounts, or retry around a usage limit. A
-limit stops the turn and tells you.
-
-Codex reads your vault's `AGENTS.md` natively, so the team's rules carry
-over without a rewrite. The permission modes map onto Codex's own approval
-policy and sandbox, and the mode chip shows both names. Bypass means "never
-ask, full disk access" on Codex exactly as it does on Claude, and it is a
-per-conversation choice, never a saved default.
-
-One honest limit, measured on 2026-09-04: in every mode but Bypass, Codex
-runs commands inside its own macOS sandbox, and that sandbox blocks `open`
-and the `obsidian` command line tool (the tool cannot reach the running
-app's socket). A Codex conversation can read and write your notes, but it
-cannot open one in Obsidian for you the way a Claude Code conversation can.
-The team says so when it happens rather than pretending. Whether a narrower
-sandbox rule can admit the socket is being probed.
-
-Your data goes to OpenAI under your own ChatGPT or API terms, not through
-anything of ours. This reflects OpenAI's published Codex documentation and
-terms as of 4 September 2026; they can change without notice, so treat the
-date as the point this was checked.
+1. Install the Claude Code command line tool and sign in.
+2. Enable the plugin and open the chat pane.
+3. Ask something about the note you have open.
 
 ## Continue on your phone
 
-Every chat you run here already has a Claude Code session behind it. On
-desktop, the "Continue on your phone" button in the pane's header opens that
-same session in a real terminal with Claude Code's own Remote Control turned
-on, so the exact same conversation appears in the Claude app on your phone,
-under your own account. The pane stays open and shows a plain notice while
-this is happening; sending a message from here is blocked until you bring
-the chat back, because two live writers on one session would fork it
-silently. "Bring it back" resumes it here, headless, with anything you sent
-from your phone already in the transcript. End the terminal session first
-(Ctrl+C, or `/exit`) before pressing "Bring it back": resuming the same
-session in two places at once interleaves messages from both into one
-transcript.
-
-This needs a Claude Pro, Max, Team or Enterprise plan (Team and Enterprise
-need the account owner's Remote Control toggle turned on first) and Claude
-Code signed in with your own Claude account, not an API key: Remote Control
-only works with a claude.ai sign-in. It also needs a current Claude Code
-(2.1.154 or newer), none of Claude Code's own telemetry environment
-variables turned off, since Remote Control rides that same traffic, and
-Claude Code talking to the Anthropic API directly rather than Amazon
-Bedrock, Google Cloud's Agent Platform, Microsoft Foundry, or a custom
-`ANTHROPIC_BASE_URL`. The button explains which of these is missing rather
-than failing quietly.
-
-Nothing about this adds a new account, a new server, or a new place your
-data goes. With the ICOR for Life - Terminal plugin installed, the command
-is typed into a new terminal pane and waits for you to read it and press
-Enter - the plugin never runs it for you. Without that plugin, on macOS,
-Windows and Linux, the button opens a terminal window and runs the command
-immediately, the moment the window opens, the same as if you had typed that
-exact line yourself and pressed Enter. From there it is the same unmodified
-Claude Code binary talking to the same Anthropic account it always did;
-nothing leaves this machine except through your own Claude account, the
-same as every other conversation in this plugin.
-## Where your keys live
-
-Most of this plugin needs no key at all: the Claude Code and Codex engines
-run a tool that is already signed in on your machine (see above). The one
-part that does hold a key is **My own API key** under *Settings, AI engine on
-this device*, where you paste an Anthropic or OpenRouter key and the plugin
-calls that provider directly, billed to your account, per use.
-
-That key lives in one of two places, and you choose which:
-
-- **Obsidian's keychain** (the default). Obsidian 1.11.4 and newer keeps
-  plugin secrets in its own keychain; you can see and delete them under
-  *Settings, General, Keychain*. Under the hood Obsidian encrypts them with
-  the platform's secure storage. The keychain is per device and Obsidian Sync
-  does not carry it, so a key entered on your Mac is not on your iPad; enter
-  it once per device. Every plugin in the vault can read every entry, which
-  is why the ids carry this plugin's name:
-  - `icor-for-life-chat-anthropic-api-key`
-  - `icor-for-life-chat-openrouter-api-key`
-- **An env file in the vault.** One `KEY=value` per line, `#` for comments,
-  no quotes, no `${VAR}` expansion. The default path is
-  `06 AI Team/AI Team Knowledge/.env` (the ICOR for Life scaffold's own env
-  file); change it under *Env file location*. The plugin reads
-  `ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY`, and when you save a key here
-  it rewrites only that one line and leaves every other byte of the file as
-  it was. Keep that file out of anything that syncs or publishes the vault.
-  On an Obsidian older than 1.11.4 this is the only choice and the dropdown
-  says so.
-
-The plugin reads the place you chose and only that place; it never falls
-back to the other one, because a fallback would hide a wrong setting until
-the day it billed the wrong account. The settings tab shows, per key, where a
-value exists ("stored in Obsidian's keychain", "stored in the env file", "not
-set") and offers a *Move to ...* button that copies the key into the place
-you chose and blanks the old one. Switching the dropdown alone moves nothing.
-The paste field is a password field that is emptied after *Save*; the plugin
-never shows a key back, not in a message, not in a log, not masked.
-
-Two disclosures, as the Obsidian developer policies ask:
-
-- **An account is required** for the own-key engine: an Anthropic account
-  (`console.anthropic.com`) or an OpenRouter account (`openrouter.ai`), with
-  a key you create there. The Claude Code and Codex engines need those tools
-  signed in with their own accounts, as described above.
-- **Network use.** With your own key the plugin sends your messages, the
-  notes you attach and the vault tool results to `api.anthropic.com` or
-  `openrouter.ai` over HTTPS, and nowhere else. *Test key* makes one tiny
-  request to the same host. Nothing is sent to myICOR.
+Hand a conversation to your phone and pick it up there. From that point
+permissions follow your own command line tool's settings rather than this
+plugin's.
 
 ## Safety
 
-- Permission mode starts at **Ask**. Every tool call that wants a decision gets
-  one, from you.
-- **Bypass is never a saved default.** It is a per-conversation choice, and the
-  flag that skips permission checks is only ever set while you are explicitly in
-  that mode.
-- Sessions are read scoped to this vault. The plugin does not enumerate work
-  from your other projects.
-- **This applies to the plugin's own Ask-by-default broker only.** Once you
-  press "Continue on your phone", permission enforcement passes to your own
-  Claude Code CLI's configured defaults - on your desktop terminal and on
-  your phone alike - not to this plugin's broker.
+- **Permission mode starts at Ask.** Every tool call that wants a decision
+  gets one, from you.
+- **Bypass is never a saved default.** It is a choice you make for one
+  conversation, never a setting that quietly stays on.
+- **Sessions are scoped to this vault.** The plugin does not go looking at
+  your other projects.
+
+## Where your keys live
+
+One setting decides whether keys stay on this device or follow the vault.
+Most people need nothing here: on the default engine there is no key at all,
+because your command line tool is already signed in.
 
 ## Settings
 
-Plumbing only, by design: executable path, model, reasoning effort, default
-permission mode, archive folder and retention, structured replies, vault layout.
-There is no prompt box and no context policy, because the vault already has one.
-The only default worth naming: **Structured replies is on**, and it is the only
-setting that changes what the team is told.
+Plumbing only, by design: where the program is, which model, how hard it
+thinks, the default permission mode, where conversations are archived and for
+how long.
 
-## Install
+There is no prompt box, because your vault already has one.
 
-Copy `main.js`, `manifest.json` and `styles.css` into
-`.obsidian/plugins/icor-for-life-chat/` and enable the plugin.
+## What it touches
 
-## Development
+- **Runs the command line tool you already installed**, in your vault folder.
+- **Reads and writes notes in your vault**, with your permission, the same as
+  you would.
+- **Archives your conversations** as notes in a folder you choose.
 
-```
-npm install      # pins the Agent SDK exactly; it is pre-1.0
-npm run dev      # esbuild watch
-npm run gate     # typecheck, production build, lint, tests
-```
+**The plugin itself makes no network calls on the default engine.** Your
+command line tool talks to Anthropic under your own account.
 
-`npm run gate` is the bar for a commit. The suite protects the behaviours that
-bite in the wild rather than the ones that are easy to assert: `PATH` for a
-GUI-launched Obsidian, an abort that leaves no orphaned process and no hung
-promise, a tool whose input arrives in fragments rendering once instead of
-repeatedly half-formed, a result that arrives before its own call, and unknown
-SDK message types passing through without throwing.
+## Good to know
 
-One test in the suite is not about behaviour at all. `test/computed-style.test.mjs`
-launches headless Chrome, mounts the shipped view components under a
-reproduction of both hosts this plugin renders inside - Obsidian's own `app.css`
-and the ICOR for Life - INKLINE theme - and reads `getComputedStyle`. It exists because
-the failure it guards is invisible to every other kind of test: a host rule like
-`button:not(.clickable-icon)` computes to (0,1,1) and outranks a plugin rule
-stated by a single class, so the send pill, the badge, the chips and the code
-chip render in theme chrome while the stylesheet still reads exactly as
-authored. The host fixture paints in sentinel colours that appear nowhere in the
-design system, and the gate's last assertion sweeps EVERY element under
-`.aic-root` - so the control nobody thought to enumerate is covered too. It also
-measures the contrast ratios the design system fixes, from real pixels, in all
-four rooms.
+- **Desktop only.**
+- **Beta.** If something looks off, open an issue.
 
-It needs a Chrome or Chromium binary. It finds one on the usual paths, or set
-`CHROME_BIN`. It does not skip when it cannot find one; a gate whose passing
-state is reachable without the thing being true is worse than no gate.
+## Support
 
-`test/turn-render.test.mjs` uses the same headless browser for a different
-claim: one assistant turn renders exactly ONE message node. It replays
-`test/fixtures/recorded-turn.json`, verbatim CLI wire traffic recorded by
-`tools/frames-entry.ts`, because the defect it guards lives in a disagreement
-between two frame kinds about what a content block's index means, and a
-hand-typed sequence would only ever agree with whichever one its author had in
-mind. The census counts nodes rather than hunting for the unstyled one: an
-assertion that no raw block is visible is satisfied by hiding a node, and a
-hidden node leaves the thing that produced it alive.
+Open an issue on this repository. For security problems, see `SECURITY.md`.
 
-## For developers
+## Licence
 
-`docs/architecture.md` is the map: the event spine, the Provider seam, context, the reply action registry, the AI team layer, the style contract, the stream discipline and the extension points.
-
-## ICOR for Life Obsidian Edition
-
-ICOR for Life - AI Chat is the AI surface of the **ICOR for Life Obsidian Edition**: ICOR
-(Input, Control, Output, Refine), the productivity methodology by Paperless
-Movement / myICOR, implemented as a ready-to-use Obsidian vault. Best to be used
-in combination with:
-
-- **[ICOR for Life - INKLINE theme](https://community.obsidian.md/themes/icor-for-life-inkline)**, the
-  hand-drawn ICOR look every surface of the Edition is designed against. It is one of
-  the two hosts the shipped style gate measures this plugin against, so cards, tool
-  rows and decision blocks hold their shape in ink and paper mode alike.
-- **[ICOR for Life - Planner](https://obsidian.md/plugins?id=icor-for-life-planner)**, the weekly planning
-  board: Todoist, ClickUp, starred email and Google Calendar synced into the vault,
-  planned by drag and drop. Talk a week through here, run it there.
-- **[ICOR for Life - Focus](https://obsidian.md/plugins?id=icor-for-life-focus)**, the gravity map of your
-  vault: what you touched today sits close, older work ripples outward.
-- **[ICOR for Life - Connect](https://obsidian.md/plugins?id=icor-for-life-connect)**, your
-  app.myicor.com account inside the vault: the ICOR Journey courses from myicor.com
-  next to your notes.
-- **[ICOR for Life - Diagrams](https://obsidian.md/plugins?id=icor-for-life-diagrams)**, a fullscreen viewer
-  with zoom and pan for the mermaid diagrams in your notes, including the ones this
-  plugin drafts.
-
-The complete, preconfigured experience ships free at https://myicor.com
-
-## License
-
-What you can do: install it, run it, read the code, modify your own copy,
-and use it in your own business. What you cannot do: sell it, redistribute
-it, or offer it (original or modified) as your own product or service to
-others. Contributions: send a pull request. See `CONTRIBUTING.md`;
-submitting one grants Paperless Movement the rights described in Section 7
-of the LICENSE. This is not open source. It is source-available: the code
-is visible, personal and business use are free, resale and republishing
-are not. Bundled third-party components keep their own licenses; see
-`THIRD-PARTY-NOTICES.md`.
-
-Full text in LICENSE. Machine-readable identifier: LicenseRef-ICOR-Source-Available-1.0.
+Source-available, see `LICENSE`. Not open source. Bundled third-party
+components: see `THIRD-PARTY-NOTICES.md`.
