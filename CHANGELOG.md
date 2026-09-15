@@ -31,6 +31,14 @@ messages (`git log --grep='^0\.'`) and on the GitHub releases page.
   the plugin now says so rather than drawing a number it did not measure.
   What it would take to fix is written in `docs/architecture.md`, section
   "The AI team layer".
+- **The key-storage and network disclosure is back in the README**, under
+  "Where your keys live": the two keychain ids, that keys in Obsidian's
+  keychain stay on the device and Obsidian Sync does not carry them, the
+  env file and its two variables, and that the plugin reads only the
+  backend you chose and never the other one. `SECURITY.md` now describes
+  the own-key engine as well, engine by engine, including which two hosts
+  the plugin talks to on your own key and that nothing is proxied through
+  myICOR.
 - **Known: iOS below 16.4 cannot load the plugin bundle.** The Claude
   Agent SDK the plugin bundles contains regex lookbehind literals, which
   the JavaScript engine on those versions rejects when the bundle is
