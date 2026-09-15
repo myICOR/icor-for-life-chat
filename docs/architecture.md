@@ -33,6 +33,27 @@ Before a provider is listed in the picker it passes the conformance list: one re
 
 Codex is the second implementation on this seam, through OpenAI's App Server protocol (`src/provider/codex/`), offered as Alpha. Four Agent Client Protocol runtimes were on the seam from 2026-09-04 to 2026-09-06 and were removed because three of them were never measured against their agent; their code is in the history at 0.10.0.
 
+## AskUserQuestion, measured
+
+The tool that asks rather than acts does **not** arrive as a `request_user_dialog`. Measured 2026-09-15 against the installed CLI 2.1.272 and SDK 0.3.226 with `tools/question-entry.ts`, a harness that declared `supportedDialogKinds: ['ask_user_question']` and wired `onUserDialog` so a dialog of that kind would have been logged: `dialogCalls=0`. The CLI carries exactly two `request_user_dialog` kinds at this version, `refusal_fallback_prompt` and `auto_mode_outside_reads`, and neither is this one.
+
+What actually happens is that `AskUserQuestion` is a tool whose own permission check always answers `ask`, so the question arrives through `canUseTool` like any other permission request, with the questions in its input:
+
+```
+wire assistant tool_use:AskUserQuestion
+canUseTool AskUserQuestion
+  input {"questions":[{"question":"Which colour do you prefer?","header":"Colour",
+         "options":[{"label":"Red","description":"..."},{"label":"Blue","description":"..."}],
+         "multiSelect":false}]}
+  answering {...input, "answers":{"Which colour do you prefer?":"Red"}}
+wire user tool_result "Your questions have been answered: \"Which colour do you prefer?\"=\"Red\".
+         You can now continue with these answers in mind."
+```
+
+The tool's own `call` reads `answers`, `response` and `annotations` out of its own input, so the host answers by ALLOWING the call with those fields added. That is normally forbidden: a permission answer that changes the call is refused outright ("this session runs a call only as it was asked. Nothing ran."). `AskUserQuestion` is exempt through its own card-answer admitter, which admits exactly `answers`, `annotations`, `response` and `followUp`, only when the shown input does not already carry them, refuses `afkTimeoutMs` as a host-only field, and requires every other field to come back deep-equal. Caps from the same admitter: 8192 characters per answer string and per `response`, 32768 across all answer text. A multi-select answer is ONE string, the labels joined with `", "` and a label containing that separator or a double quote JSON-quoted.
+
+`src/provider/questions.ts` is that whole contract in one pure file: `parseQuestions` (a call to its questions, or null), `joinChoices`, `answeredInput` (the shown input plus nothing the admitter would refuse), `isAnswered`, and `approvalEvent`, the one place a `PendingApproval` becomes either `tool-approval` or the new `tool-question`. The broker (`src/provider/claude/permissions.ts`) keeps questions in a second lane whose only outcomes are an answer or `null`, so `close()` settles a question the way it settles an approval and an unanswered question cannot hang a turn past the CLI's park deadline. `StreamRenderer.renderQuestionCard` draws one card per question with the choices as buttons and a field for an answer that is not on the list, one Send for the whole stack, and settles into a record of what was answered. Tests: `test/questions.test.mjs` (pure) and the Q1 sweeps in `test/computed-style.test.mjs` (four rooms). Codex has no such surface and declines a question in words; `ProviderSession.answerQuestion` is optional for exactly that reason.
+
 ## Context
 
 `ContextRef` in `src/model/context.ts` names what the user attached: `kind` is one of `active`, `note`, `folder`, `tag`, `property`, `wip`, `tasks`, `linked`; `id` is stable per thing; `paths` are the vault-relative notes it resolved to. `ATTACH_CAP` (12) bounds how many notes travel as attachments across all refs of one message.
@@ -111,7 +132,7 @@ Release: the version in `manifest.json`, `package.json` and `versions.json`; `gi
 
 Sideload into a vault: copy `main.js`, `manifest.json`, `styles.css` into `.obsidian/plugins/icor-for-life-chat/`, then `obsidian plugin:disable id=icor-for-life-chat` and `obsidian plugin:enable id=icor-for-life-chat`. The plugin list shows the boot-time version until Obsidian restarts; the new code runs regardless.
 
-The measurement harnesses under `tools/` (`smoke-entry.ts`, `abort-entry.ts`, `frames-entry.ts`, `followup-entry.ts`, `structured-entry.ts`, `subagent-entry.ts`, built by `tools/build-smoke.mjs`) run against the real CLI. A behaviour of the runtime is measured there before the plugin relies on it, and the finding is written as a dated comment at the head of the file that depends on it.
+The measurement harnesses under `tools/` (`smoke-entry.ts`, `abort-entry.ts`, `frames-entry.ts`, `followup-entry.ts`, `structured-entry.ts`, `subagent-entry.ts`, `question-entry.ts`, built by `tools/build-smoke.mjs`) run against the real CLI. A behaviour of the runtime is measured there before the plugin relies on it, and the finding is written as a dated comment at the head of the file that depends on it.
 
 ## Extension points
 

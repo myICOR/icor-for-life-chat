@@ -56,8 +56,10 @@ import { Normalizer } from './normalize';
 import { toolPurpose, toolTarget } from '../tooling';
 import { launchPermissions } from './launch';
 import { ApprovalBroker, toPermissionAnswer } from './permissions';
+import { answeredInput, parseQuestions } from '../questions';
 import type {
-  ApprovalChoice, AuthSource, ProviderSession, SessionConfig, SessionHooks, SessionImage,
+  ApprovalChoice, AuthSource, ProviderSession, QuestionAnswer, SessionConfig, SessionHooks,
+  SessionImage,
 } from '../types';
 import type { EffortName, ModelChoice, PermissionModeName, RateLimitFacts } from '../../model/types';
 import { usageEvents } from './usage';
@@ -244,6 +246,10 @@ export class ChatSession implements ProviderSession {
     this.broker.answer(toolUseId, choice);
   }
 
+  answerQuestion(toolUseId: string, answer: QuestionAnswer): void {
+    this.broker.answerQuestion(toolUseId, answer);
+  }
+
   /** Stop the turn without tearing the session down. */
   async interrupt(): Promise<void> {
     this.broker.close();
@@ -385,9 +391,37 @@ export class ChatSession implements ProviderSession {
         ? { type: 'preset', preset: 'claude_code', append: STRUCTURED_REPLY_PROMPT }
         : { type: 'preset', preset: 'claude_code' },
       canUseTool: async (toolName, input, ctx) => {
+        const toolUseId = ctx.toolUseID ?? `${toolName}:${ctx.requestId}`;
+        /* A QUESTION COMES DOWN THIS SAME WIRE. AskUserQuestion is a tool
+           whose permission check always answers `ask`, so the questions arrive
+           here as an ordinary permission request and the answer goes back as
+           the allowed call's own input. There is no `request_user_dialog` for
+           it; that was measured, not assumed, and the measurement is written
+           out in `provider/questions.ts`. */
+        const questions = parseQuestions(toolName, input);
+        if (questions) {
+          const answer = await this.broker.requestQuestion(
+            {
+              toolUseId,
+              toolName,
+              target: toolTarget(toolName, input),
+              purpose: toolPurpose(toolName, input, config.cwd),
+              title: ctx.title ?? 'The team is asking you a question',
+              questions,
+            },
+            ctx.signal,
+          );
+          // No answer is not a refusal to grant a permission; it is a question
+          // nobody answered, and the turn has to be told which of the two it
+          // was rather than being left to time out on the CLI's park deadline.
+          if (!answer) {
+            return { behavior: 'deny', message: 'The user did not answer the question.' };
+          }
+          return { behavior: 'allow', updatedInput: answeredInput(input, answer) };
+        }
         const choice = await this.broker.request(
           {
-            toolUseId: ctx.toolUseID ?? `${toolName}:${ctx.requestId}`,
+            toolUseId,
             toolName,
             target: toolTarget(toolName, input),
             purpose: toolPurpose(toolName, input, config.cwd),

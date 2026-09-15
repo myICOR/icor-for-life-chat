@@ -3566,3 +3566,150 @@
 .aic-own-key-missing:empty { display: none; }
 
 /* ==== END REGION M1 ==== */
+
+/* ==== REGION Q1: the question card (AskUserQuestion, Felix, 2026-09-15) ==== */
+
+/* NEW CARD VOCABULARY, and this comment is the note Iris asked for.
+   Everything here rides existing tokens - no new colour, no new type size, no
+   new radius - but the SHAPE is new: an approval is three pills in a tool
+   row's right cell, and a question is a block in the column carrying a
+   question, its choices and a field. The kicker, the mono voice, the pill
+   control and the hairline are the ones the approval card and the tool rows
+   already use; the only borrowed class is `.aic-kicker`.
+
+   Q1.1 the block. One question or four, it is one card stack with one Send. */
+.aic-question {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--aic-hairline);
+  border-radius: var(--aic-r-subtle);
+  background-color: var(--aic-surface);
+}
+.aic-question.is-settled { background-color: transparent; border-color: var(--aic-hairline-subtle); }
+.aic-qcard + .aic-qcard { margin-top: 16px; border-top: 1px solid var(--aic-hairline-subtle); padding-top: 12px; }
+.aic-qtext {
+  font-family: var(--aic-body);
+  font-size: 14px;
+  color: var(--aic-paper);
+  margin-top: 4px;
+}
+
+/* Q1.2 the choices. A column, because an option carries a label AND the line
+   that says what it means, and side-by-side pills crush the second one away.
+   The chosen option is marked by the marker hairline, never by hue alone. */
+.aic-qopts { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+/* The transition is stated on the BARE class, at (0,1,0), and that is not a
+   tidy-up. The reduced-motion override at the foot of this file is (0,3,0)
+   plus last position; a motion carrier stated at (0,4,0) with the control
+   layer's three roots would outrank it, and a member who asked the system for
+   no motion would still get it. Every motion carrier in this file measures at
+   most (0,2,1) for the same reason, and the gate counts it. */
+.aic-qopt { transition: border-color 140ms var(--aic-ease); }
+.aic-root.aic-root .aic-qopt {
+  /* The explicit control reset, the same property-for-property set the
+     approval pills carry: both hosts style bare <button> above a bare class
+     rule, and an incomplete reset here goes red in the pixel gate.
+
+     TWO roots, not three, and that is a measurement. A reserved region is
+     appended AFTER the focus pen, so a control stated here at (0,4,0) would
+     TIE the pen and then beat it on source order - and its `outline: none`
+     would put the ring out on every control in this block. At (0,3,0) the
+     pen still wins, exactly as it does for every other region-resident
+     control in this file. The pre-pen approval pills can afford three roots
+     because the pen is stated after them; this block cannot.
+
+     The
+     `border` the reset would set to `none` is stated ONCE, as the hairline
+     this control actually wears: a rule that declares a property twice is a
+     rule whose author did not decide, and the hygiene gate says so. */
+  appearance: none;
+  background: none;
+  box-shadow: none;
+  outline: none;
+  margin: 0;
+  opacity: 1;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--aic-r-control);
+  border: 1px solid var(--aic-hairline);
+  background-color: transparent;
+}
+.aic-root.aic-root .aic-qopt:hover { border-color: var(--aic-hairline-emphasis); background-color: var(--aic-wash); }
+.aic-root.aic-root .aic-qopt.is-chosen { border-color: var(--aic-marker); background-color: transparent; }
+.aic-root.aic-root .aic-qopt:disabled { cursor: default; }
+.aic-qopt-label { font-family: var(--aic-body); font-size: 13px; color: var(--aic-paper); }
+.aic-qopt-desc { font-family: var(--aic-body); font-size: 12.5px; color: var(--aic-dim); }
+
+/* Q1.3 the field for an answer that is not on the list.
+   Four class repetitions for the reason the composer's textarea and the
+   context search carry them: the host theme's input family is an :is() list
+   behind four :not() clauses, which computes to (0,5,1), and three
+   repetitions only TIE it. No `outline` and no `:focus-visible` twin, so the
+   focus pen still reaches the field. */
+.aic-qother { margin-top: 8px; }
+.aic-root .aic-question input.aic-qother-input.aic-qother-input.aic-qother-input.aic-qother-input,
+.aic-root .aic-question input.aic-qother-input.aic-qother-input.aic-qother-input.aic-qother-input:hover,
+.aic-root .aic-question input.aic-qother-input.aic-qother-input.aic-qother-input.aic-qother-input:active,
+.aic-root .aic-question input.aic-qother-input.aic-qother-input.aic-qother-input.aic-qother-input:focus {
+  appearance: none;
+  background: transparent;
+  box-shadow: none;
+  margin: 0;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--aic-hairline-subtle);
+  border-radius: var(--aic-r-control);
+  font-family: var(--aic-body);
+  font-size: 13px;
+  color: var(--aic-paper);
+  caret-color: var(--aic-marker);
+}
+.aic-root .aic-question input.aic-qother-input.aic-qother-input.aic-qother-input.aic-qother-input::placeholder { color: var(--aic-faint); }
+
+/* Q1.4 Send, and the record the card becomes once it is sent. Send takes the
+   narrow-grant treatment the approval card's `Allow once` takes, because it is
+   the same weight of act: one deliberate answer, not a standing permission. */
+.aic-question-foot { display: flex; justify-content: flex-end; margin-top: 12px; }
+.aic-root.aic-root .aic-qsubmit {
+  appearance: none;
+  background: none;
+  box-shadow: none;
+  outline: none;
+  margin: 0;
+  opacity: 1;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-radius: var(--aic-r-pill);
+  padding: 2px 10px;
+  color: var(--aic-paper);
+  border: 1px solid var(--aic-hairline);
+  background-color: transparent;
+}
+/* Disabled is READABLE, not a ghost: the control is still on screen saying
+   what it is waiting for, so it keeps its border and drops to the dim rung
+   rather than to an opacity nobody can read. */
+.aic-root.aic-root .aic-qsubmit:disabled { cursor: default; color: var(--aic-faint); }
+.aic-root.aic-root .aic-qsubmit:hover { color: var(--aic-paper); background-color: var(--aic-wash); }
+.aic-root.aic-root .aic-qsubmit:disabled:hover { color: var(--aic-faint); background-color: transparent; }
+.aic-question-said {
+  margin-top: 10px;
+  font-family: var(--aic-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--aic-faint);
+}
+
+/* ==== END REGION Q1 ==== */

@@ -342,6 +342,13 @@ ${HELPERS}
        silently vacuous test. */
     findingExpandable: '.aic-finding.is-expandable',
     findingChevron: '.aic-finding.is-expandable .aic-srow-chevron',
+    /* The question card (Q1). A new control shape, so it is named here: a
+       control that is not in this map is one the loser sweep walks past by
+       name even though it still walks it by element. */
+    question: '.aic-question',
+    qopt: '.aic-qopt',
+    qother: '.aic-qother-input',
+    qsubmit: '.aic-qsubmit',
     /* The reply surface: the action bar's buttons under a reply and under
        the user's own well, and the sentence a collapsed group now says. */
     actionBar: '.aic-assistant .aic-actions',
@@ -612,6 +619,64 @@ ${HELPERS}
     } else {
       out.findingExpanded = null;
       out.findingReCollapsed = null;
+    }
+  }
+
+  /* THE QUESTION CARD (Q1). The claim is that the questions and their choices
+     are ON SCREEN and answerable, which is exactly what the bare permission
+     card could not do. Read at rest, then one click, then read again. */
+  {
+    const card = document.querySelector('.aic-question');
+    const opts = card ? Array.from(card.querySelectorAll('.aic-qopt')) : [];
+    const submit = card ? card.querySelector('.aic-qsubmit') : null;
+    if (card && opts.length > 0 && submit) {
+      const first = opts[0];
+      const second = opts[1];
+      out.question = {
+        cards: card.querySelectorAll('.aic-qcard').length,
+        role: card.getAttribute('role'),
+        questionTexts: Array.from(card.querySelectorAll('.aic-qtext')).map((q) => (q.textContent || '').trim()),
+        labelled: Array.from(card.querySelectorAll('.aic-qcard')).every((c) => {
+          const id = c.getAttribute('aria-labelledby');
+          return !!id && !!card.querySelector('#' + CSS.escape(id));
+        }),
+        options: opts.length,
+        optionLabels: opts.map((o) => (o.querySelector('.aic-qopt-label')?.textContent || '').trim()),
+        descriptions: opts.filter((o) => o.querySelector('.aic-qopt-desc')).length,
+        pressedAtRest: opts.filter((o) => o.getAttribute('aria-pressed') === 'true').length,
+        fields: card.querySelectorAll('.aic-qother-input').length,
+        fieldsNamed: Array.from(card.querySelectorAll('.aic-qother-input')).every((f) => !!f.getAttribute('aria-label')),
+        submitDisabledAtRest: submit.disabled,
+        optionCut: opts.some((o) => {
+          const label = o.querySelector('.aic-qopt-label');
+          return label ? label.scrollWidth > label.clientWidth + 1 : false;
+        }),
+        rightEdge: Math.round(Math.max(...opts.map((o) => o.getBoundingClientRect().right))),
+        cardRight: Math.round(card.getBoundingClientRect().right),
+      };
+      first.click();
+      out.questionPicked = {
+        firstPressed: first.getAttribute('aria-pressed'),
+        firstChosen: first.classList.contains('is-chosen'),
+        secondPressed: second ? second.getAttribute('aria-pressed') : null,
+        submitDisabled: submit.disabled,
+        borderChanged: getComputedStyle(first).borderTopColor !== getComputedStyle(opts[opts.length - 1]).borderTopColor,
+      };
+      // The second choice in the SAME single-select question releases the first.
+      if (second) second.click();
+      out.questionSwapped = {
+        firstPressed: first.getAttribute('aria-pressed'),
+        secondPressed: second ? second.getAttribute('aria-pressed') : null,
+      };
+      // And a second click on the one that IS taken takes it back, which puts
+      // the card back where the rest sweep found it.
+      if (second) second.click();
+      out.questionCleared = { pressed: opts.filter((o) => o.getAttribute('aria-pressed') === 'true').length, submitDisabled: submit.disabled };
+    } else {
+      out.question = null;
+      out.questionPicked = null;
+      out.questionSwapped = null;
+      out.questionCleared = null;
     }
   }
 
@@ -2418,6 +2483,46 @@ test('a cut FINDINGS claim is a control with a door, and a short one is not', ()
       assert.equal(r.chevrons, 1, `${room}: the cut finding shows ${r.chevrons} chevrons; an ellipsis alone is not a signal`);
       assert.equal(r.columns, 3, `${room}: the cut finding has no track for its door (${r.columns} columns)`);
     }
+  });
+});
+
+test('a question card shows the questions and their choices, and can be answered', () => {
+  forEachRoom((s, room) => {
+    const q = s.base.question;
+    assert.ok(q, `${room}: no question card in the fixture - the whole point of C1 is unmeasured`);
+    assert.equal(q.cards, 2, `${room}: ${q.cards} cards for two questions; one card per question`);
+    assert.equal(q.role, 'group', `${room}: the card stack is not announced as a group`);
+    assert.deepEqual(q.questionTexts, ['Which colour do you prefer?', 'Which fruits do you like?'],
+      `${room}: the questions are not on screen, which is the defect this card exists for`);
+    assert.ok(q.labelled, `${room}: a question card has no accessible name pointing at its question`);
+    assert.equal(q.options, 4, `${room}: ${q.options} option buttons for four options`);
+    assert.deepEqual(q.optionLabels, ['Red', 'Blue', 'Apple', 'Pear'], `${room}: the choices are not the ones asked`);
+    assert.equal(q.descriptions, 4, `${room}: an option lost the line that says what it means`);
+    assert.equal(q.pressedAtRest, 0, `${room}: a choice was taken before the member took one`);
+    assert.equal(q.fields, 2, `${room}: ${q.fields} free-text fields; every question takes an answer off the list`);
+    assert.ok(q.fieldsNamed, `${room}: a free-text field has no accessible name`);
+    assert.equal(q.submitDisabledAtRest, true, `${room}: Send is live with nothing answered`);
+    assert.equal(q.optionCut, false, `${room}: an option label is clipped - the same loss, one card further in`);
+    assert.ok(q.rightEdge <= q.cardRight + 1, `${room}: an option runs ${q.rightEdge - q.cardRight}px past the card`);
+  });
+});
+
+test('taking a choice marks it, releases the other, and opens Send', () => {
+  forEachRoom((s, room) => {
+    const p = s.base.questionPicked;
+    assert.ok(p, `${room}: the question card is not in the fixture`);
+    assert.equal(p.firstPressed, 'true', `${room}: the taken choice does not report itself pressed`);
+    assert.equal(p.firstChosen, true, `${room}: the taken choice carries no state class`);
+    assert.equal(p.secondPressed, 'false', `${room}: a choice nobody took reports itself pressed`);
+    assert.equal(p.submitDisabled, false, `${room}: Send stayed inert after an answer was given`);
+    assert.equal(p.borderChanged, true,
+      `${room}: the taken choice looks exactly like an untaken one - the mark is the border, never hue alone`);
+    const sw = s.base.questionSwapped;
+    assert.equal(sw.firstPressed, 'false', `${room}: single select kept two choices`);
+    assert.equal(sw.secondPressed, 'true', `${room}: the second choice was not taken`);
+    const cl = s.base.questionCleared;
+    assert.equal(cl.pressed, 0, `${room}: a choice could not be released`);
+    assert.equal(cl.submitDisabled, true, `${room}: Send stayed live with the answer taken back`);
   });
 });
 

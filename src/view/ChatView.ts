@@ -48,6 +48,7 @@ import type { PinnedPrompt } from '../model/pins';
 import type { TrayChip } from './composer/Composer';
 import { cliModule, missingProviderMessage, providerFor } from '../provider/registry';
 import { launchModelFor } from '../model/catalogCache';
+import { approvalEvent } from '../provider/questions';
 import { isProviderId } from '../provider/types';
 import type { Provider, ProviderId, ProviderSession, SessionHooks, SessionStore } from '../provider/types';
 import { authTruthLine, describeAuthTruth } from '../provider/types';
@@ -401,6 +402,13 @@ export class ChatView extends ItemView {
           return;
         }
         this.session?.answerApproval(toolUseId, choice);
+      },
+      onQuestion: (toolUseId, answer) => {
+        if (!this.session && this.remoteControlHandedOff) {
+          new Notice('Answer this in the terminal - the session moved to Remote Control.');
+          return;
+        }
+        this.session?.answerQuestion?.(toolUseId, answer);
       },
       structured: () => this.plugin.settings.structuredReplies,
       onOpenContextGroup: (label) => {
@@ -1889,15 +1897,7 @@ export class ChatView extends ItemView {
     };
     const hooks: SessionHooks = {
         onEvent: (event) => this.store.apply(event),
-        onApprovalRequest: (request) =>
-          this.store.apply({
-            kind: 'tool-approval',
-            toolUseId: request.toolUseId,
-            name: request.toolName,
-            target: request.target,
-            purpose: request.purpose,
-            stream: null,
-          }),
+        onApprovalRequest: (request) => this.store.apply(approvalEvent(request)),
         onApprovalSettled: (toolUseId, choice) =>
           this.store.apply({
             kind: 'tool-approval-resolved',
@@ -2106,15 +2106,7 @@ export class ChatView extends ItemView {
     this.composer?.setStreaming(true);
     const hooks: OwnKeyHooks = {
       onEvent: (event) => this.store.apply(event),
-      onApprovalRequest: (request) =>
-        this.store.apply({
-          kind: 'tool-approval',
-          toolUseId: request.toolUseId,
-          name: request.toolName,
-          target: request.target,
-          purpose: request.purpose,
-          stream: null,
-        }),
+      onApprovalRequest: (request) => this.store.apply(approvalEvent(request)),
       onApprovalSettled: (toolUseId, choice) =>
         this.store.apply({ kind: 'tool-approval-resolved', toolUseId, allowed: choice !== 'deny', stream: null }),
     };

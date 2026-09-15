@@ -3,6 +3,11 @@
 export * from '../src/provider/claude/normalize';
 export * from '../src/provider/claude/usage';
 export * from '../src/provider/tooling';
+/* The AskUserQuestion surface: parsing a call into questions, the answer the
+   CLI's own admitter will take back, and the one place a pending request
+   becomes an event. All pure, all measured against the real CLI - see the
+   header of src/provider/questions.ts. */
+export * from '../src/provider/questions';
 export * from '../src/provider/types';
 export * from '../src/provider/registry';
 export * from '../src/provider/cli';

@@ -7,9 +7,10 @@
  * pending request resolves to a denial, so an abort during approval is a
  * closed promise, never a hung one. */
 
-import type { ApprovalChoice, PendingApproval } from '../types';
+import type { ToolQuestion } from '../../model/types';
+import type { ApprovalChoice, PendingApproval, QuestionAnswer } from '../types';
 
-export type { ApprovalChoice, PendingApproval } from '../types';
+export type { ApprovalChoice, PendingApproval, QuestionAnswer } from '../types';
 
 export interface PermissionResultAllow<S> {
   behavior: 'allow';
@@ -27,6 +28,11 @@ export type PermissionAnswer<S> = PermissionResultAllow<S> | PermissionResultDen
 
 export class ApprovalBroker {
   private readonly pending = new Map<string, PendingApproval>();
+  /* QUESTIONS ARE A SECOND LANE, not a third `ApprovalChoice`. A question is
+   * settled by an ANSWER, and `null` is the only other outcome it has: no
+   * answer. Keeping the two lanes apart is what lets `close()` settle both
+   * without either one having to pretend to be the other. */
+  private readonly questions = new Map<string, (answer: QuestionAnswer | null) => void>();
   private closed = false;
 
   constructor(
@@ -53,18 +59,55 @@ export class ApprovalBroker {
     });
   }
 
+  /**
+   * Ask the member a QUESTION. Resolves with the answer, or with `null` when
+   * the turn was aborted or the broker closed before one arrived - which is
+   * what keeps an unanswered question from hanging a turn past the CLI's own
+   * park deadline, exactly as a pending approval cannot hang one.
+   */
+  requestQuestion(
+    input: Omit<PendingApproval, 'resolve'> & { questions: ToolQuestion[] },
+    signal: AbortSignal,
+  ): Promise<QuestionAnswer | null> {
+    if (this.closed || signal.aborted) return Promise.resolve(null);
+    return new Promise<QuestionAnswer | null>((resolve) => {
+      const settle = (answer: QuestionAnswer | null): void => {
+        if (!this.questions.has(input.toolUseId)) return;
+        this.questions.delete(input.toolUseId);
+        signal.removeEventListener('abort', onAbort);
+        // The settled signal the view already listens to. An answered question
+        // reads as allowed and an unanswered one as denied, because that is
+        // what the tool call itself goes on to be.
+        this.onSettled(input.toolUseId, answer ? 'allow-once' : 'deny');
+        resolve(answer);
+      };
+      const onAbort = (): void => settle(null);
+      signal.addEventListener('abort', onAbort, { once: true });
+      this.questions.set(input.toolUseId, settle);
+      // A question has no allow and no deny, so whatever a caller hands the
+      // approval resolver, an unanswered question is a cancelled one.
+      this.onRequest({ ...input, resolve: () => settle(null) });
+    });
+  }
+
   answer(toolUseId: string, choice: ApprovalChoice): void {
     this.pending.get(toolUseId)?.resolve(choice);
   }
 
-  /** Resolve every outstanding request as a denial. Idempotent. */
+  answerQuestion(toolUseId: string, answer: QuestionAnswer): void {
+    this.questions.get(toolUseId)?.(answer);
+  }
+
+  /** Resolve every outstanding request as a denial, and every question as
+   *  unanswered. Idempotent. */
   close(): void {
     this.closed = true;
     for (const entry of Array.from(this.pending.values())) entry.resolve('deny');
+    for (const settle of Array.from(this.questions.values())) settle(null);
   }
 
   get size(): number {
-    return this.pending.size;
+    return this.pending.size + this.questions.size;
   }
 }
 

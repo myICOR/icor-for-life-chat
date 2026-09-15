@@ -262,6 +262,7 @@ async function mount(): Promise<void> {
     '',
     {
       onApproval: () => {},
+      onQuestion: () => {},
       structured: () => false,
       renderHost: {
         home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
@@ -293,6 +294,34 @@ async function mount(): Promise<void> {
   stream2.apply(ev({ kind: 'tool-call', toolUseId: 't3', name: 'Edit', target: 'locked.md', purpose: 'Edited locked.md', input: {} }));
   stream2.apply(ev({ kind: 'tool-result', toolUseId: 't3', ok: false, detail: 'permission denied', output: 'permission denied' }));
   stream2.apply(ev({ kind: 'tool-approval', toolUseId: 't4', name: 'Write', target: '06 AI Team/note.md', purpose: 'Wrote 06 AI Team/note.md' }));
+  /* THE QUESTION CARD (Q1). Two questions, so the gate measures the stack and
+     not only one card: a single-select with descriptions, and a multi-select.
+     Drawn by the shipped renderer through the real `tool-question` event, so
+     a card the product stops rendering takes the sweep down with it. */
+  stream2.apply(ev({
+    kind: 'tool-question',
+    toolUseId: 't4q',
+    questions: [
+      {
+        question: 'Which colour do you prefer?',
+        header: 'Colour',
+        multiSelect: false,
+        options: [
+          { label: 'Red', description: 'The colour red' },
+          { label: 'Blue', description: 'The colour blue' },
+        ],
+      },
+      {
+        question: 'Which fruits do you like?',
+        header: 'Fruit',
+        multiSelect: true,
+        options: [
+          { label: 'Apple', description: 'A pome' },
+          { label: 'Pear', description: 'Also a pome' },
+        ],
+      },
+    ],
+  }));
   /* THE ROW THE EXPANSION EXISTS FOR: a Bash call whose command is long and
      whose result has a body. The closed row says what it DID (the purpose)
      and never the command; the opened row shows both. */

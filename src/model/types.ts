@@ -29,6 +29,24 @@ export interface ModelChoice {
   supportedEffortLevels: EffortName[] | null;
 }
 
+/** One choice on a `tool-question`. `description` is the trade-off line. */
+export interface ToolQuestionOption {
+  label: string;
+  /** What the choice means, in the runtime's own words. Empty when it sent none. */
+  description: string;
+}
+
+/** One question the runtime put to the member, with the choices it offered. */
+export interface ToolQuestion {
+  /** The full question text. It is also the KEY the answer is filed under. */
+  question: string;
+  /** The short chip over the card. Empty when the runtime sent none. */
+  header: string;
+  /** True when more than one choice may be taken. */
+  multiSelect: boolean;
+  options: ToolQuestionOption[];
+}
+
 /** One image the user attached to a turn. The renderer rebuilds a data URL. */
 export interface TurnImage {
   name: string;
@@ -146,6 +164,13 @@ export type ChatEventBody =
    * broker, which knows the input and can derive it, and a stored transcript
    * from before 0.6, which cannot. The renderer falls back to the name. */
   | { kind: 'tool-approval'; toolUseId: string; name: string; target: string; purpose?: string }
+  /* A QUESTION, not a permission ask. The runtime is not asking whether it may
+   * run something; it is asking the member to choose. It arrives on the same
+   * wire as an approval (see `provider/questions.ts` for the measurement) and
+   * is settled by the same `tool-approval-resolved`, but it renders as a card
+   * with the choices on it rather than as three buttons over a tool row.
+   * Added 2026-09-15. */
+  | { kind: 'tool-question'; toolUseId: string; questions: ToolQuestion[] }
   | { kind: 'tool-approval-resolved'; toolUseId: string; allowed: boolean }
   | {
       kind: 'subagent-start';

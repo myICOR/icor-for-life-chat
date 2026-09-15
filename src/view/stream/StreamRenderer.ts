@@ -10,12 +10,13 @@
 
 import { Component, MarkdownRenderer, Menu, setIcon, setTooltip } from 'obsidian';
 import type { App } from 'obsidian';
-import type { ChatEvent, ToolStatus, TurnContext, TurnImage } from '../../model/types';
+import type { ChatEvent, ToolQuestion, ToolStatus, TurnContext, TurnImage } from '../../model/types';
 import { dot, kicker, ownKeyCostLine, shortAge, shortDuration } from '../dom';
 import { activitySentence } from '../../model/activity';
 import type { BoundAction } from '../actions';
 import { fallbackPurpose } from '../../provider/tooling';
-import type { ApprovalChoice } from '../../provider/types';
+import type { ApprovalChoice, QuestionAnswer } from '../../provider/types';
+import { isAnswered, joinChoices } from '../../provider/questions';
 import { parseStructured, decisionsOf } from '../../structured/parser';
 import { remeasureDecisionBodies, remeasureRows, renderStructured } from '../../structured/render';
 import type { RenderHost } from '../../structured/render';
@@ -103,6 +104,11 @@ export interface ActionTarget {
 
 export interface StreamCallbacks {
   onApproval: (toolUseId: string, choice: ApprovalChoice) => void;
+  /* THE ANSWER TO A QUESTION CARD. Optional, because a surface that only
+     replays a stored transcript has no live session to answer into: the card
+     is drawn as a record there, with no controls, rather than with buttons
+     that would do nothing. */
+  onQuestion?: (toolUseId: string, answer: QuestionAnswer) => void;
   /* THE ACTIONS A BLOCK OFFERS, already bound to it. The renderer draws a
      bar from whatever list comes back and knows none of the names: the list
      is the plugin's registry, so an action added elsewhere shows up here
@@ -149,6 +155,8 @@ export class StreamRenderer {
   private readonly blocks = new Map<string, HTMLElement>();
   private readonly blockText = new Map<string, string>();
   private readonly tools = new Map<string, ToolRow>();
+  /** Question cards by tool-use id, so the answer can settle the one card. */
+  private readonly questionCards = new Map<string, HTMLElement>();
   /** User wells by transcript key, so a pin can repaint or scroll to its well. */
   private readonly wells = new Map<string, { el: HTMLElement; pin: HTMLElement }>();
   private group: ToolGroup | null = null;
@@ -424,6 +432,18 @@ export class StreamRenderer {
         this.renderApprovalControls(event.toolUseId);
         break;
       }
+      case 'tool-question': {
+        const row = this.upsertTool(event.toolUseId, 'AskUserQuestion', '', 'Asked you a question');
+        row.status = 'awaiting-approval';
+        row.group.forcedOpen = true;
+        this.paintTool(event.toolUseId);
+        // The card is a BLOCK in the column, not a control squeezed into a
+        // tool row's right cell: it carries a question, its choices and a
+        // field, and none of that fits where three pill buttons fit.
+        this.closeToolGroup();
+        this.renderQuestionCard(event.toolUseId, event.questions);
+        break;
+      }
       case 'tool-approval-resolved': {
         const row = this.tools.get(event.toolUseId);
         if (row) {
@@ -431,6 +451,7 @@ export class StreamRenderer {
           row.rightEl.empty();
           this.paintTool(event.toolUseId);
         }
+        this.settleQuestionCard(event.toolUseId, event.allowed);
         break;
       }
       case 'tool-result': {
@@ -1237,6 +1258,151 @@ export class StreamRenderer {
     deny.addEventListener('click', () => choose('deny'));
     once.addEventListener('click', () => choose('allow-once'));
     always.addEventListener('click', () => choose('allow-always'));
+  }
+
+  /* THE QUESTION CARD.
+   *
+   * Holger Schwan, 2026-09-15: an AskUserQuestion arrived as a bare permission
+   * card - "Claude wants to run AskUserQuestion", Allow once / Always allow /
+   * Deny - so the questions the team had actually asked were nowhere on
+   * screen and no answer could be given. The questions were in the request's
+   * input the whole time and the seam threw them away; see
+   * `provider/questions.ts` for what the wire really carries.
+   *
+   * One card per question when several arrive, because the format allows up
+   * to four and stacking them into one control would make the choices read as
+   * one list. Every card carries the same three things: the question, its
+   * choices as buttons, and a field for an answer that is not on the list.
+   * Nothing submits on its own: a member answering three questions gets one
+   * Send, so an early click cannot settle the other two by accident.
+   *
+   * The vocabulary is the approval card's - the same mono kicker, the same
+   * pill controls - with no new colour and no new type size. */
+  private renderQuestionCard(toolUseId: string, questions: ToolQuestion[]): void {
+    this.clearEmptyState();
+    const live = typeof this.callbacks.onQuestion === 'function';
+    const wrap = this.column.createDiv({ cls: 'aic-question' });
+    wrap.setAttr('role', 'group');
+    wrap.setAttr('aria-label', 'The team is asking you a question');
+    const chosen = new Map<string, Set<string>>();
+    const free = new Map<string, string>();
+    let submit: HTMLButtonElement | null = null;
+
+    const answerOf = (): QuestionAnswer => {
+      const answers: Record<string, string> = {};
+      for (const question of questions) {
+        const picked = Array.from(chosen.get(question.question) ?? []);
+        if (picked.length > 0) answers[question.question] = joinChoices(picked);
+      }
+      // Every field's text, in question order, as the one free-text answer the
+      // tool takes. The format carries a single `response`, so several fields
+      // filled in are joined rather than one of them silently winning.
+      const typed = questions
+        .map((question) => (free.get(question.question) ?? '').trim())
+        .filter((text) => text !== '');
+      const answer: QuestionAnswer = { answers };
+      if (typed.length > 0) answer.response = typed.join('\n');
+      return answer;
+    };
+    // Send stays inert until something has actually been answered: a card that
+    // can be sent empty is a control that promises the team an answer and
+    // hands it nothing.
+    const repaintSubmit = (): void => {
+      if (submit) submit.disabled = !isAnswered(answerOf());
+    };
+
+    questions.forEach((question, index) => {
+      const card = wrap.createDiv({ cls: 'aic-qcard' });
+      const id = `aic-q-${toolUseId}-${index}`;
+      card.setAttr('role', 'group');
+      card.setAttr('aria-labelledby', id);
+      if (question.header || question.multiSelect) {
+        const head = card.createDiv({ cls: 'aic-kicker' });
+        if (question.header) head.createSpan({ text: question.header });
+        if (question.header && question.multiSelect) head.createSpan({ cls: 'aic-middot', text: '·' });
+        if (question.multiSelect) head.createSpan({ text: 'PICK ANY' });
+      }
+      const text = card.createDiv({ cls: 'aic-qtext', text: question.question });
+      text.id = id;
+      const picks = new Set<string>();
+      chosen.set(question.question, picks);
+      const opts = card.createDiv({ cls: 'aic-qopts' });
+      for (const option of question.options) {
+        const btn = opts.createEl('button', { cls: 'aic-qopt', type: 'button' });
+        btn.disabled = !live;
+        btn.setAttr('aria-pressed', 'false');
+        btn.createSpan({ cls: 'aic-qopt-label', text: option.label });
+        if (option.description) {
+          btn.createSpan({ cls: 'aic-qopt-desc', text: option.description });
+        }
+        btn.addEventListener('click', () => {
+          if (picks.has(option.label)) picks.delete(option.label);
+          else {
+            // Single select is single: taking one choice releases the other.
+            if (!question.multiSelect) picks.clear();
+            picks.add(option.label);
+          }
+          for (const el of Array.from(opts.querySelectorAll<HTMLElement>('.aic-qopt'))) {
+            const label = el.querySelector('.aic-qopt-label')?.textContent ?? '';
+            const on = picks.has(label);
+            el.toggleClass('is-chosen', on);
+            el.setAttr('aria-pressed', on ? 'true' : 'false');
+          }
+          repaintSubmit();
+        });
+      }
+      const other = card.createDiv({ cls: 'aic-qother' });
+      const field = other.createEl('input', { cls: 'aic-qother-input', type: 'text' });
+      field.placeholder = question.options.length > 0 ? 'Something else' : 'Your answer';
+      field.setAttr('aria-label', `Another answer to: ${question.question}`);
+      field.disabled = !live;
+      field.addEventListener('input', () => {
+        free.set(question.question, field.value);
+        repaintSubmit();
+      });
+      field.addEventListener('keydown', (ev: KeyboardEvent) => {
+        if (ev.key !== 'Enter') return;
+        ev.preventDefault();
+        if (submit && !submit.disabled) submit.click();
+      });
+    });
+
+    if (live) {
+      const foot = wrap.createDiv({ cls: 'aic-question-foot' });
+      submit = foot.createEl('button', { cls: 'aic-qsubmit', type: 'button', text: 'Send answer' });
+      submit.disabled = true;
+      submit.addEventListener('click', () => {
+        const answer = answerOf();
+        this.settleQuestionCard(toolUseId, true, answer);
+        this.callbacks.onQuestion?.(toolUseId, answer);
+      });
+    }
+    this.questionCards.set(toolUseId, wrap);
+  }
+
+  /* THE CARD AFTER THE ANSWER. It is not removed: what was asked, and what
+     was answered, is part of the transcript. It stops being a control and
+     becomes the record of one - which is also what a replayed transcript
+     needs, since the stored stream carries the question and its resolution
+     but no live session to answer into. */
+  private settleQuestionCard(toolUseId: string, allowed: boolean, answer?: QuestionAnswer): void {
+    const wrap = this.questionCards.get(toolUseId);
+    if (!wrap || wrap.hasClass('is-settled')) return;
+    wrap.addClass('is-settled');
+    wrap.querySelector('.aic-question-foot')?.remove();
+    for (const el of Array.from(wrap.querySelectorAll<HTMLElement>('.aic-qother'))) el.remove();
+    for (const el of Array.from(wrap.querySelectorAll<HTMLButtonElement>('.aic-qopt'))) {
+      el.disabled = true;
+      // A choice that was not taken is not part of the record.
+      if (!el.hasClass('is-chosen')) el.remove();
+    }
+    const foot = wrap.createDiv({ cls: 'aic-question-said' });
+    if (!allowed) {
+      foot.setText('Not answered');
+      return;
+    }
+    const response = (answer?.response ?? '').trim();
+    foot.setText(response ? `You wrote: ${response}` : 'Answered');
   }
 
   /**

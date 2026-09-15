@@ -19,7 +19,7 @@
  *     something in `ChatEvent` degrades to fewer events, never to a new kind
  *     the renderer has to learn per provider. */
 
-import type { ChatEvent, EffortName, ModelChoice, PermissionModeName } from '../model/types';
+import type { ChatEvent, EffortName, ModelChoice, PermissionModeName, ToolQuestion } from '../model/types';
 
 /* One id per RUNTIME, never per protocol. Two runtimes are in the build:
  * Claude Code, the one the plugin was built on, and Codex, measured against
@@ -127,6 +127,20 @@ export function authTruthLine(state: AuthTruthState): string {
   }
 }
 
+/**
+ * The member's answer to a `tool-question`.
+ *
+ * `answers` is keyed by the question TEXT, because that is the key the runtime
+ * files it under; a multi-select answer is one string, the labels already
+ * joined by `joinChoices`. `response` is free text the member typed instead
+ * of, or beside, a choice. See `provider/questions.ts` for the measurement
+ * both shapes come from.
+ */
+export interface QuestionAnswer {
+  answers: Record<string, string>;
+  response?: string;
+}
+
 export interface PendingApproval {
   toolUseId: string;
   toolName: string;
@@ -134,6 +148,13 @@ export interface PendingApproval {
   /** What the call would DO, in one sentence. See `toolPurpose`. */
   purpose?: string;
   title: string;
+  /* SET ONLY ON A QUESTION. The runtime is not asking whether it may run
+   * something, it is asking the member to choose, so the view draws a card
+   * with the choices on it instead of the three-button approval card and the
+   * answer travels back through `ProviderSession.answerQuestion`. Absent on
+   * every ordinary permission request and on every provider that has no such
+   * surface. */
+  questions?: ToolQuestion[];
   resolve: (choice: ApprovalChoice) => void;
 }
 
@@ -186,6 +207,10 @@ export interface ProviderSession {
   send(text: string, images?: SessionImage[]): void;
   interrupt(): Promise<void>;
   answerApproval(toolUseId: string, choice: ApprovalChoice): void;
+  /* Answer a question card. Absent on a runtime with no question surface -
+   * Codex has none and declines such a request in words - so the view checks
+   * for it before it draws a card that could be answered. */
+  answerQuestion?(toolUseId: string, answer: QuestionAnswer): void;
   /** True only when the provider confirmed the switch. */
   setPermissionMode(mode: PermissionModeName): Promise<boolean>;
   setModel(model: string): Promise<void>;
