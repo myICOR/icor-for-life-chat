@@ -28,9 +28,20 @@ messages (`git log --grep='^0\.'`) and on the GitHub releases page.
   names what is missing in the file's own words.
 - **One line in the chat header says which of those four states you are in**,
   beside the engine line that was already there. No new panel, no new tab.
+- **Every conversation gets the block, not just the first one in the tab.**
+  Starting a new conversation in a pane that has already sent once, and
+  editing the very first message of a chat (which starts the tab over rather
+  than forking it), both count as new conversations and both get the snapshot
+  in front of their first message. Resuming an archived thread gets the
+  **current** snapshot rather than the one the thread was given on the day it
+  started, because a snapshot is as old as its thread.
 - **The week's items are called priorities and the day's is the daily
   highlight**, following the naming ruling of 2026-09-15, so one word does
   not carry both a Planner task and a My Life goal.
+- **The README says what the snapshot read means for you**, under "What it
+  touches": which file is read, that it is per device because Obsidian Sync
+  skips dot folders, and that on the own API key engine the brief travels to
+  the provider with the first message the same way pinned note context does.
 
 ## 0.14.0
 

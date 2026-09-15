@@ -242,9 +242,21 @@ export class ChatView extends ItemView {
    * Starts as "missing" rather than null: an unread file and an absent one
    * say the same true thing until the adapter has answered. */
   private snapshot: SnapshotRead = { kind: 'missing' };
-  /** The snapshot block travels with the FIRST message of this pane and no
-   * other. Sending it again every turn would bill the member for the same
-   * twenty lines on every send and tell the model nothing it had not read. */
+  /** The snapshot block travels with the FIRST message of a CONVERSATION and
+   * no other. Sending it again every turn would bill the member for the same
+   * twenty lines on every send and tell the model nothing it had not read.
+   *
+   * Per conversation, not per pane: `resetConversation()` clears this flag
+   * along with everything else the tab remembers, so a pane that has already
+   * sent once and is then started over (a new conversation, or the `'fresh'`
+   * outcome of `rewindBefore`) arms the block again.
+   *
+   * DECIDED, for `resume()` of an archived thread: it does NOT suppress the
+   * block. A thread reopened days later carries the snapshot it was given on
+   * the day it started, and that snapshot has since gone stale; the current
+   * one is worth its twenty lines once. Resume does not set this flag, so the
+   * next send from the resuming pane prepends the fresh block, exactly as a
+   * new conversation would. */
   private snapshotSent = false;
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: IcorChatPlugin) {
@@ -769,6 +781,10 @@ export class ChatView extends ItemView {
     this.turnEnded = false;
     this.startedAt = Date.now();
     this.resumeSessionId = null;
+    /* The snapshot block is owed to the first message of a conversation, and
+       this is a new conversation. Left set, a reused pane and the `'fresh'`
+       outcome of `rewindBefore` would both start without it. */
+    this.snapshotSent = false;
     this.store.state = { ...this.store.state, sessionId: null, status: 'idle', usage: null, contextTokens: null, subagents: {}, turnStartedAt: null, resumed: false, sessionStartedAt: null };
     this.plugin.subagents.retireFinished();
     this.stream?.reset();

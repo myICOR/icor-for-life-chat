@@ -10,6 +10,9 @@
  * is what the first test measures. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import {
   SNAPSHOT_PATH, SNAPSHOT_SCHEMA, SNAPSHOT_COMMAND,
   parseSnapshot, snapshotIsStale, snapshotBrief, snapshotReaderLine,
@@ -203,4 +206,37 @@ test('a missing file injects the refusal, not a brief', () => {
   assert.match(block, /Do not answer the six life questions from memory/);
   assert.match(block, /never read an absent file as an empty life/);
   assert.ok(!block.includes('Goals ('), 'nothing is invented to fill the block');
+});
+
+/* --------------------------------------------- the block is owed per
+   CONVERSATION, not per pane
+
+   `snapshotSent` is a private field on `ChatView`, and `ChatView` imports
+   Obsidian, so it cannot be constructed here: these two read the source the
+   way `hygiene.test.mjs` reads it. What they defend is a rule the changelog
+   states out loud ("the first message of a conversation") and that a single
+   missing line in `resetConversation()` quietly breaks, in the one place
+   nobody looks: the SECOND conversation in a reused pane, and the `'fresh'`
+   outcome of `rewindBefore`, which both go out without the block. */
+
+const chatView = readFileSync(
+  resolve(dirname(fileURLToPath(import.meta.url)), '..', 'src/view/ChatView.ts'),
+  'utf8',
+);
+
+test('resetConversation re-arms the snapshot block', () => {
+  const body = chatView.match(/private resetConversation\(\): void \{([\s\S]*?)\n  \}/);
+  assert.ok(body, 'resetConversation() not found in ChatView.ts');
+  assert.match(body[1], /this\.snapshotSent = false;/,
+    'a new conversation in a reused pane would go out without the snapshot block');
+});
+
+test('resume does not suppress the block, and says so', () => {
+  const body = chatView.match(/async resume\(sessionId: string\): Promise<void> \{([\s\S]*?)\n  \}/);
+  assert.ok(body, 'resume() not found in ChatView.ts');
+  assert.ok(!/this\.snapshotSent = true;/.test(body[1]),
+    'the decision recorded on the snapshotSent field is that a resumed thread gets the CURRENT snapshot, '
+    + 'because the one in its history is as old as the thread; change the field comment with the behaviour');
+  assert.match(chatView, /DECIDED, for `resume\(\)`/,
+    'the resume decision has to stay written down next to the flag');
 });

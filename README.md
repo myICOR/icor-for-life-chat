@@ -110,6 +110,17 @@ There is no prompt box, because your vault already has one.
 - **Reads and writes notes in your vault**, with your permission, the same as
   you would.
 - **Archives your conversations** as notes in a folder you choose.
+- **Reads your life snapshot, if one is there.** When the pane opens and again
+  before the first message of a conversation, the plugin reads
+  `.icor-for-life/scripts/snapshot.json` in your vault: the file the ICOR for
+  Life `life-snapshot.py` script writes, holding the names of your open goals,
+  your focus projects, your week and your key elements. It is only ever read,
+  never written, and if it is not there the pane says so and nothing is
+  invented. The file is per device, because Obsidian Sync skips folders whose
+  name starts with a dot, so running the script on your laptop does not put it
+  on your phone. On the **own API key** engine, the short brief built from it
+  travels to the model provider with the first message, the same way the note
+  context you pin already does.
 
 **The plugin itself makes no network calls on the default engine.** Your
 command line tool talks to Anthropic under your own account.
