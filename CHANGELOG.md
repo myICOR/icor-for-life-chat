@@ -5,9 +5,6 @@ messages (`git log --grep='^0\.'`) and on the GitHub releases page.
 
 ## 0.15.0
 
-> Pending Flint review. Not released until he has read the manifest and the
-> adapter access path.
-
 - **A conversation now starts knowing where your life stands.** When you
   send the first message of a chat, the plugin reads the life snapshot your
   vault's own script writes (`.icor-for-life/scripts/snapshot.json`) and
