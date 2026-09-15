@@ -33,11 +33,11 @@ A useful report contains:
   attack works in the default mode.
 - Steps to reproduce, ideally against a throwaway vault. If the finding involves
   crafted note content, include the note.
-- **Never send us a real credential or session transcript.** The plugin has no
-  key of its own, but the environment it inherits may hold secrets the agent can
-  see. Describe the credential rather than pasting it, and redact transcripts
-  before attaching them. If a secret of yours was exposed, rotate it at its
-  provider first, then report.
+- **Never send us a real credential or session transcript.** The own-key engine
+  holds a key you gave it, and the environment the Claude Code engine inherits may
+  hold secrets the agent can see. Describe the credential rather than pasting it,
+  and redact transcripts before attaching them. If a secret of yours was exposed,
+  rotate it at its provider first, then report.
 
 ## What to expect
 
@@ -69,8 +69,11 @@ plugin is at 0.x, it is early, and its interfaces are still moving.
 
 ## Scope: what this plugin actually touches
 
-This plugin is desktop-only. Its source is published in this repository, so you can
-read the parts named below rather than taking our word for them.
+This plugin runs on desktop, and on phones and tablets. The Claude Code engine is
+desktop only, because it launches a command-line tool on your machine; on a phone or
+a tablet the own-key engine is the only engine there is, and it is the one in force.
+The plugin's source is published in this repository, so you can read the parts named
+below rather than taking our word for them.
 
 **The agent runtime.** The plugin drives the Claude Agent SDK. The model can issue
 tool calls that read and write files and run commands on the machine Obsidian is
@@ -88,15 +91,42 @@ transcript can contain anything the model was shown, which includes the content 
 notes you had open and text you had selected. Transcripts are as sensitive as the
 most sensitive note in the conversation.
 
-**Credentials.** The plugin has none. It stores no API key,
-performs no login, exposes no authentication setting, and makes no
-network request of its own. It launches the Claude Code CLI
-already installed on the machine; that CLI holds whatever
-credential you gave it, in Anthropic's own storage, and the plugin
-never reads it. Nothing written to `data.json` is a secret. The
-plugin does pass its own process environment to the child, so any
-secret already present in Obsidian's environment is visible to the
-agent under a permissive mode. That is in scope below.
+**Credentials.** Which credential is in play depends on which engine you are running.
+
+*The Claude Code engine* (desktop only) holds no key of its own. It launches the
+Claude Code CLI already installed on the machine; that CLI holds whatever credential
+you gave it, in Anthropic's own storage, and the plugin never reads it. The plugin
+does pass its own process environment to the child, so any secret already present in
+Obsidian's environment is visible to the agent under a permissive mode. That is in
+scope below.
+
+*The own-key engine* (desktop, phone and tablet; since 0.13.0) runs on a key you
+paste in yourself. It stores two, one per provider: an Anthropic API key and an
+OpenRouter API key. They go into one of two backends and you choose which. The
+default is Obsidian's keychain (Settings, General, Keychain), under the ids
+`icor-for-life-chat-anthropic-api-key` and `icor-for-life-chat-openrouter-api-key`.
+The other is an env file inside your vault, `06 AI Team/AI Team Knowledge/.env` by
+default, as `ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY`; that file is plain text,
+and anyone who can read your vault can read it. **The plugin reads only the backend
+you selected, and never the other one.** A key sitting in the backend you did not
+choose counts as not set and the settings tab says so, because a silent fallback is
+how a misconfiguration hides until it bills the wrong account. No key is written to
+`data.json`, and nothing written to `data.json` is a secret. Keys in Obsidian's
+keychain stay on the device that holds them: Obsidian Sync does not carry them, so
+you enter the key once per device. **The key is never shown back to you.** The
+settings field is write-only, it is emptied after you save, and there is no reveal
+toggle, no masked preview and no key in any message the plugin prints.
+
+*What leaves the machine.* On the own-key engine the plugin does make network
+requests of its own, from the Obsidian process, carrying your key: to
+`api.anthropic.com` when the provider is Anthropic, and to `openrouter.ai` when it is
+OpenRouter. Those two hosts are the only ones it calls. Nothing is proxied, and
+nothing passes through myICOR or any other server of ours, so we never see your key,
+your prompts or your vault content. The OpenRouter request carries `HTTP-Referer:
+https://myicor.com` and `X-Title` because OpenRouter's own API uses them as
+attribution labels; they are strings inside the request to OpenRouter, not a call to
+us. On the Claude Code engine the plugin makes no network request of its own; the CLI
+it launches makes its own.
 
 **In scope, and we want to hear about it. In rough order of how much we care:**
 
