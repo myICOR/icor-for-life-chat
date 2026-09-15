@@ -31,6 +31,13 @@ if (typeof minAppVersion !== 'string' || !/^\d+\.\d+\.\d+$/.test(minAppVersion))
 const raw = readFileSync(VERSIONS, 'utf8');
 const before = JSON.parse(raw);
 
+if (before === null || typeof before !== 'object' || Array.isArray(before)) {
+  throw new Error(
+    `${VERSIONS} did not parse to a plain object: ${Object.prototype.toString.call(before)}. ` +
+    `Spreading anything else would silently produce a map with numeric keys.`,
+  );
+}
+
 if (Object.prototype.hasOwnProperty.call(before, version)) {
   if (before[version] !== minAppVersion) {
     console.log(

@@ -3,11 +3,16 @@
 # `npm run gate` is typecheck, production build, lint (source and stylesheet)
 # and the tests, including the headless Chrome sweeps. It never skips.
 #
+# There are no required status checks on `main`: Tom pushes to main directly
+# and a required check would block him. This workflow is therefore advisory on
+# a push and blocking only by a human reading it. The one place a gate is a
+# hard stop is the `publish` job in release-please.yml, which runs the same
+# `npm run gate` at the exact commit it is about to release.
+#
 # workflow_dispatch is here on purpose and is not a convenience. A pull request
 # opened by GITHUB_TOKEN does not trigger other workflows, so the release-please
-# pull request gets no automatic `gate` run. Dispatching this workflow against
-# that branch produces a `gate` check on the same head commit, which is what
-# branch protection looks at. See the note in .github/workflows/release-please.yml.
+# pull request gets no automatic run and has to be dispatched onto its head
+# commit. See the note in .github/workflows/release-please.yml.
 
 name: gate
 
@@ -25,8 +30,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # The job id is the status-check context name. Branch protection requires
-  # `gate`, so this id must not be renamed without updating the protection.
   gate:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -36,12 +39,46 @@ jobs:
       CHROME_BIN: /usr/bin/google-chrome
     steps:
       - name: Check out the commit under test
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
+      - name: versions.json is append-only
+        # An earlier release is still installed in somebody's vault and its
+        # floor must not move. A hand-edit overwrote the 0.14.0 key once.
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BASE:-}" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            echo "No base commit for this event (a dispatch, or a new branch). Nothing to compare."
+            exit 0
+          fi
+          git fetch --depth=1 origin "$BASE"
+          git show "$BASE:versions.json" > /tmp/base-versions.json
+          jq -en \
+            --slurpfile b /tmp/base-versions.json \
+            --slurpfile n versions.json \
+            '$b[0] | to_entries | all(.[]; $n[0][.key] == .value)' \
+            || { echo "versions.json changed or removed an earlier key. The map is append-only."; exit 1; }
+          echo "Every key present at $BASE is unchanged."
+
+      - name: The three version fields agree
+        # package.json, manifest.json and release-please's own bookmark are the
+        # same number, or the next release computes from the wrong base.
+        # package-lock.json is deliberately not asserted here: main carries a
+        # known lock drift that the next release pull request repairs.
+        run: |
+          set -euo pipefail
+          package_version="$(jq -r '.version' package.json)"
+          manifest_version="$(jq -r '.version' manifest.json)"
+          seed_version="$(jq -r '.["."]' .release-please-manifest.json)"
+          echo "package=$package_version manifest=$manifest_version release-please-seed=$seed_version"
+          [ "$package_version" = "$manifest_version" ]
+          [ "$package_version" = "$seed_version" ]
+
       - name: Set up Node
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v7.0.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
           cache: npm

@@ -12,6 +12,8 @@ Commit messages follow Conventional Commits v1.0.0 (https://www.conventionalcomm
 The version bump, the CHANGELOG entry, the `versions.json` key and the GitHub release are all derived from
 those messages by release-please, so a message that lies about its type ships the wrong version number.
 
+Push to `main` directly. The only pull request in this repository is the release one, which release-please opens.
+
 Run the repo's gate (`npm run gate` where it exists) before opening the
 pull request.
 
