@@ -108,9 +108,14 @@ function wireRow(el: HTMLElement): void {
   window.requestAnimationFrame(() => measureRow(el));
 }
 
-/** Is any span in the row wider than the box it was given? */
+/** Is any span in the row wider than the box it was given?
+ *
+ * `.aic-finding-claim` is in this list for the same reason the three
+ * `.aic-srow-*` spans are: the claim line is `nowrap` plus an ellipsis, so a
+ * long claim was cut with no door and no signal (Daniel Piatk, 2026-09-15).
+ * A measurer that does not read a span is a row that can never open. */
 function rowIsCut(el: HTMLElement): boolean {
-  for (const sel of ['.aic-srow-label', '.aic-srow-value', '.aic-srow-qual']) {
+  for (const sel of ['.aic-srow-label', '.aic-srow-value', '.aic-srow-qual', '.aic-finding-claim']) {
     const span = el.querySelector(sel);
     if (span && span.instanceOf(HTMLElement) && span.scrollWidth > span.clientWidth + 1) return true;
   }
@@ -165,10 +170,13 @@ function paintRow(el: HTMLElement): void {
   el.setAttr('aria-label', open ? 'Collapse the row' : 'Show the full row');
 }
 
-/** Re-measure every card row under `root`. The cut is a function of width. */
+/** Re-measure every card row under `root`. The cut is a function of width.
+ *
+ * A finding is a row that opens on the same terms as a card row, so it is
+ * swept here too; leaving it out was half of why a cut claim stayed cut. */
 export function remeasureRows(root: HTMLElement): void {
   const rows: HTMLElement[] = [];
-  for (const el of Array.from(root.querySelectorAll('.aic-srow'))) {
+  for (const el of Array.from(root.querySelectorAll('.aic-srow, .aic-finding'))) {
     if (el.instanceOf(HTMLElement)) rows.push(el);
   }
   remeasureAll(rows);
@@ -282,6 +290,8 @@ class Renderer {
           main.createDiv({ cls: 'aic-finding-claim', text: finding.claim });
           if (finding.ownership) main.createDiv({ cls: 'aic-finding-own', text: finding.ownership });
           if (finding.evidence) main.createDiv({ cls: 'aic-finding-ev', text: finding.evidence });
+          // The claim line clips like a card value, so it earns the same door.
+          wireRow(el);
           return el;
         });
         break;

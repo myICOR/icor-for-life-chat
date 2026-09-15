@@ -1596,7 +1596,11 @@
    its INNER edge lands on the same line as the 1px rail beside it. */
 .aic-rail.is-first { border-left-width: 2px; margin-left: -17px; }
 
-.aic-finding { display: grid; grid-template-columns: 16px 1fr; gap: 8px; align-items: baseline; margin-top: 8px; }
+/* `minmax(0, 1fr)`, not `1fr`: a bare `1fr` floors at the track's min-content,
+   which for a nowrap claim is the whole sentence, so the grid grew past the
+   card and the claim's own ellipsis never engaged. The finding's door (R1.4)
+   needs a track that can actually cut. */
+.aic-finding { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; align-items: baseline; margin-top: 8px; }
 .aic-finding-claim {
   font-size: 14px;
   font-weight: 560;
@@ -3388,6 +3392,36 @@
   text-overflow: clip;
   overflow-wrap: anywhere;
   line-height: 1.5;
+}
+
+/* R1.4 THE FINDING'S CLAIM TAKES THE SAME DOOR (Daniel Piatk, 2026-09-15).
+   The claim line is nowrap plus an ellipsis, so it was cut exactly the way a
+   card value was, and had none of the three things R1 gives a cut row: a
+   measurer that reads it, a chevron, and an open state. The vocabulary is
+   NOT new - the chevron is `.aic-srow-chevron` and the state classes are the
+   same `is-expandable` / `is-expanded` - only the carrier changed. */
+/* The grid ITEM's own floor, the twin of the track above: a grid item's
+   automatic minimum size is its min-content, so the track's minmax(0,...) buys
+   nothing until the item says it may shrink. `.aic-srow-text` carries the same
+   declaration for the same reason. */
+.aic-finding-main { min-width: 0; }
+.aic-finding.is-expandable .aic-srow-chevron { display: inline-flex; }
+/* The third track exists only on a cut finding, for the reason stated in R1.1:
+   a zero-width track still costs its gap. */
+.aic-finding.is-expandable { cursor: pointer; border-radius: 2px; grid-template-columns: 16px minmax(0, 1fr) 12px; }
+.aic-finding.is-expandable:hover .aic-srow-chevron,
+.aic-finding.is-expandable:focus-visible .aic-srow-chevron { color: var(--aic-marker); }
+.aic-finding.is-expandable:focus-visible { outline: 2px solid var(--aic-marker); outline-offset: 2px; }
+.aic-finding.is-expanded .aic-srow-chevron .svg-icon { transform: rotate(180deg); }
+/* Open: the claim wraps and NOTHING is hidden. The nowrap, the ellipsis and
+   the overflow all come off together, and a long token breaks rather than
+   running past the card. */
+.aic-finding.is-expanded { align-items: start; }
+.aic-finding.is-expanded .aic-finding-claim {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
 }
 
 /* R1.3 a sub-head over prose inside a card: the kicker keeps the band's own

@@ -337,6 +337,11 @@ ${HELPERS}
        and not a silently vacuous row test. */
     srowExpandable: '.aic-srow.is-expandable',
     srowChevron: '.aic-srow.is-expandable .aic-srow-chevron',
+    /* The same claim for a FINDING (R1.4). Listed for the same reason: a
+       fixture whose long claim stopped being cut is a red build, not a
+       silently vacuous test. */
+    findingExpandable: '.aic-finding.is-expandable',
+    findingChevron: '.aic-finding.is-expandable .aic-srow-chevron',
     /* The reply surface: the action bar's buttons under a reply and under
        the user's own well, and the sentence a collapsed group now says. */
     actionBar: '.aic-assistant .aic-actions',
@@ -565,6 +570,48 @@ ${HELPERS}
     } else {
       out.srowExpanded = null;
       out.srowReCollapsed = null;
+    }
+  }
+
+  /* THE FINDINGS CLAIM (R1.4). Same three questions as the card row: is a cut
+     claim a control, does it carry a door, and does opening it hide nothing. */
+  out.findings = Array.from(document.querySelectorAll('.aic-finding')).map((r) => {
+    const claim = r.querySelector('.aic-finding-claim');
+    return {
+      claim: (claim?.textContent || '').trim().slice(0, 40),
+      claimCut: claim ? claim.scrollWidth > claim.clientWidth + 1 : false,
+      expandable: r.classList.contains('is-expandable'),
+      role: r.getAttribute('role'),
+      tabindex: r.getAttribute('tabindex'),
+      expanded: r.getAttribute('aria-expanded'),
+      cursor: getComputedStyle(r).cursor,
+      chevrons: Array.from(r.querySelectorAll('.aic-srow-chevron')).filter((c) => getComputedStyle(c).display !== 'none').length,
+      columns: getComputedStyle(r).gridTemplateColumns.split(' ').length,
+    };
+  });
+  {
+    const cut = Array.from(document.querySelectorAll('.aic-finding')).find(
+      (r) => r.classList.contains('is-expandable'),
+    );
+    if (cut) {
+      const collapsedHeight = Math.round(cut.getBoundingClientRect().height);
+      cut.click();
+      const claim = cut.querySelector('.aic-finding-claim');
+      out.findingExpanded = {
+        expanded: cut.getAttribute('aria-expanded'),
+        name2: cut.getAttribute('aria-label') || '',
+        wrap: claim ? getComputedStyle(claim).whiteSpace : null,
+        claimCut: claim ? claim.scrollWidth > claim.clientWidth + 1 : null,
+        collapsedHeight,
+        expandedHeight: Math.round(cut.getBoundingClientRect().height),
+        rowRight: Math.round(cut.getBoundingClientRect().right),
+        claimRight: claim ? Math.round(claim.getBoundingClientRect().right) : 0,
+      };
+      cut.click();
+      out.findingReCollapsed = cut.getAttribute('aria-expanded');
+    } else {
+      out.findingExpanded = null;
+      out.findingReCollapsed = null;
     }
   }
 
@@ -2345,6 +2392,47 @@ test('an opened card row hides nothing, and closes again', () => {
     assert.ok(e.rightRight <= e.rowRight + 1, `${room}: the opened value runs ${e.rightRight - e.rowRight}px past the row`);
     assert.notEqual(e.chevronRotation, 'none', `${room}: the open row's chevron did not turn`);
     assert.equal(s.base.srowReCollapsed, 'false', `${room}: a second click did not close the row`);
+  });
+});
+
+test('a cut FINDINGS claim is a control with a door, and a short one is not', () => {
+  forEachRoom((s, room) => {
+    const rows = s.base.findings;
+    assert.ok(rows.length >= 2, `${room}: only ${rows.length} findings - the fixture shrank`);
+    const cut = rows.filter((r) => r.expandable);
+    const fits = rows.filter((r) => !r.expandable);
+    assert.ok(cut.length >= 1, `${room}: no finding is cut, so the door is guarding nothing`);
+    assert.ok(fits.length >= 1, `${room}: every finding is cut, so "a claim that fits is inert" is untested`);
+    for (const r of fits) {
+      assert.equal(r.claimCut, false, `${room}: the "${r.claim}" finding is cut and not expandable - silent loss`);
+      assert.equal(r.role, null, `${room}: a finding that fits took a role`);
+      assert.equal(r.tabindex, null, `${room}: a finding that fits took a tab stop`);
+      assert.equal(r.chevrons, 0, `${room}: a finding that fits grew a chevron - an empty promise`);
+      assert.equal(r.columns, 2, `${room}: a finding that fits pays for the door's track (${r.columns} columns)`);
+    }
+    for (const r of cut) {
+      assert.equal(r.role, 'button', `${room}: the cut "${r.claim}" finding is not a control`);
+      assert.equal(r.tabindex, '0', `${room}: the cut "${r.claim}" finding has no tab stop`);
+      assert.equal(r.expanded, 'false', `${room}: the cut finding does not report its state`);
+      assert.equal(r.cursor, 'pointer', `${room}: the cut finding does not look clickable`);
+      assert.equal(r.chevrons, 1, `${room}: the cut finding shows ${r.chevrons} chevrons; an ellipsis alone is not a signal`);
+      assert.equal(r.columns, 3, `${room}: the cut finding has no track for its door (${r.columns} columns)`);
+    }
+  });
+});
+
+test('an opened FINDINGS claim hides nothing, and closes again', () => {
+  forEachRoom((s, room) => {
+    const e = s.base.findingExpanded;
+    assert.ok(e, `${room}: the long finding is not in the fixture`);
+    assert.equal(e.expanded, 'true', `${room}: the click did not open the finding`);
+    assert.equal(e.name2, 'Collapse the row', `${room}: the open finding's name is "${e.name2}"`);
+    assert.notEqual(e.wrap, 'nowrap', `${room}: the opened claim still refuses to wrap`);
+    assert.equal(e.claimCut, false, `${room}: the opened claim is still cut`);
+    assert.ok(e.expandedHeight > e.collapsedHeight,
+      `${room}: the opened finding is still ${e.expandedHeight}px tall, the same as closed`);
+    assert.ok(e.claimRight <= e.rowRight + 1, `${room}: the opened claim runs ${e.claimRight - e.rowRight}px past the card`);
+    assert.equal(s.base.findingReCollapsed, 'false', `${room}: a second click did not close the finding`);
   });
 });
 

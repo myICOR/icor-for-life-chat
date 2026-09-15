@@ -64,6 +64,27 @@ const DOC: StructuredDoc = {
             },
           ],
         },
+        /* A FINDINGS block, and the first finding is the one the door exists
+           for (Daniel Piatk, 2026-09-15): a claim long enough to be cut at any
+           sane pane width. The second fits, so "a finding that fits is inert"
+           is tested too. */
+        {
+          kind: 'findings',
+          findings: [
+            {
+              disposition: 'unowned',
+              claim: 'the FINDINGS claim line is cut at the pane width and the clause that changes what the finding actually means lives right at the end of it, where the ellipsis used to swallow it whole',
+              ownership: 'Felix',
+              evidence: 'render.ts:278',
+            },
+            {
+              disposition: 'handled',
+              claim: 'a short claim fits',
+              ownership: 'Felix',
+              evidence: 'styles.css',
+            },
+          ],
+        },
         { kind: 'insight', text: 'A specificity fix not counted against the competing selector is a guess.' },
         /* A FILES block, and it is here to keep a probe honest rather than to
            decorate the fixture. `.aic-icon-btn` used to reach the DOM through
