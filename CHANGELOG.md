@@ -3,6 +3,41 @@
 Notable changes per release. Older releases are described in their commit
 messages (`git log --grep='^0\.'`) and on the GitHub releases page.
 
+## 0.14.0
+
+- **A question from the team is now a question you can answer.** When the
+  team asks a multiple-choice clarifying question, the pane draws the
+  questions it asked: one card per question, the choices as rows, a field
+  for an answer that is not on the list, and one Send for the whole stack,
+  so an early click cannot settle the rest. It used to draw a bare
+  permission card over Allow once, Always allow and Deny, with the
+  questions nowhere on screen and no way to answer them. Reported by
+  Holger Schwan.
+- **A long FINDINGS claim opens like every other card row.** A claim too
+  long to fit now carries the chevron, takes a tab stop, and opens to show
+  the rest of the sentence. It used to clip with an ellipsis and no way to
+  reach what was cut. Reported by Daniel Piatk.
+- **Team Insights no longer reads a Codex session as one in which no
+  specialist ran.** A runtime that cannot report its subagents now says so
+  on its own session row, and that session leaves the agent ranking and
+  its denominator instead of sitting in them carrying a zero. The number
+  of excluded sessions is printed beside the ranking. Sessions archived
+  before this release get the same treatment from their manifest, so no
+  archive is rewritten. Reported by Antonio Bradley.
+- **What Codex cannot tell you yet.** The Codex provider forwards no
+  subagent boundary, so a Codex session carries no specialist detail
+  anywhere in Team Insights and its tool calls all read as the main
+  thread. This is a missing measurement, not a measurement of zero, and
+  the plugin now says so rather than drawing a number it did not measure.
+  What it would take to fix is written in `docs/architecture.md`, section
+  "The AI team layer".
+- **Known: iOS below 16.4 cannot load the plugin bundle.** The Claude
+  Agent SDK the plugin bundles contains regex lookbehind literals, which
+  the JavaScript engine on those versions rejects when the bundle is
+  parsed. This has been true since 0.13.0, the first release that ran on
+  mobile at all, and is not new in 0.14.0. Desktop, and iOS and iPadOS
+  16.4 or newer, are unaffected.
+
 ## 0.13.0
 
 - **Keys move to Obsidian secret storage.** The own-key engine's Anthropic
