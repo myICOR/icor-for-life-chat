@@ -23,6 +23,9 @@ export * from '../src/model/pins';
 export * from '../src/model/activity';
 export * from '../src/view/actions';
 export * from '../src/team/memoryParse';
+/* The life snapshot's reader: parse, staleness, the brief and the three
+ * reader lines. Pure; only `src/team/snapshot.ts` touches the adapter. */
+export * from '../src/team/snapshotParse';
 export { STRUCTURED_REPLY_PROMPT, INK_PLUGIN_NAME, PLUGIN_ID } from '../src/constants';
 export * from '../src/model/facts';
 export * from '../src/model/format';

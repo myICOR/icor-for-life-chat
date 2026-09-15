@@ -3,6 +3,35 @@
 Notable changes per release. Older releases are described in their commit
 messages (`git log --grep='^0\.'`) and on the GitHub releases page.
 
+## 0.15.0
+
+> Pending Flint review. Not released until he has read the manifest and the
+> adapter access path.
+
+- **A conversation now starts knowing where your life stands.** When you
+  send the first message of a chat, the plugin reads the life snapshot your
+  vault's own script writes (`.icor-for-life/scripts/snapshot.json`) and
+  puts it in front of that message, so the team answers the six everyday
+  questions from the file: your goals, the projects you put in focus, this
+  week's priorities, today's highlight, your key elements, and the topics
+  that have had your attention. It used to walk the folders and guess, on
+  every single conversation.
+- **The plugin reads that file, and never writes it and never runs the
+  script.** It checks the file's schema before trusting a field, and a file
+  from a newer script is refused rather than half-read.
+- **A snapshot that is old, absent or incomplete says so, in one fixed
+  sentence.** Old: the team names the date it is answering from and the
+  command for a fresh one. Absent: it says the snapshot has not been made on
+  this device, gives you the line to run, and offers to read the folders
+  instead. It never answers the six questions from memory and never reads a
+  missing file as an empty life. Incomplete: it answers what is there and
+  names what is missing in the file's own words.
+- **One line in the chat header says which of those four states you are in**,
+  beside the engine line that was already there. No new panel, no new tab.
+- **The week's items are called priorities and the day's is the daily
+  highlight**, following the naming ruling of 2026-09-15, so one word does
+  not carry both a Planner task and a My Life goal.
+
 ## 0.14.0
 
 - **A question from the team is now a question you can answer.** When the

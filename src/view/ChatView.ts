@@ -60,6 +60,8 @@ import {
 } from '../engine';
 import type { EngineChoice, EngineMessage, OwnKeyHooks, OwnKeySettings } from '../engine';
 import { renderEngineStatus } from './EngineStatus';
+import { readLifeSnapshot, snapshotContextBlock, snapshotStatusLine } from '../team/snapshot';
+import type { SnapshotRead } from '../team/snapshot';
 import { vaultToolsContextFor } from './ownKeyVault';
 import type { ChatEvent, EffortName, PermissionModeName, TurnContext, TurnImage } from '../model/types';
 import { NO_FOLLOW_UPS, followUpSent, selfStartedTurn, turnAborted, turnEnded } from '../model/followups';
@@ -236,6 +238,14 @@ export class ChatView extends ItemView {
   private ownKeyChain: Promise<void> = Promise.resolve();
   /** Rung above the pins; painted by `renderEngineStatus`. Null until `onOpen`. */
   private engineStatusEl: HTMLElement | null = null;
+  /** The life snapshot as this pane last read it (`src/team/snapshot.ts`).
+   * Starts as "missing" rather than null: an unread file and an absent one
+   * say the same true thing until the adapter has answered. */
+  private snapshot: SnapshotRead = { kind: 'missing' };
+  /** The snapshot block travels with the FIRST message of this pane and no
+   * other. Sending it again every turn would bill the member for the same
+   * twenty lines on every send and tell the model nothing it had not read. */
+  private snapshotSent = false;
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: IcorChatPlugin) {
     super(leaf);
@@ -289,19 +299,51 @@ export class ChatView extends ItemView {
    */
   private refreshEngineStatus(): void {
     if (!this.engineStatusEl) return;
+    /* The snapshot's state rides the SAME line rather than opening a second
+       one. It is the same kind of statement: a standing fact about what this
+       conversation is running on, not a measured number for the readout
+       strip. One line stays one line. */
+    renderEngineStatus(
+      this.engineStatusEl,
+      `${this.engineLine()} ${snapshotStatusLine(this.snapshot)}`,
+    );
+  }
+
+  /** Which engine this conversation runs on, and for Claude Code the desktop auth truth. */
+  private engineLine(): string {
     if (this.engine === 'own-key') {
       const settings = loadOwnKeySettings(this.app);
-      renderEngineStatus(
-        this.engineStatusEl,
-        `My own key engine: ${MODEL_PROVIDER_NAMES[settings.provider]}, ${this.ownKeyModelLabel(settings)}.`,
-      );
-      return;
+      return `My own key engine: ${MODEL_PROVIDER_NAMES[settings.provider]}, ${this.ownKeyModelLabel(settings)}.`;
     }
     // This TAB's own truth only - never a value borrowed from another open
     // conversation, which could be running with a different sign-in.
     const found = this.plugin.detections.claude?.found;
     const state = describeAuthTruth(found, this.session?.authSource ?? 'unknown');
-    renderEngineStatus(this.engineStatusEl, authTruthLine(state));
+    return authTruthLine(state);
+  }
+
+  /**
+   * The life snapshot, re-read from the machine layer. Cheap (one small JSON
+   * file) and never cached across a send, because the session-start hook or
+   * the skill prerun may have refreshed the file since this tab opened.
+   */
+  private async refreshSnapshot(): Promise<void> {
+    this.snapshot = await readLifeSnapshot(this.app);
+    this.refreshEngineStatus();
+  }
+
+  /**
+   * The snapshot block ahead of the first message of the conversation, so the
+   * six everyday questions are answered from the file rather than from a
+   * folder walk or from memory. Prepended to the context preamble and
+   * therefore visible in the transcript, which is the rule the preamble
+   * already follows: what the model saw stays recoverable from the record.
+   */
+  private withSnapshot(prompt: string): string {
+    if (this.snapshotSent) return prompt;
+    this.snapshotSent = true;
+    const block = snapshotContextBlock(this.snapshot);
+    return block ? `${block}\n\n${prompt}` : prompt;
   }
 
   override getViewType(): string {
@@ -389,6 +431,10 @@ export class ChatView extends ItemView {
     this.statusline = pane.statusline;
     this.engineStatusEl = pane.engineStatus;
     this.refreshEngineStatus();
+    /* Not awaited: the pane opens on the vault's own timing, and the status
+       line repaints itself when the adapter answers. A hidden folder fires no
+       vault event, so this is a read, never a subscription (GL-1008). */
+    void this.refreshSnapshot();
 
     this.stream = new StreamRenderer(this.app, this, this.column, '', {
       onApproval: (toolUseId, choice) => {
@@ -1931,6 +1977,10 @@ export class ChatView extends ItemView {
       this.composer?.setStreaming(false);
       return;
     }
+    /* Read before any of the turn's bookkeeping, and only while the block is
+       still owed: once it has travelled, a send never waits on the adapter
+       again. Both engines pass through here, so neither needs its own read. */
+    if (!this.snapshotSent) await this.refreshSnapshot();
     if (this.engine === 'own-key') return this.submitOwnKey(text, attachments);
     const session = this.ensureSession();
     if (!session) {
@@ -1989,7 +2039,7 @@ export class ChatView extends ItemView {
     this.renderPins();
     this.refreshDecisions();
     this.refreshContext();
-    session.send(withContext(text, ctx, refs), images);
+    session.send(this.withSnapshot(withContext(text, ctx, refs)), images);
     this.scrollToBottom();
   }
 
@@ -2050,7 +2100,7 @@ export class ChatView extends ItemView {
     this.refreshContext();
     this.scrollToBottom();
 
-    const prompt = withContext(text, ctx, refs);
+    const prompt = this.withSnapshot(withContext(text, ctx, refs));
     this.ownKeyChain = this.ownKeyChain.then(() => this.runOwnKeyTurnNow(prompt));
     await this.ownKeyChain;
   }
