@@ -1,0 +1,65 @@
+# The merge condition, run by a machine instead of by memory.
+#
+# `npm run gate` is typecheck, production build, lint (source and stylesheet)
+# and the tests, including the headless Chrome sweeps. It never skips.
+#
+# workflow_dispatch is here on purpose and is not a convenience. A pull request
+# opened by GITHUB_TOKEN does not trigger other workflows, so the release-please
+# pull request gets no automatic `gate` run. Dispatching this workflow against
+# that branch produces a `gate` check on the same head commit, which is what
+# branch protection looks at. See the note in .github/workflows/release-please.yml.
+
+name: gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The job id is the status-check context name. Branch protection requires
+  # `gate`, so this id must not be renamed without updating the protection.
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      CHROME_BIN: /usr/bin/google-chrome
+    steps:
+      - name: Check out the commit under test
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Prove a real Chrome exists before the gate needs it
+        # test/dom/chrome.mjs fails rather than skips when Chrome is missing.
+        # Failing here instead names the cause in one line at the top of the log.
+        run: |
+          set -euo pipefail
+          if [ ! -x "$CHROME_BIN" ]; then
+            echo "No Chrome at $CHROME_BIN. The computed-style sweeps cannot run."
+            echo "Point CHROME_BIN at a Chrome or Chromium binary on the runner."
+            exit 1
+          fi
+          "$CHROME_BIN" --version
+
+      - name: Install exactly what the lockfile says
+        run: npm ci
+
+      - name: Run the gate
+        run: npm run gate
