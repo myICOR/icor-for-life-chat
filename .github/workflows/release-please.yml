@@ -1,0 +1,160 @@
+# The release pull request is the only thing that touches a version field.
+#
+# Three jobs, in order:
+#   1. release-please  opens or grooms the release pull request from the
+#      Conventional Commits on main, and on merge tags the release.
+#   2. versions-json   appends this release's key to versions.json on the
+#      release pull request branch. release-please has no native updater for
+#      the Obsidian versions map and JSON cannot carry a marker comment, so a
+#      script step is the honest route rather than a `generic` updater.
+#   3. publish         builds at the tag and uploads the three release assets.
+#
+# GITHUB_TOKEN only. No personal access token, no new secret.
+#
+# KNOWN LIMITATION, stated rather than papered over: a pull request opened by
+# GITHUB_TOKEN does not trigger other workflows. The release pull request will
+# therefore NOT get an automatic `gate` run. The fallback is to dispatch the
+# gate workflow against the release branch, which writes a `gate` check on the
+# same head commit and satisfies branch protection:
+#
+#   gh workflow run gate.yml --ref "$(gh pr view <number> --json headRefName -q .headRefName)"
+#
+# The same limitation applies to the versions-json commit below: it is pushed
+# with GITHUB_TOKEN, so it triggers nothing either. Dispatch the gate AFTER
+# that commit has landed, so the check sits on the final head commit.
+
+name: release-please
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+      prs_created: ${{ steps.release.outputs.prs_created }}
+      pr_branch: ${{ steps.release.outputs.prs_created == 'true' && fromJSON(steps.release.outputs.pr).headBranchName || '' }}
+    steps:
+      - name: Open or groom the release pull request
+        id: release
+        uses: googleapis/release-please-action@8b8fd2cc23b2e18957157a9d923d75aa0c6f6ad5 # v5.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  versions-json:
+    needs: release-please
+    if: needs.release-please.outputs.pr_branch != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the release pull request branch
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v7.0.1
+        with:
+          ref: ${{ needs.release-please.outputs.pr_branch }}
+          persist-credentials: true
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v7.0.0
+        with:
+          node-version-file: .node-version
+
+      - name: Append the versions.json key for this release
+        run: node .github/scripts/append-versions-json.mjs
+
+      - name: Commit it to the release pull request branch
+        env:
+          BRANCH: ${{ needs.release-please.outputs.pr_branch }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- versions.json; then
+            echo "versions.json is already correct on this branch. Nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add versions.json
+          git commit -m "chore(release): append the versions.json key for this release"
+          git push origin "HEAD:$BRANCH"
+
+  publish:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the TAG, never a branch
+        # The assets must come from the tagged tree. An asset built from any
+        # other tree does not match what the Obsidian directory rebuilds.
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v7.0.1
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Prove the checked-out tree is the one being released
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          set -euo pipefail
+          manifest_version="$(jq -r '.version' manifest.json)"
+          package_version="$(jq -r '.version' package.json)"
+          lock_version="$(jq -r '.version' package-lock.json)"
+          lock_root_version="$(jq -r '.packages[""].version' package-lock.json)"
+          min_app="$(jq -r '.minAppVersion' manifest.json)"
+          mapped="$(jq -r --arg v "$VERSION" '.[$v] // "MISSING"' versions.json)"
+          echo "tag=$TAG version=$VERSION manifest=$manifest_version package=$package_version lock=$lock_version lock_root=$lock_root_version versions[$VERSION]=$mapped minAppVersion=$min_app"
+          [ "$TAG" = "$VERSION" ]
+          [ "$manifest_version" = "$VERSION" ]
+          [ "$package_version" = "$VERSION" ]
+          [ "$lock_version" = "$VERSION" ]
+          [ "$lock_root_version" = "$VERSION" ]
+          [ "$mapped" = "$min_app" ]
+
+      - name: Install exactly what the lockfile says
+        run: npm ci
+
+      - name: Build at the tag
+        run: npm run build
+
+      - name: Title the release the way every earlier one is titled
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: gh release edit "$TAG" --title "ICOR for Life - AI Chat $VERSION"
+
+      - name: Upload the three assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        # No --clobber on purpose. If an asset is already on the tag, something
+        # uploaded it from a tree nobody checked, and that is the failure this
+        # workflow exists to prevent. Let it fail and be looked at.
+        run: gh release upload "$TAG" main.js manifest.json styles.css
