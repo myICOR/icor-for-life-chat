@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   agentShares, matchRoster, aggregate, deriveFromEvents, rangeStart, dayKey, agentRecords, WEEK_THRESHOLD_DAYS,
+  subagentDetailGap, subagentDetailNote, exclusionNote,
 } from './build/pure.mjs';
 
 const ROSTER = [
@@ -187,4 +188,62 @@ test('the agent filter keeps only sessions where that agent ran; the model filte
 test('tools sum across sessions and sort by count', () => {
   const agg = aggregate([session(0, { tools: { Read: 2, Bash: 1 } }), session(1, { tools: { Bash: 5 } })], '7d', { agent: null, model: null }, ROSTER, NOW);
   assert.deepEqual(agg.tools, [{ name: 'Bash', count: 6 }, { name: 'Read', count: 2 }]);
+});
+
+/* ------------------------------------- a runtime that cannot say who ran */
+
+/* T12, Antonio Bradley, 2026-09-15. The Codex normaliser forwards no
+   subagent boundary, so a Codex archive records zero subagents. Zero read as
+   a measurement made Team Insights show Larry alone. The rule under test: a
+   zero nobody measured is never shown, and the sessions it would have come
+   from leave the ranking's denominator rather than sitting in it. */
+
+test('a Codex session leaves the agent ranking, denominator included, and says why', () => {
+  const all = [
+    session(0, { agents: [{ agentType: 'pax', toolCalls: 4, textBlocks: 1, durationMs: 10, status: 'done' }] }),
+    session(1, { provider: 'codex' }),
+    session(2, { provider: 'codex' }),
+  ];
+  const agg = aggregate(all, '7d', { agent: null, model: null }, ROSTER, NOW);
+  // Every one of the three is a real, archived session and is counted as one.
+  assert.equal(agg.sessionCount, 3);
+  assert.equal(agg.tokens, 3000);
+  // Larry ran in ONE countable session, not three: the two Codex folders are
+  // out of the ranking, not in it carrying a zero for everybody else.
+  assert.deepEqual(agg.agents.map((a) => [a.key, a.runs, a.sessions]), [['pax', 1, 1], ['larry', 1, 1]]);
+  assert.deepEqual(agg.agentsExcluded, [{ runtime: 'Codex', sessions: 2 }]);
+  assert.equal(
+    exclusionNote(agg.agentsExcluded),
+    '2 Codex sessions not counted here. Specialist detail is not available for Codex yet.',
+  );
+  // And the filter agrees with the ranking: a session whose participants are
+  // unmeasurable cannot match a participant.
+  const larry = aggregate(all, '7d', { agent: 'larry', model: null }, ROSTER, NOW);
+  assert.deepEqual(larry.sessions.map((x) => x.folder), ['f0']);
+});
+
+test('the note names the runtime, and one excluded session is singular', () => {
+  assert.equal(subagentDetailGap('codex'), 'Codex');
+  assert.equal(subagentDetailGap('CODEX'), 'Codex');
+  assert.equal(subagentDetailNote('Codex'), 'Specialist detail is not available for Codex yet');
+  assert.equal(
+    exclusionNote([{ runtime: 'Codex', sessions: 1 }]),
+    '1 Codex session not counted here. Specialist detail is not available for Codex yet.',
+  );
+  assert.equal(exclusionNote([]), null);
+});
+
+test('a Claude session is unchanged, and so is a folder that names no runtime at all', () => {
+  const all = [
+    session(0, { provider: 'claude', agents: [{ agentType: 'pax', toolCalls: 4, textBlocks: 1, durationMs: 10, status: 'done' }] }),
+    // A pre-@2 archive carries no provider: read as Claude, counted as before.
+    session(1),
+  ];
+  const agg = aggregate(all, '7d', { agent: null, model: null }, ROSTER, NOW);
+  assert.deepEqual(agg.agents.map((a) => [a.key, a.runs, a.sessions]), [['larry', 2, 2], ['pax', 1, 1]]);
+  assert.deepEqual(agg.agentsExcluded, []);
+  assert.equal(exclusionNote(agg.agentsExcluded), null);
+  assert.equal(subagentDetailGap('claude'), null);
+  assert.equal(subagentDetailGap(undefined), null);
+  assert.equal(subagentDetailGap(null), null);
 });

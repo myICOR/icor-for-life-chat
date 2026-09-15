@@ -10,7 +10,7 @@
 import { TFile, TFolder } from 'obsidian';
 import type { App } from 'obsidian';
 import { ArchiveWriter } from '../archive/writer';
-import { looksLikeOurArchive } from '../archive/naming';
+import { looksLikeOurArchive, manifestProvider } from '../archive/naming';
 import type { ArchiveManifest } from '../archive/naming';
 import type { ChatEvent } from '../model/types';
 import { deriveFromEvents } from './insights';
@@ -84,6 +84,11 @@ async function recordOf(app: App, folder: string, manifest: ArchiveManifest): Pr
     endedAt,
     tokens,
     model: manifest.resume?.model ?? null,
+    /* The runtime, so the page can say what a runtime could not measure
+       instead of printing its zero. `manifestProvider` reads a pre-@2 folder
+       as Claude and a named one as written, which is what lets the nine
+       already archived Codex sessions get the note without a rewrite. */
+    provider: manifestProvider(manifest),
     wip: Array.isArray(manifest.wip) ? manifest.wip.filter((w): w is string => typeof w === 'string') : [],
     ...counts,
   };

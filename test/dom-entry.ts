@@ -471,6 +471,10 @@ function mountTeamStates(): void {
       agents: [{ agentType: 'pax', toolCalls: 4, textBlocks: 1, durationMs: 40_000, status: 'done' }], tools: { Read: 3, Bash: 5 }, mainToolCalls: 8, mainTextBlocks: 2 },
     { folder: 'b', title: 'A quiet one', startedAt: at(3), endedAt: at(3) + 9_000, tokens: null, model: 'claude-opus-5',
       agents: [], tools: { Read: 1 }, mainToolCalls: 1, mainTextBlocks: 1 },
+    /* A runtime that forwards no subagent: the row must carry the honest line
+       and the ranking must carry the exclusion, both in real pixels. */
+    { folder: 'd', title: 'A Codex turn', startedAt: at(1), endedAt: at(1) + 30_000, tokens: 12_000, model: 'gpt-5-codex', provider: 'codex',
+      agents: [], tools: { shell: 2 }, mainToolCalls: 2, mainTextBlocks: 1 },
     { folder: 'c', title: 'Hire a specialist', startedAt: at(6), endedAt: at(6) + 120_000, tokens: 1_200_000, model: 'claude-sonnet-5',
       agents: [{ agentType: 'general-purpose', toolCalls: 2, textBlocks: 0, durationMs: 9_000, status: 'done' }], tools: { Grep: 4 }, mainToolCalls: 4, mainTextBlocks: 3 },
   ];

@@ -12,7 +12,7 @@
 
 import { setIcon, setTooltip } from 'obsidian';
 import type { Aggregate, Bucket, Filters, RangeKey } from '../team/insights';
-import { RANGES } from '../team/insights';
+import { RANGES, exclusionNote, subagentDetailGap, subagentDetailNote } from '../team/insights';
 import type { VaultCounts } from '../team/load';
 import { compactNumber } from '../model/format';
 import { renderAvatar } from './TeamStrip';
@@ -260,6 +260,13 @@ export function renderInsights(root: HTMLElement, page: InsightsPage, state: Ins
     host.resolveAvatar,
     (key) => host.onAgent(state.filters.agent === key ? null : key),
   );
+  /* WHAT THE RANKING COULD NOT COUNT, said out loud. A runtime that forwards
+     no subagent boundary leaves a session with one measurable participant and
+     that is not the same fact as a session nobody but Larry worked; those
+     sessions are out of the ranking, denominator included, and an exclusion
+     the reader cannot see is the same lie told quietly. */
+  const excluded = exclusionNote(agg.agentsExcluded);
+  if (excluded) agentsSec.createDiv({ cls: 'aic-ins-note', text: excluded });
   /* THE JOURNAL LINE, per roster agent, filled in after the row exists. The
      journals are the agents' own memory and this is the one place the vault
      shows who learned what; read lazily so a 52-agent roster costs nothing
@@ -305,7 +312,10 @@ export function renderInsights(root: HTMLElement, page: InsightsPage, state: Ins
   const list = listSec.createDiv({ cls: 'aic-ins-sessions' });
   for (const s of agg.sessions) {
     const row = list.createEl('button', { cls: 'aic-ins-session', type: 'button' });
-    row.setAttr('aria-label', `Open the archived conversation: ${s.title}`);
+    const gap = subagentDetailGap(s.provider);
+    row.setAttr('aria-label', gap
+      ? `Open the archived conversation: ${s.title}. ${subagentDetailNote(gap)}.`
+      : `Open the archived conversation: ${s.title}`);
     row.addEventListener('click', () => host.openSession(s.folder));
     const d = new Date(s.startedAt);
     const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -321,6 +331,11 @@ export function renderInsights(root: HTMLElement, page: InsightsPage, state: Ins
       setTooltip(face, a.agentType);
     }
     if (s.tokens !== null) row.createSpan({ cls: 'aic-ins-session-tokens', text: `${compactNumber(s.tokens)} TOK` });
+    /* NOT A ZERO. An empty face strip reads as "nobody else worked on this",
+       which is a claim the archive of a Codex session cannot support: the
+       runtime forwarded no subagent at all. The line says which of the two it
+       is, in the same quiet ink as the rest of the page's honest limits. */
+    if (gap) list.createDiv({ cls: 'aic-ins-note', text: subagentDetailNote(gap) });
     /* THE DELIVERABLES A SESSION TOUCHED (R1): one glyph per WiP folder, each
        its own button so a click opens the folder and not the conversation.
        Only sessions whose manifest carries the fact show it; an older folder

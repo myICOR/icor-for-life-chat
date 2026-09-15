@@ -11,7 +11,8 @@
  *   - the vault's own counts (roster, session logs, tasks), read by the loader.
  *
  * A session with no token count contributes NO bar. Null is a real answer and
- * it is never drawn as zero. */
+ * it is never drawn as zero, and the same rule governs a runtime that cannot
+ * report which specialists ran: see `NO_SUBAGENT_DETAIL` below. */
 
 import type { ChatEvent } from '../model/types';
 import type { RosterRef } from './usage';
@@ -83,6 +84,59 @@ export function deriveFromEvents(events: readonly ChatEvent[]): DerivedCounts {
   return { agents: Array.from(agents.values()), tools, mainToolCalls, mainTextBlocks };
 }
 
+/* RUNTIMES THAT CANNOT SAY WHICH SPECIALISTS RAN (2026-09-15, T12).
+ *
+ * Codex's App Server stream carries no subagent boundary the normaliser can
+ * translate: `src/provider/codex/normalize.ts` emits no `subagent-start` and
+ * no `subagent-end`, and hands every event the main thread. A Codex archive
+ * therefore records zero subagents, and a zero HERE would be a measurement
+ * ("Larry worked alone") when the truth is that nobody measured. So a Codex
+ * session says that in words and is kept out of the agent ranking entirely,
+ * rather than being counted as a session in which no specialist ran. The
+ * ranking's denominator is the sessions whose runtime could answer.
+ *
+ * The table is a plain string map on purpose. This file is pure and the
+ * provider registry is not (it requires Node inside its own module), and the
+ * provider a manifest names is a STRING that can outlive the build that
+ * wrote it, which is the rule `manifestProvider` in `archive/naming.ts`
+ * keeps. Nothing here decides what can launch.
+ *
+ * A runtime leaves this table the day its normaliser emits the two events.
+ * Codex 0.154.0 publishes `subAgentActivity`, `collabAgentToolCall` and
+ * `Thread.parentThreadId`, so that day is reachable; the path is in
+ * `docs/architecture.md` under the AI team layer. */
+const NO_SUBAGENT_DETAIL: Readonly<Record<string, string>> = { codex: 'Codex' };
+
+/** The runtime's display name when it cannot report who ran, else null. */
+export function subagentDetailGap(provider: string | null | undefined): string | null {
+  if (typeof provider !== 'string') return null;
+  return NO_SUBAGENT_DETAIL[provider.trim().toLowerCase()] ?? null;
+}
+
+/** The one sentence a session shows in place of the zero it cannot claim. */
+export function subagentDetailNote(runtime: string): string {
+  return `Specialist detail is not available for ${runtime} yet`;
+}
+
+/** One runtime's sessions, kept out of the agent ranking. */
+export interface ExcludedRuntime {
+  runtime: string;
+  sessions: number;
+}
+
+/**
+ * The line that makes the exclusion visible next to the ranking: how many
+ * sessions were left out, and why. Null when every session in range counted.
+ */
+export function exclusionNote(excluded: readonly ExcludedRuntime[]): string | null {
+  if (excluded.length === 0) return null;
+  const counts = excluded.map((e) => `${e.sessions} ${e.runtime} session${e.sessions === 1 ? '' : 's'}`);
+  const names = excluded.map((e) => e.runtime);
+  const last = names[names.length - 1] ?? '';
+  const phrase = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${last}` : last;
+  return `${counts.join(' · ')} not counted here. ${subagentDetailNote(phrase)}.`;
+}
+
 /** One archived conversation, in the shape the charts consume. */
 export interface SessionRecord {
   /** Vault-relative archive folder. */
@@ -93,6 +147,12 @@ export interface SessionRecord {
   /** Null when the manifest recorded no measured total. */
   tokens: number | null;
   model: string | null;
+  /**
+   * The runtime that had this conversation, as its own manifest names it.
+   * Absent on a record built before the loader read the field; absent is read
+   * as Claude everywhere, the same rule `manifestProvider` applies.
+   */
+  provider?: string;
   agents: ManifestAgent[];
   tools: Record<string, number>;
   mainToolCalls: number;
@@ -144,6 +204,12 @@ export interface Aggregate {
   /** Null when no session in range carried a measured token count. */
   tokens: number | null;
   agents: AgentTotal[];
+  /**
+   * Sessions in range their runtime could not describe, by runtime. They are
+   * out of `agents` altogether, denominator included; the page prints this
+   * beside the ranking so the exclusion is visible rather than silent.
+   */
+  agentsExcluded: ExcludedRuntime[];
   tools: Array<{ name: string; count: number }>;
   models: Array<{ model: string; sessions: number }>;
 }
@@ -209,6 +275,11 @@ export function mainKey(roster: RosterRef[] | null): { key: string; name: string
  * ranking counts; tool calls stay a detail, shown only when measured. */
 function participants(session: SessionRecord, roster: RosterRef[] | null): Array<{ key: string; name: string; matched: boolean; activity: number; toolCalls: number; runs: number }> {
   const out: Array<{ key: string; name: string; matched: boolean; activity: number; toolCalls: number; runs: number }> = [];
+  /* A runtime with no subagent detail contributes NO participant, not a lone
+     main thread. Counting Larry here while the specialists beside him are
+     unmeasurable is precisely what made the ranking read "Larry only" on a
+     Codex session (T12, Antonio Bradley, 2026-09-15). */
+  if (subagentDetailGap(session.provider) !== null) return out;
   const mainActivity = session.mainToolCalls + session.mainTextBlocks;
   out.push({ ...mainKey(roster), activity: mainActivity, toolCalls: session.mainToolCalls, runs: 1 });
   for (const agent of session.agents) {
@@ -269,9 +340,12 @@ export function aggregate(
   const tokens = measured.length ? measured.reduce((sum, s) => sum + (s.tokens ?? 0), 0) : null;
 
   const agentMap = new Map<string, AgentTotal>();
+  const excludedMap = new Map<string, number>();
   const toolMap = new Map<string, number>();
   const modelMap = new Map<string, number>();
   for (const s of sessions) {
+    const gap = subagentDetailGap(s.provider);
+    if (gap !== null) excludedMap.set(gap, (excludedMap.get(gap) ?? 0) + 1);
     const seen = new Set<string>();
     for (const p of participants(s, roster)) {
       const row = agentMap.get(p.key) ?? { key: p.key, name: p.name, activity: 0, toolCalls: 0, runs: 0, sessions: 0, matched: p.matched };
@@ -295,6 +369,9 @@ export function aggregate(
     sessionCount: sessions.length,
     tokens,
     agents: Array.from(agentMap.values()).sort((a, b) => b.runs - a.runs || b.activity - a.activity || a.name.localeCompare(b.name)),
+    agentsExcluded: Array.from(excludedMap.entries())
+      .map(([runtime, count]) => ({ runtime, sessions: count }))
+      .sort((a, b) => b.sessions - a.sessions || a.runtime.localeCompare(b.runtime)),
     tools: Array.from(toolMap.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
     models: Array.from(modelMap.entries()).map(([model, sessions]) => ({ model, sessions })).sort((a, b) => b.sessions - a.sessions),
   };
