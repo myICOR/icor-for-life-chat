@@ -36,8 +36,9 @@ already on your machine and talks to that. If it is not installed, nothing
 happens, and that is far and away the most common reason a fresh install
 appears to do nothing.
 
-Desktop Obsidian 1.4.0 or newer. Mobile cannot run a local program, so the
-plugin is desktop only.
+Desktop Obsidian 1.8.7 or newer. Mobile cannot run a local program, so this
+engine is desktop only. Your own API key runs on a phone or tablet too; see
+"Where your keys live".
 
 Optionally, the Codex command line tool as a second engine.
 
@@ -68,6 +69,33 @@ One setting decides whether keys stay on this device or follow the vault.
 Most people need nothing here: on the default engine there is no key at all,
 because your command line tool is already signed in.
 
+If you pick **My own API key** under *Settings, AI engine on this device*,
+two things change:
+
+- **You need an account** at Anthropic (`console.anthropic.com`) or
+  OpenRouter (`openrouter.ai`), and a key from there. Use is billed to
+  that account.
+- **The plugin talks to the internet itself.** Your messages, the notes
+  you attach and tool results go over HTTPS to `api.anthropic.com` or
+  `openrouter.ai`, and nowhere else. Nothing goes to myICOR.
+
+The key lives where you choose:
+
+- **Obsidian's keychain** (the default; Obsidian 1.11.4 or newer; see
+  *Settings, General, Keychain*). Keys in Obsidian's keychain stay on
+  this device. Obsidian Sync does not carry them; enter the key once per
+  device. Any plugin in the vault can read any keychain entry, which is
+  why this plugin's entries carry its name:
+  `icor-for-life-chat-anthropic-api-key` and
+  `icor-for-life-chat-openrouter-api-key`.
+- **An env file in the vault**, by default
+  `06 AI Team/AI Team Knowledge/.env`, as `ANTHROPIC_API_KEY=` and
+  `OPENROUTER_API_KEY=`. Keep that file out of anything that syncs or
+  publishes your vault.
+
+The plugin reads only the place you chose. The settings tab shows where
+each key is and can move it. No key is ever shown back.
+
 ## Settings
 
 Plumbing only, by design: where the program is, which model, how hard it
@@ -88,7 +116,7 @@ command line tool talks to Anthropic under your own account.
 
 ## Good to know
 
-- **Desktop only.**
+- **Desktop, plus phones and tablets on your own API key.**
 - **Beta.** If something looks off, open an issue.
 
 ## Support
