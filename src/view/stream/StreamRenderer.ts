@@ -1335,6 +1335,13 @@ export class StreamRenderer {
         if (option.description) {
           btn.createSpan({ cls: 'aic-qopt-desc', text: option.description });
         }
+        /* THE MARK, in the row's end track. Its visibility is the stylesheet's
+           (`.is-chosen`), so the class the click sets is the single source of
+           the state; the glyph is decorative and hidden from the reader,
+           because `aria-pressed` on the button already says it. */
+        const check = btn.createSpan({ cls: 'aic-qopt-check' });
+        setIcon(check, 'check');
+        check.setAttr('aria-hidden', 'true');
         btn.addEventListener('click', () => {
           if (picks.has(option.label)) picks.delete(option.label);
           else {
@@ -1378,6 +1385,25 @@ export class StreamRenderer {
       });
     }
     this.questionCards.set(toolUseId, wrap);
+  }
+
+  /* A REPLAYED CARD IS NOT ANSWERABLE (Flint, 2026-09-15).
+   *
+   * A stored transcript can carry a `tool-question` whose resolution was never
+   * written, and the renderer cannot tell one of those from a live one: it has
+   * no session, only callbacks. So the two replayers close the cards
+   * themselves when their replay ends. The card keeps every choice it was
+   * drawn with and says NOTHING about the outcome, because the archive
+   * measured none: a verdict line here would be an invented one.
+   */
+  private closeOpenQuestionCards(): void {
+    for (const wrap of this.questionCards.values()) {
+      if (wrap.hasClass('is-settled')) continue;
+      wrap.addClass('is-settled');
+      wrap.querySelector('.aic-question-foot')?.remove();
+      for (const el of Array.from(wrap.querySelectorAll<HTMLElement>('.aic-qother'))) el.remove();
+      for (const el of Array.from(wrap.querySelectorAll<HTMLButtonElement>('.aic-qopt'))) el.disabled = true;
+    }
   }
 
   /* THE CARD AFTER THE ANSWER. It is not removed: what was asked, and what
@@ -1455,6 +1481,7 @@ export class StreamRenderer {
     this.commitThinking();
     this.flushHeld();
     this.settleRunningRows();
+    this.closeOpenQuestionCards();
   }
 
   /* QUEUED, said on the well itself.
@@ -1519,6 +1546,7 @@ export class StreamRenderer {
     this.group = null;
     this.hideWorking();
     this.thinkingText = '';
+    this.closeOpenQuestionCards();
     const seam = this.column.createDiv({ cls: 'aic-seam' });
     seam.createSpan({ cls: 'aic-kicker', text: 'RESUMED' });
   }

@@ -3575,7 +3575,13 @@
    row's right cell, and a question is a block in the column carrying a
    question, its choices and a field. The kicker, the mono voice, the pill
    control and the hairline are the ones the approval card and the tool rows
-   already use; the only borrowed class is `.aic-kicker`.
+   already use; the borrowed classes are `.aic-kicker` and `.aic-middot`.
+
+   Iris ruled on this block (2026-09-15) and the shape below is hers: the
+   choices are ROWS separated by a subtle hairline, not boxes separated by
+   air; the taken row is marked in TWO channels, a check glyph in its own end
+   track and the label's weight, never by a border in the marker hue; hover is
+   the wash alone; and the field is a baseline rule, not a well.
 
    Q1.1 the block. One question or four, it is one card stack with one Send. */
 .aic-question {
@@ -3597,14 +3603,14 @@
 /* Q1.2 the choices. A column, because an option carries a label AND the line
    that says what it means, and side-by-side pills crush the second one away.
    The chosen option is marked by the marker hairline, never by hue alone. */
-.aic-qopts { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.aic-qopts { display: flex; flex-direction: column; gap: 0; margin-top: 10px; }
 /* The transition is stated on the BARE class, at (0,1,0), and that is not a
    tidy-up. The reduced-motion override at the foot of this file is (0,3,0)
    plus last position; a motion carrier stated at (0,4,0) with the control
    layer's three roots would outrank it, and a member who asked the system for
    no motion would still get it. Every motion carrier in this file measures at
    most (0,2,1) for the same reason, and the gate counts it. */
-.aic-qopt { transition: border-color 140ms var(--aic-ease); }
+.aic-qopt { transition: background-color 140ms var(--aic-ease); }
 .aic-root.aic-root .aic-qopt {
   /* The explicit control reset, the same property-for-property set the
      approval pills carry: both hosts style bare <button> above a bare class
@@ -3632,20 +3638,44 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  /* A ROW, and the end track is the mark's. The label and its meaning stack in
+     the first track; the check sits in the second and spans both, so a row
+     with a description and a row without line up on the same right edge.
+     `border` and `border-radius` are stated at their zero values rather than
+     left out: this rule's job is to keep the host theme's button skin off the
+     control, and a property it does not state is a property the host still
+     owns. The hairline that separates two rows is the sibling rule below. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 12px;
+  column-gap: 8px;
+  row-gap: 2px;
   width: 100%;
   padding: 8px 10px;
-  border-radius: var(--aic-r-control);
-  border: 1px solid var(--aic-hairline);
+  border: none;
+  border-radius: 0;
   background-color: transparent;
 }
-.aic-root.aic-root .aic-qopt:hover { border-color: var(--aic-hairline-emphasis); background-color: var(--aic-wash); }
-.aic-root.aic-root .aic-qopt.is-chosen { border-color: var(--aic-marker); background-color: transparent; }
+/* Stated ABOVE the reset, because the reset's `border: none` is (0,3,0) and
+   would otherwise erase the one border this control does wear. */
+.aic-root.aic-root .aic-qopt + .aic-qopt { border-top: 1px solid var(--aic-hairline-subtle); }
+.aic-root.aic-root .aic-qopt:hover { background-color: var(--aic-wash); }
 .aic-root.aic-root .aic-qopt:disabled { cursor: default; }
-.aic-qopt-label { font-family: var(--aic-body); font-size: 13px; color: var(--aic-paper); }
-.aic-qopt-desc { font-family: var(--aic-body); font-size: 12.5px; color: var(--aic-dim); }
+.aic-qopt-label { grid-column: 1; font-family: var(--aic-body); font-size: 13px; color: var(--aic-paper); }
+.aic-qopt-desc { grid-column: 1; font-family: var(--aic-body); font-size: 12.5px; color: var(--aic-dim); }
+/* THE MARK, channel one: a check in the end track. Channel two is the label's
+   weight, right below. Two channels because one of them is colour, and colour
+   alone is not a state anyone can read. */
+.aic-qopt-check {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  display: none;
+  align-self: center;
+  color: var(--aic-marker);
+  line-height: 0;
+}
+.aic-qopt-check .svg-icon { width: 12px; height: 12px; }
+.aic-qopt.is-chosen .aic-qopt-check { display: inline-flex; }
+.aic-qopt.is-chosen .aic-qopt-label { font-weight: 600; }
 
 /* Q1.3 the field for an answer that is not on the list.
    Four class repetitions for the reason the composer's textarea and the
@@ -3662,10 +3692,20 @@
   background: transparent;
   box-shadow: none;
   margin: 0;
+  /* `border-box`, and it took a screenshot to see it. An <input> is
+     `content-box` by default where a <button> is not, so `width: 100%` plus
+     the padding put the field's rule 8px PAST the card's own edge: visible in
+     the render, invisible to every assertion that only read the options. The
+     gate measures this edge now. */
+  box-sizing: border-box;
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid var(--aic-hairline-subtle);
-  border-radius: var(--aic-r-control);
+  /* A baseline, not a well: one rule under the field, nothing around it. The
+     shorthand clears the host's four sides first and the longhand states the
+     one side this field keeps, which is why both are here. */
+  border: none;
+  border-bottom: 1px solid var(--aic-hairline);
+  border-radius: 0;
   font-family: var(--aic-body);
   font-size: 13px;
   color: var(--aic-paper);

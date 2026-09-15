@@ -647,6 +647,24 @@ ${HELPERS}
         fields: card.querySelectorAll('.aic-qother-input').length,
         fieldsNamed: Array.from(card.querySelectorAll('.aic-qother-input')).every((f) => !!f.getAttribute('aria-label')),
         submitDisabledAtRest: submit.disabled,
+        checksAtRest: opts.filter((o) => {
+          const c = o.querySelector('.aic-qopt-check');
+          return !!c && getComputedStyle(c).display !== 'none';
+        }).length,
+        labelWeightPlain: getComputedStyle(first.querySelector('.aic-qopt-label')).fontWeight,
+        /* The field is a BASELINE: one rule under it and nothing around it. */
+        field: (() => {
+          const f = card.querySelector('.aic-qother-input');
+          if (!f) return null;
+          const cs = getComputedStyle(f);
+          return {
+            bottom: key(parse(cs.borderBottomColor)),
+            bottomWidth: cs.borderBottomWidth,
+            sideWidths: [cs.borderTopWidth, cs.borderLeftWidth, cs.borderRightWidth],
+            radius: cs.borderTopLeftRadius,
+            right: Math.round(f.getBoundingClientRect().right),
+          };
+        })(),
         optionCut: opts.some((o) => {
           const label = o.querySelector('.aic-qopt-label');
           return label ? label.scrollWidth > label.clientWidth + 1 : false;
@@ -655,12 +673,30 @@ ${HELPERS}
         cardRight: Math.round(card.getBoundingClientRect().right),
       };
       first.click();
+      const chosenCheck = first.querySelector('.aic-qopt-check');
+      const chosenIcon = chosenCheck ? chosenCheck.querySelector('svg') : null;
       out.questionPicked = {
         firstPressed: first.getAttribute('aria-pressed'),
         firstChosen: first.classList.contains('is-chosen'),
         secondPressed: second ? second.getAttribute('aria-pressed') : null,
         submitDisabled: submit.disabled,
-        borderChanged: getComputedStyle(first).borderTopColor !== getComputedStyle(opts[opts.length - 1]).borderTopColor,
+        /* THE TWO CHANNELS the mark rides, read separately: the check in the
+           end track, and the label's weight. Colour is one of them and colour
+           alone is not a state, which is why both are asserted. */
+        checkShown: chosenCheck ? getComputedStyle(chosenCheck).display !== 'none' : null,
+        checkColour: chosenCheck ? key(parse(getComputedStyle(chosenCheck).color)) : null,
+        checkBox: chosenIcon ? Math.round(chosenIcon.getBoundingClientRect().width) : 0,
+        /* The icon NAME, pinned through its class: the DOM shim draws an empty
+           <svg> where Obsidian draws the path, so the glyph is invisible in a
+           fixture screenshot and only the class says which icon was asked for. */
+        checkIcon: chosenIcon ? chosenIcon.getAttribute('class') : null,
+        checkHidden: chosenCheck ? chosenCheck.getAttribute('aria-hidden') : null,
+        labelWeightChosen: getComputedStyle(first.querySelector('.aic-qopt-label')).fontWeight,
+        checksElsewhere: opts.filter((o) => {
+          if (o === first) return false;
+          const c = o.querySelector('.aic-qopt-check');
+          return !!c && getComputedStyle(c).display !== 'none';
+        }).length,
       };
       // The second choice in the SAME single-select question releases the first.
       if (second) second.click();
@@ -2502,6 +2538,18 @@ test('a question card shows the questions and their choices, and can be answered
     assert.equal(q.fields, 2, `${room}: ${q.fields} free-text fields; every question takes an answer off the list`);
     assert.ok(q.fieldsNamed, `${room}: a free-text field has no accessible name`);
     assert.equal(q.submitDisabledAtRest, true, `${room}: Send is live with nothing answered`);
+    assert.equal(q.checksAtRest, 0, `${room}: ${q.checksAtRest} choices are marked before one was taken`);
+    assert.ok(q.field, `${room}: no free-text field to measure`);
+    assert.equal(q.field.bottom, s.base.tokens['--aic-hairline'], `${room}: the field's rule is not --aic-hairline`);
+    assert.equal(q.field.bottomWidth, '1px', `${room}: the field's rule measures ${q.field.bottomWidth}`);
+    assert.deepEqual(q.field.sideWidths, ['0px', '0px', '0px'],
+      `${room}: the field is a well, not a baseline - it kept ${JSON.stringify(q.field.sideWidths)} on its other sides`);
+    assert.equal(q.field.radius, '0px', `${room}: the field kept a ${q.field.radius} radius`);
+    /* The edge a screenshot caught and no assertion did: an <input> is
+       content-box where a <button> is not, so width:100% plus padding put the
+       field's rule past the card. Measured here so it cannot come back. */
+    assert.ok(q.field.right <= q.cardRight,
+      `${room}: the free-text rule runs ${q.field.right - q.cardRight}px past the card's edge`);
     assert.equal(q.optionCut, false, `${room}: an option label is clipped - the same loss, one card further in`);
     assert.ok(q.rightEdge <= q.cardRight + 1, `${room}: an option runs ${q.rightEdge - q.cardRight}px past the card`);
   });
@@ -2515,8 +2563,14 @@ test('taking a choice marks it, releases the other, and opens Send', () => {
     assert.equal(p.firstChosen, true, `${room}: the taken choice carries no state class`);
     assert.equal(p.secondPressed, 'false', `${room}: a choice nobody took reports itself pressed`);
     assert.equal(p.submitDisabled, false, `${room}: Send stayed inert after an answer was given`);
-    assert.equal(p.borderChanged, true,
-      `${room}: the taken choice looks exactly like an untaken one - the mark is the border, never hue alone`);
+    assert.equal(p.checkShown, true, `${room}: the taken choice carries no check in its end track`);
+    assert.equal(p.checkColour, s.base.tokens['--aic-marker'], `${room}: the check is not --aic-marker`);
+    assert.equal(p.checkBox, 12, `${room}: the check glyph measures ${p.checkBox}px, not 12`);
+    assert.match(p.checkIcon ?? '', /lucide-check\b/, `${room}: the mark is not the check icon (${p.checkIcon})`);
+    assert.equal(p.checkHidden, 'true', `${room}: the check is read out as well as aria-pressed, twice over`);
+    assert.notEqual(p.labelWeightChosen, s.base.question.labelWeightPlain,
+      `${room}: the taken choice's label weighs the same as an untaken one - the mark rides on colour alone`);
+    assert.equal(p.checksElsewhere, 0, `${room}: ${p.checksElsewhere} untaken choices show a check`);
     const sw = s.base.questionSwapped;
     assert.equal(sw.firstPressed, 'false', `${room}: single select kept two choices`);
     assert.equal(sw.secondPressed, 'true', `${room}: the second choice was not taken`);
