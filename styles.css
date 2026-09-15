@@ -3647,6 +3647,7 @@
      owns. The hairline that separates two rows is the sibling rule below. */
   display: grid;
   grid-template-columns: minmax(0, 1fr) 12px;
+  grid-auto-rows: auto;
   column-gap: 8px;
   row-gap: 2px;
   width: 100%;
@@ -3654,6 +3655,23 @@
   border: none;
   border-radius: 0;
   background-color: transparent;
+  /* THE FIVE THE HOST SETS ON EVERY BARE <button>, and the reason this block
+     exists at all. Obsidian's app.css states, at (0,0,1):
+       display:inline-flex; align-items:center; justify-content:center;
+       padding:4px 12px; height:30px; white-space:nowrap;
+     This rule already overrode `display` and `padding` and forgot the other
+     three, so in the PRODUCT every option was clamped to a 30px box while its
+     description was painted below the row's own bottom edge, over the hairline
+     and into the next option's label. Tom found it on the sideloaded 0.14.0
+     build; the suite was green because the fixture reproduced the theme's
+     button rule and never the app's. A reset that states some of a host rule's
+     properties and not the rest is not a reset, it is a coin toss, and the
+     fixture now carries the real rule so this cannot hide again. */
+  height: auto;
+  min-height: 0;
+  align-items: start;
+  justify-content: normal;
+  white-space: normal;
 }
 /* Stated ABOVE the reset, because the reset's `border: none` is (0,3,0) and
    would otherwise erase the one border this control does wear. */
@@ -3736,6 +3754,12 @@
   color: var(--aic-paper);
   border: 1px solid var(--aic-hairline);
   background-color: transparent;
+  /* The same host `height: 30px`, and the same answer: a 2px-padded pill was
+     being drawn 30px tall, which is where the empty band under the field in
+     Tom's screenshot came from. */
+  height: auto;
+  min-height: 0;
+  white-space: nowrap;
 }
 /* Disabled is READABLE, not a ghost: the control is still on screen saying
    what it is waiting for, so it keeps its border and drops to the dim rung

@@ -647,6 +647,47 @@ ${HELPERS}
         fields: card.querySelectorAll('.aic-qother-input').length,
         fieldsNamed: Array.from(card.querySelectorAll('.aic-qother-input')).every((f) => !!f.getAttribute('aria-label')),
         submitDisabledAtRest: submit.disabled,
+        /* THE ROW ACTUALLY HOLDS ITS CONTENT. Obsidian's bare button rule
+           sets height 30px, so an option that does not unset it is clamped and
+           its description is drawn BELOW the row's own bottom edge, over the
+           hairline and into the next label. That shipped in 0.14.0 and every
+           assertion here was green, because the fixture had no such rule. Now
+           it has one, and this reads the geometry. (No backticks: this probe
+           is inside a template literal.) */
+        rows: opts.map((o) => {
+          const cs = getComputedStyle(o);
+          const r = o.getBoundingClientRect();
+          const label = o.querySelector('.aic-qopt-label');
+          const desc = o.querySelector('.aic-qopt-desc');
+          return {
+            label: (label?.textContent || '').trim(),
+            height: Math.round(r.height),
+            bottom: Math.round(r.bottom),
+            descBottom: desc ? Math.round(desc.getBoundingClientRect().bottom) : null,
+            needed: Math.round(
+              (label ? label.getBoundingClientRect().height : 0)
+              + (desc ? desc.getBoundingClientRect().height : 0)
+              + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
+              + parseFloat(cs.rowGap || '0'),
+            ),
+            cssHeight: cs.height,
+            whiteSpace: cs.whiteSpace,
+          };
+        }),
+        /* Send is a 2px-padded pill, and the host's 30px was making it a band.
+           Read as its own claim, because the rows and the foot were clamped by
+           the same rule and fixed by the same line. */
+        send: (() => {
+          const cs = getComputedStyle(submit);
+          return {
+            height: Math.round(submit.getBoundingClientRect().height),
+            cssHeight: cs.height,
+            needed: Math.round(
+              parseFloat(cs.fontSize) * 1.2 + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
+              + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth),
+            ),
+          };
+        })(),
         checksAtRest: opts.filter((o) => {
           const c = o.querySelector('.aic-qopt-check');
           return !!c && getComputedStyle(c).display !== 'none';
@@ -2539,6 +2580,25 @@ test('a question card shows the questions and their choices, and can be answered
     assert.ok(q.fieldsNamed, `${room}: a free-text field has no accessible name`);
     assert.equal(q.submitDisabledAtRest, true, `${room}: Send is live with nothing answered`);
     assert.equal(q.checksAtRest, 0, `${room}: ${q.checksAtRest} choices are marked before one was taken`);
+    /* The defect Tom found on the real build, made measurable. Two claims,
+       because they fail in two different ways: a row can be tall enough and
+       still clip, and a row can hold its text while the box is the wrong size. */
+    assert.ok(q.send.height < 30,
+      `${room}: Send is ${q.send.height}px tall (computed ${q.send.cssHeight}) - it kept the host's 30px `
+      + `button height, which is the empty band under the field`);
+    assert.ok(q.send.height <= q.send.needed + 4,
+      `${room}: Send is ${q.send.height}px for ${q.send.needed}px of content`);
+    for (const r of q.rows) {
+      assert.ok(r.height >= r.needed,
+        `${room}: the "${r.label}" row is ${r.height}px for ${r.needed}px of content `
+        + `(computed height ${r.cssHeight}) - its description falls out of the row and onto the next one`);
+      if (r.descBottom !== null) {
+        assert.ok(r.bottom >= r.descBottom,
+          `${room}: the "${r.label}" row ends ${r.descBottom - r.bottom}px above its own description`);
+      }
+      assert.notEqual(r.whiteSpace, 'nowrap',
+        `${room}: the "${r.label}" row inherited the host's nowrap, so a long option cannot wrap`);
+    }
     assert.ok(q.field, `${room}: no free-text field to measure`);
     assert.equal(q.field.bottom, s.base.tokens['--aic-hairline'], `${room}: the field's rule is not --aic-hairline`);
     assert.equal(q.field.bottomWidth, '1px', `${room}: the field's rule measures ${q.field.bottomWidth}`);
