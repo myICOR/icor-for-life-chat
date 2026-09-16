@@ -650,10 +650,11 @@ ${HELPERS}
         /* THE ROW ACTUALLY HOLDS ITS CONTENT. Obsidian's bare button rule
            sets height 30px, so an option that does not unset it is clamped and
            its description is drawn BELOW the row's own bottom edge, over the
-           hairline and into the next label. That shipped in 0.14.0 and every
-           assertion here was green, because the fixture had no such rule. Now
-           it has one, and this reads the geometry. (No backticks: this probe
-           is inside a template literal.) */
+           hairline and into the next label. It never shipped: Tom caught it on
+           a sideloaded build before any tag was cut, and every assertion here
+           was green, because the fixture had no such rule. Now it has one, and
+           this reads the geometry. (No backticks: this probe is inside a
+           template literal.) */
         rows: opts.map((o) => {
           const cs = getComputedStyle(o);
           const r = o.getBoundingClientRect();
