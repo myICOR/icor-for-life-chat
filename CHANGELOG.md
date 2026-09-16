@@ -3,6 +3,45 @@
 Notable changes per release. Older releases are described in their commit
 messages (`git log --grep='^0\.'`) and on the GitHub releases page.
 
+## 0.15.1
+
+- **Fourteen controls now state their own height instead of taking
+  Obsidian's.** The three approval pills, the mode pills, the provider
+  buttons, the question card's Send, the Team Insights chips, the code
+  keycap and the remove button on a context chip each say how tall they
+  are: 24px for a control standing in a row, 22px for the code keycap
+  because it is inline type in a sentence rather than a control, and 18px
+  for the small remove disc. They used to compute to 30px, which is
+  Obsidian's bare `button` rule and not a size this plugin ever chose, so
+  controls that agree on paper drew at two different sizes and the question
+  card's Send sat at 17px beside pills at 30px.
+- **Rows grow to their content instead of clipping it.** A row in the
+  context picker holds a note's name and its path, two lines of content in
+  a box that was cut to 30px and centred in it, so the text hung out of the
+  row at the top and the bottom. The Team Insights session rows and the
+  history rows carried the same cut. Each row's text still truncates with
+  an ellipsis where it has to; what stopped is the row itself being cut.
+- **A screenshot you paste into a message is a picture again.** The cell
+  that holds it in your own turn was cut to that same 30px, so a 150px
+  screenshot was shown through a 30px strip. The cell now grows to the
+  picture, which caps itself at 240 by 180 as before. Found by Iris while
+  reviewing the question card Holger Schwan reported in 0.14.0.
+- **The gate counts the controls now rather than listing them.** A test
+  fails the build if any button under a plugin root computes to a height
+  the stylesheet never stated, checked in dark and light on both the stock
+  theme and INKLINE, with the context picker's modal swept as a root of its
+  own because Obsidian paints a modal outside the pane. A named list of
+  fourteen would have repeated the mistake that produced it.
+- **CONTRIBUTING describes the flow this repository actually has.** Changes
+  land as direct commits on `main`, because pull requests are disabled
+  here, and the contribution rights grant now names the act of contributing
+  through any channel instead of the one door that is not there. The
+  release section is unchanged.
+- **The lockfile agrees with the manifest about which version this is.**
+  `package-lock.json` was left at 0.14.0 when 0.15.0 was cut, so the
+  repository stated two different versions of itself. Version string only,
+  no dependency moves.
+
 ## 0.15.0
 
 - **A conversation now starts knowing where your life stands.** When you
