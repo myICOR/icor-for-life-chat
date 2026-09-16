@@ -7,7 +7,7 @@ Commits message and push.
 By submitting a pull request you grant Paperless Movement S.L. the rights
 described in Section 7 of the LICENSE.
 
-Keep changes small and describe the behaviour change in the pull request.
+Keep changes small and describe the behaviour change in the commit message.
 
 Commit messages follow Conventional Commits v1.0.0 (https://www.conventionalcommits.org/en/v1.0.0/):
 `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, with a `!` or a `BREAKING CHANGE:` footer for a break.
@@ -36,4 +36,4 @@ Run `npm run gate` before you commit. `main` is the release branch, so a commit
 that lands red breaks it for everybody.
 
 For security issues, use the process in SECURITY.md instead of a public
-pull request.
+commit or issue.
