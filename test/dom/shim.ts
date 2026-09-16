@@ -110,6 +110,42 @@ export class Notice {
   constructor(readonly message: string) {}
 }
 
+/* Obsidian's Modal, reduced to what `ContextModal` actually touches: an app, the
+   two elements it paints into, and open/close. It appends `modalEl` to
+   `document.body`, which is where the real one lives too - and that placement is
+   the point rather than an approximation. The group modal's rows are plugin
+   controls that sit OUTSIDE `.aic-root`, so a sweep bounded by the pane's root
+   never saw them, and `.aic-ctx-modal-row` was one of the fourteen controls
+   taking the host's `height: 30px` unmeasured. */
+export class Modal {
+  readonly modalEl = document.createElement('div');
+  readonly contentEl = document.createElement('div');
+
+  constructor(readonly app: unknown) {
+    this.modalEl.appendChild(this.contentEl);
+  }
+
+  open(): void {
+    document.body.appendChild(this.modalEl);
+    this.onOpen();
+  }
+
+  close(): void {
+    this.modalEl.remove();
+    this.onClose();
+  }
+
+  onOpen(): void {}
+  onClose(): void {}
+}
+
+/* Named so `ContextModal`'s `instanceof TFile` compiles and answers false here.
+   Nothing in this fixture opens a note, and a stub that answered true would
+   invite an assertion about the vault, which this gate does not have. */
+export class TFile {
+  constructor(readonly path: string = '') {}
+}
+
 /* StreamRenderer's two remaining Obsidian dependencies, so the fixture can
    drive the SHIPPED tool-row state machine with real events instead of
    re-typing its markup. */

@@ -132,6 +132,39 @@ const HELPERS = `
    does not measure, and measure a set it did not force. */
 const FOCUSABLE_SEL = 'button, textarea, input, select, a[href], [tabindex]:not([tabindex="-1"])';
 
+/* THE GEOMETRY CENSUS.
+ *
+ * The colour sweep at the end of this file exists because nine control rules
+ * were enumerated in an audit and a list of nine is correct today and blind to
+ * the tenth. Geometry had no such sweep, so fourteen controls took Obsidian's
+ * bare `button { height: 30px }` - the lowest-weight rule in the room, at
+ * (0,0,1) - while every assertion in this file was green. A named list of
+ * fourteen would repeat the mistake exactly.
+ *
+ * So this counts rather than names. Every <button> under a plugin root whose
+ * computed height is the host's 30px, and `.aic-ctx-modal` is a root in its own
+ * right: Obsidian paints a modal into document.body, outside the pane, so a
+ * census bounded by `.aic-root` would never have seen the group modal's rows -
+ * which is precisely why nothing had.
+ *
+ * The claim only holds while the stylesheet states `height: 30px` NOWHERE, and
+ * the test asserts that separately. A control measuring 30 measured the HOST. */
+const CENSUS = `(() => {
+  const seen = new Set();
+  const counts = {};
+  for (const root of document.querySelectorAll('.aic-root, .aic-ctx-modal')) {
+    for (const el of root.querySelectorAll('button')) {
+      if (seen.has(el)) continue;
+      seen.add(el);
+      if (getComputedStyle(el).height !== '30px') continue;
+      const cls = String(el.className || '').trim().split(/\\s+/).filter(Boolean).join('.');
+      const name = cls ? '.' + cls : 'button (no class)';
+      counts[name] = (counts[name] || 0) + 1;
+    }
+  }
+  return counts;
+})()`;
+
 const PROBE = `(() => {
   const out = {};
 ${HELPERS}
@@ -143,6 +176,13 @@ ${HELPERS}
     const g = ground(el);
     return {
       bg: key(parse(cs.backgroundColor)),
+      /* GEOMETRY, read beside the colour. This file measured what every control
+         was PAINTED and never how big it was, which is how fourteen controls
+         wore Obsidian's bare-button height with every assertion here green.
+         (No backticks: this is inside a template literal.) */
+      height: Math.round(el.getBoundingClientRect().height * 100) / 100,
+      cssHeight: cs.height,
+      minHeight: cs.minHeight,
       padding: cs.padding,
       radius: cs.borderRadius,
       lineClamp: cs.webkitLineClamp || cs.getPropertyValue('-webkit-line-clamp') || 'none',
@@ -1261,7 +1301,11 @@ async function snapshot(chrome, room) {
   const focus = await chrome.evaluate(FOCUS_PROBE);
   await chrome.evaluate('document.querySelector("[data-aic-focus-control]").remove(); 1');
 
-  return { base, hover, disabled, focusRest, focus, composerRest, composerInput, composerSend, motion };
+  /* Taken LAST, after every probe above has finished mounting and forcing: a
+     census that ran mid-build would count a page that is not the page. */
+  const census = await chrome.evaluate(CENSUS);
+
+  return { base, hover, disabled, focusRest, focus, composerRest, composerInput, composerSend, motion, census };
 }
 
 /* The browser is closed in a `finally`, and that is not tidiness.
@@ -1278,6 +1322,36 @@ try {
 }
 
 const forEachRoom = (fn) => { for (const room of ROOMS) fn(shots[room.name], room.name, room); };
+
+/* --------------------------------------------------------------- the geometry */
+
+test('no control under a plugin root wears the host\'s bare-button height', () => {
+  /* The stylesheet says 30 nowhere. That is what makes a 30px control a
+     measurement of the HOST rather than of a decision, and it is asserted
+     rather than assumed: the day somebody states `height: 30px` on purpose,
+     this census stops meaning what it says and has to be re-read. */
+  /* Comments stripped first, and that is not a convenience: the sheet QUOTES
+     Obsidian's bare-button rule verbatim where it explains why the reset exists,
+     so a raw text search finds the documentation and calls it a declaration. */
+  const declarations = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.equal(
+    /height:\s*30px/.test(declarations), false,
+    'styles.css DECLARES `height: 30px` somewhere. The census below reads a 30px control as '
+    + 'proof it took Obsidian\'s bare-button rule, and that reading is only true while the '
+    + 'sheet never states 30 itself. Re-read the census before changing this line.',
+  );
+  forEachRoom((s, room) => {
+    assert.deepEqual(
+      s.census, {},
+      `${room}: these controls compute to 30px, which is Obsidian's bare `
+      + `button { height: 30px } at (0,0,1) and not a value this stylesheet ever stated. `
+      + `A host's dimension on a bare element is never a design value: it is what you get `
+      + `when nobody decided, and it reaches the screen looking exactly like a decision. `
+      + `State the rung, or state auto and let the content decide: `
+      + `${JSON.stringify(s.census, null, 2)}`,
+    );
+  });
+});
 
 /* ---------------------------------------------------------------- the cascade */
 
@@ -1359,6 +1433,15 @@ test('V5b - the wider grant sits one visual step quieter than the narrow one', (
     assert.equal(s.base.el.approveDeny.fg, s.base.tokens['--aic-dim'], `${room}: Deny colour`);
     assert.equal(s.base.el.approveDeny.borderTopStyle, 'none', `${room}: Deny carries no border`);
     assert.equal(s.hover.el.approveAlways.fg, s.base.tokens['--aic-paper'], `${room}: Always allow hover`);
+    /* THE RUNG, stated per pill rather than "all three agree": they used to
+       agree at 30px, which is the failure. Three equal readings of the wrong
+       number is what a relative assertion calls green. */
+    for (const [name, pill] of [['Deny', s.base.el.approveDeny], ['Allow once', once], ['Always allow', always]]) {
+      assert.equal(pill.height, 24,
+        `${room}: ${name} is ${pill.height}px tall (computed ${pill.cssHeight}); the control rung is 24px`);
+      assert.equal(pill.minHeight, '0px',
+        `${room}: ${name} leaves min-height at ${pill.minHeight}, so the floor is the host's to move`);
+    }
   });
 });
 
@@ -2587,8 +2670,12 @@ test('a question card shows the questions and their choices, and can be answered
     assert.ok(q.send.height < 30,
       `${room}: Send is ${q.send.height}px tall (computed ${q.send.cssHeight}) - it kept the host's 30px `
       + `button height, which is the empty band under the field`);
-    assert.ok(q.send.height <= q.send.needed + 4,
-      `${room}: Send is ${q.send.height}px for ${q.send.needed}px of content`);
+    /* 24, exactly, and not "small enough". `height: auto` was the first half of
+       the answer and left Send at 17px while the approval pills beside it were
+       still drawing at the host's 30: the card had two control heights and both
+       of them were accidents. A band is the rung, so the assertion is the rung. */
+    assert.equal(q.send.height, 24,
+      `${room}: Send is ${q.send.height}px tall (computed ${q.send.cssHeight}); the control rung is 24px`);
     for (const r of q.rows) {
       assert.ok(r.height >= r.needed,
         `${room}: the "${r.label}" row is ${r.height}px for ${r.needed}px of content `

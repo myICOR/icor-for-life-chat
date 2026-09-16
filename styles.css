@@ -380,6 +380,26 @@
   max-width: 100%;
   cursor: zoom-in;
   box-shadow: none;
+  /* THE RESET, COMPLETED. The theme's `button:not(.clickable-icon)` was still
+     winning `color` and `font-family` here, because this block never stated
+     them. The cell holds a picture, so nothing showed - which is exactly how an
+     incomplete reset survives review. A reset is complete or it is a coin toss. */
+  color: inherit;
+  font: inherit;
+  /* THE HOST'S HEIGHT IS NOT A DESIGN VALUE (Iris, 2026-09-16). Obsidian's
+     app.css states a bare `button { height: 30px }` at (0,0,1) - the lowest
+     weight in the room - and it still wins every control rule that forgets to
+     state a height of its own. Fourteen controls in this sheet computed to 30px
+     in all four rooms and not one of them said 30 anywhere: that is the value
+     you get when nobody decided, wearing the look of a decision. The ruling is
+     two families. A PAINTED control states its rung and folds its vertical
+     padding into it; a ROW lets its content set the height. The full reasoning,
+     and the same rule met the first time, is annotated at `.aic-qopt`. */
+  /* A ROW: the picture decides. `.aic-user-image-img` already caps itself at
+     240x180, so the cell is as tall as the screenshot it holds - which at 30px
+     was a 150px picture shown through a 30px slot. */
+  height: auto;
+  min-height: 0;
 }
 /* THE TRANSITION IS STATED AT (0,1,0), DELIBERATELY, and the rule above is not
    where it lives. The reduced-motion override is `.aic-root.aic-root.aic-root *`
@@ -754,7 +774,14 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   border-radius: var(--aic-r-pill);
-  padding: 2px 10px;
+  /* The host's bare-button height, answered - see the annotated copy at `.aic-user-image`. */
+  /* 24 is the rung, and the padding folds INTO it rather than adding to it:
+     `height` plus vertical padding on a border-box control is one number, and
+     stating both is how two controls that agree on paper draw at two sizes. */
+  height: 24px;
+  min-height: 0;
+  padding: 0 10px;
+  white-space: nowrap;
 }
 /* The wider grant sits one visual step quieter than the narrow one. That step
    is the whole point of the treatment, so both ends of it are gated. */
@@ -941,6 +968,14 @@
   text-align: inherit;
   cursor: pointer;
   display: inline-flex;
+  /* The host's bare-button height, answered - see the annotated copy at `.aic-user-image`. */
+  /* The same 18px disc `.aic-thumb-x` states, and stated the same way: the two
+     are one control in two housings and they drifted only because one of them
+     never said how big it was. */
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
   color: var(--aic-faint);
   opacity: 0;
 }
@@ -1044,7 +1079,10 @@
   font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 3px 10px;
+  /* The host's bare-button height, answered - see the annotated copy at `.aic-user-image`. */
+  height: 24px;
+  min-height: 0;
+  padding: 0 10px;
   border-radius: var(--aic-r-pill);
   /* The GROUND is stated in the control layer at (0,4,0), not here: at this
      weight the reset's `background-color: transparent` would win by source
@@ -1746,8 +1784,11 @@
   display: none;
   align-items: center;
   gap: 4px;
+  /* The host's bare-button height, answered - see the annotated copy at `.aic-user-image`. */
+  height: 24px;
+  min-height: 0;
   margin: 4px 0 0;
-  padding: 2px 6px 2px 0;
+  padding: 0 6px 0 0;
   background: transparent;
   border: none;
   box-shadow: none;
@@ -1780,7 +1821,14 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--aic-paper);
-  padding: 1px 7px;
+  /* The host's bare-button height, answered - see the annotated copy at `.aic-user-image`. */
+  /* 22, not 24: the chip is a piece of inline type in a sentence, not a control
+     in a row of controls, so it sits one rung under the pills it stands beside. */
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  min-height: 0;
+  padding: 0 7px;
   border: 1px solid var(--aic-warning);
   border-radius: var(--aic-r-control);
   background: var(--ink, var(--background-primary));
@@ -2442,6 +2490,16 @@
   border-radius: var(--aic-r-subtle);
   color: var(--aic-dim);
   width: 100%;
+  /* The host's bare-button height, answered - see the annotated copy at `.aic-user-image`. */
+  /* A ROW, and the worst of the fourteen: the name and its path are two lines
+     of content in a box cut to 30px and CENTRED in it, so the text hung 8px out
+     of the row at the top and the bottom. `justify-content` is stated because
+     the host's bare rule centres a button's content and a row reads from the
+     left. */
+  height: auto;
+  min-height: 0;
+  white-space: normal;
+  justify-content: flex-start;
 }
 .aic-ctx-modal.aic-ctx-modal .aic-ctx-modal-row:hover { background: var(--aic-wash); color: var(--aic-paper); }
 .aic-ctx-modal.aic-ctx-modal .aic-ctx-modal-row:focus-visible { outline: 2px solid var(--aic-marker); outline-offset: 2px; }
@@ -2726,6 +2784,12 @@
   padding: 4px 8px;
   border: 1px solid transparent;
   border-radius: var(--aic-r-subtle);
+  /* The host's bare-button height, answered - see the annotated copy at `.aic-user-image`. */
+  /* A ROW. `.aic-hbar-name` re-states its own nowrap and ellipsis, so letting
+     the row wrap here costs the name nothing and lets the row hold its bar. */
+  height: auto;
+  min-height: 0;
+  white-space: normal;
 }
 .aic-root.aic-root .aic-hbar-row.is-static { cursor: default; grid-template-columns: minmax(80px, 16ch) 1fr auto; }
 .aic-root.aic-root .aic-hbar-row:not(.is-static):hover { background: var(--aic-wash); }
@@ -2764,6 +2828,12 @@
   width: 100%;
   padding: 10px 4px;
   border-bottom: 1px solid var(--aic-hairline-subtle);
+  /* The host's bare-button height, answered - see the annotated copy at `.aic-user-image`. */
+  /* A ROW. `.aic-ins-session-title` re-states nowrap and its ellipsis, so the
+     title still truncates; what stops is the ROW being cut to 30. */
+  height: auto;
+  min-height: 0;
+  white-space: normal;
 }
 .aic-root.aic-root .aic-ins-session:hover { background: var(--aic-wash); }
 .aic-ins-session-date {
@@ -3008,7 +3078,10 @@
   align-items: center;
   gap: 4px;
   margin: 0;
-  padding: 2px 8px;
+  /* The host's bare-button height, answered - see the annotated copy at `.aic-user-image`. */
+  height: 24px;
+  min-height: 0;
+  padding: 0 8px;
   border: 1px solid var(--aic-hairline-subtle);
   border-radius: var(--aic-r-pill);
   background: transparent;
@@ -3244,7 +3317,10 @@
   font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 3px 10px;
+  /* The host's bare-button height, answered - see the annotated copy at `.aic-user-image`. */
+  height: 24px;
+  min-height: 0;
+  padding: 0 10px;
   border-radius: var(--aic-r-pill);
   color: var(--aic-dim);
 }
@@ -3750,14 +3826,16 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   border-radius: var(--aic-r-pill);
-  padding: 2px 10px;
+  padding: 0 10px;
   color: var(--aic-paper);
   border: 1px solid var(--aic-hairline);
   background-color: transparent;
   /* The same host `height: 30px`, and the same answer: a 2px-padded pill was
      being drawn 30px tall, which is where the empty band under the field in
-     Tom's screenshot came from. */
-  height: auto;
+     Tom's screenshot came from. `auto` was the first half of that answer and
+     left this pill at 17px while the approval pills beside it drew at 30; 24 is
+     the rung both of them are on, so the card has ONE control height. */
+  height: 24px;
   min-height: 0;
   white-space: nowrap;
 }

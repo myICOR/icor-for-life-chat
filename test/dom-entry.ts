@@ -19,6 +19,7 @@ import { buildPane } from '../src/view/pane';
 import { renderChipTray } from '../src/view/SubagentView';
 import { renderTeamStrip } from '../src/view/TeamStrip';
 import { renderInsights } from '../src/view/InsightsRender';
+import { ContextModal } from '../src/view/ContextModal';
 import { aggregate } from '../src/team/insights';
 import type { SessionRecord } from '../src/team/insights';
 import { agentShares } from '../src/team/usage';
@@ -123,6 +124,29 @@ const DOC: StructuredDoc = {
         title: 'The composer border was a tie, not a loss',
         body: 'Four class repetitions clear the host input rule outright.',
         variant: 'cleared',
+      },
+    },
+  ],
+};
+
+/* THE DECISION WHOSE BODY DOES NOT FIT.
+ *
+ * `is-shown` is not a class a fixture may write: `measureDecisionBody` compares
+ * scrollHeight against clientHeight on a frame and the renderer decides. So the
+ * door is earned here the way the product earns it, with a body no three-line
+ * clamp can hold at any pane width this gate uses. Without it `.aic-decision-more`
+ * sits at `display: none` in every room, and a control that is never displayed is
+ * a control whose height nothing measures. */
+const DOOR_DOC: StructuredDoc = {
+  structured: true,
+  segments: [
+    {
+      kind: 'decision',
+      decision: {
+        code: 'e5f6a',
+        title: 'The host owns fourteen control heights',
+        body: 'Obsidian\'s app.css states a bare `button { height: 30px }` at (0,0,1), which is the lowest weight in the room and still wins every control rule that forgets to state a height of its own. Fourteen selectors in this stylesheet compute to 30px in all four rooms because of it, and not one of them says 30 anywhere. A host dimension on a bare element is never a design value: it is the value you get when nobody decided, and it reaches the screen looking exactly like a decision. The pills are the loudest case because a 2px-padded pill drawn 30px tall stops being a pill and becomes a band, but the rows are the worse one, because a row clamped to 30px draws its second line outside its own box and over the hairline below it.',
+        variant: 'decision',
       },
     },
   ],
@@ -517,8 +541,12 @@ function mountTeamStates(): void {
   const now = new Date(2026, 8, 4, 12).getTime();
   const at = (daysAgo: number): number => new Date(2026, 8, 4 - daysAgo, 10).getTime();
   const sessions: SessionRecord[] = [
+    /* The `wip` array is not decoration: it is the only thing that mounts
+       `.aic-ins-wip`, one of the four controls no fixture built, and an
+       unmounted control is a control the census cannot fail. */
     { folder: 'a', title: 'The specificity sweep', startedAt: at(0), endedAt: at(0) + 60_000, tokens: 875_753, model: 'claude-opus-5',
-      agents: [{ agentType: 'pax', toolCalls: 4, textBlocks: 1, durationMs: 40_000, status: 'done' }], tools: { Read: 3, Bash: 5 }, mainToolCalls: 8, mainTextBlocks: 2 },
+      agents: [{ agentType: 'pax', toolCalls: 4, textBlocks: 1, durationMs: 40_000, status: 'done' }], tools: { Read: 3, Bash: 5 }, mainToolCalls: 8, mainTextBlocks: 2,
+      wip: ['03 WiP/2026-09-16-follow-discussion'] },
     { folder: 'b', title: 'A quiet one', startedAt: at(3), endedAt: at(3) + 9_000, tokens: null, model: 'claude-opus-5',
       agents: [], tools: { Read: 1 }, mainToolCalls: 1, mainTextBlocks: 1 },
     /* A runtime that forwards no subagent: the row must carry the honest line
@@ -561,6 +589,22 @@ function mountTeamStates(): void {
 const PROBE_PNG_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 const PROBE_PNG_URL = `data:image/png;base64,${PROBE_PNG_B64}`;
+
+/* A 200x150 PNG, and the SIZE is the measurement. The 1x1 above is fine for an
+   attachment cell whose job is to exist, but a pasted screenshot's cell is a
+   GEOMETRY claim: the image rule caps it at 240x180 and lets the cell take the
+   picture's own height, which the host's bare `button { height: 30px }` then
+   overrules. A 1x1 probe is 3px tall and gets PUSHED UP to 30 by that rule, so
+   it hides the defect; a 200x150 probe wants 152 and gets CUT DOWN to 30, which
+   is what a member actually sees. Solid fill, because nothing here reads the
+   pixels - only the box. */
+const PROBE_WIDE_PNG_B64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAMgAAACWCAIAAAAUvlBOAAABG0lEQVR42u3SMQ0AAAzDsOIv6hLYu8+G'
+  + 'ECWFB5EAY2EsjAXGwlgYC4yFsTAWGAtjYSwwFsbCWGAsjIWxwFgYC2OBsTAWxgJjYSyMBcbCWBgLjI'
+  + 'WxMBYYC2NhLDAWxsJYYCyMhbHAWBgLY4GxMBbGAmNhLIwFxsJYGAuMhbEwFhgLY2EsMBbGwlhgLIyF'
+  + 'scBYGAtjgbEwFsYCY2EsjAXGwlgYC4yFsTAWGAtjYSwwFsbCWBgLjIWxMBYYC2NhLDAWxsJYYCyMhb'
+  + 'HAWBgLY4GxMBbGAmNhLIwFxsJYGAuMhbEwFhgLY2EsMBbGwlhgLIyFscBYGAtjgbEwFsYCY2EsjAXG'
+  + 'wlgYC4yFsTAWGAtjYSwwFsbCWGAsjIWx4DbIA460eEpTQQAAAABJRU5ErkJggg==';
 function probeImage(): File {
   const b64 = PROBE_PNG_B64;
   const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -810,6 +854,71 @@ async function mountStates(root: HTMLElement): Promise<void> {
   narrowHost.setCssStyles({ width: '260px' });
   const narrow = narrowHost.createDiv({ cls: 'aic-facts aic-facts-narrow' });
   new Statusline(narrow).render(FULL_STATE, Date.UTC(2026, 7, 30, 0, 6));
+
+  /* THE CONTROLS NO FIXTURE EVER BUILT.
+   *
+   * The census asserts that no control under a plugin root computes to the
+   * host's 30px, and a census can only count what is mounted. Four controls sat
+   * outside every reading this gate has ever taken: the pasted-image cell, the
+   * WiP chip on a session row, the decision door, and the group modal's rows.
+   * All four took the host's height, in all four rooms, with every assertion in
+   * this file green - the same shape of miss as the bare-button rule itself. The
+   * WiP chip comes from the `wip` array on a session record above; the other
+   * three are mounted here, through shipped code, never as re-typed markup. */
+  const geometry = probe.createDiv({ cls: 'aic-geometry-probe' });
+
+  /* THE PASTED SCREENSHOT'S CELL, through the shipped user-turn renderer. */
+  const imageColumn = geometry.createDiv({ cls: 'aic-column aic-user-image-probe' });
+  const imageStream = new StreamRenderer({} as App, new Component() as never, imageColumn, '', {
+    onApproval: () => {},
+    structured: () => false,
+    renderHost: {
+      home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
+      openUrl: () => {}, copy: () => {}, decisionState: () => null,
+    },
+    onDecisions: () => {},
+  });
+  imageStream.apply({
+    kind: 'user-turn', text: 'the card, as it draws today', contextNote: null, contextPath: null,
+    images: [{ name: 'card.png', mediaType: 'image/png', data: PROBE_WIDE_PNG_B64 }],
+    queued: false, stream: null,
+  });
+  /* The cell's height IS the decoded image's height, so this waits on the decode
+     and not on a frame. The attachment strip taught this gate the lesson once
+     already: a probe that measures a picture before it is a picture measures an
+     empty box and reports it as a reading. */
+  const cellImg = imageColumn.querySelector('img.aic-user-image-img');
+  if (cellImg instanceof HTMLImageElement && !cellImg.complete) {
+    await new Promise<void>((resolve) => {
+      cellImg.addEventListener('load', () => resolve(), { once: true });
+      cellImg.addEventListener('error', () => resolve(), { once: true });
+    });
+  }
+
+  /* THE DECISION DOOR, EARNED. renderStructured measures the body on a frame and
+     shows the door itself; nothing here writes `is-shown`. */
+  const doorColumn = geometry.createDiv({ cls: 'aic-column aic-decision-door-probe' });
+  renderStructured(
+    doorColumn,
+    DOOR_DOC,
+    {
+      home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
+      openUrl: () => {}, copy: () => {}, decisionState: () => null,
+    },
+    (el, text) => { el.setText(text); },
+  );
+
+  /* THE GROUP MODAL'S ROWS, through the shipped modal. It paints into
+     document.body, outside `.aic-root`, exactly as the real one does - which is
+     the whole reason the census names `.aic-ctx-modal` as a second root instead
+     of trusting the pane's to contain every control this plugin draws. */
+  new ContextModal({} as App, {
+    kind: 'folder',
+    id: '04 Inner World',
+    label: '04 Inner World',
+    detail: '2 notes',
+    paths: ['04 Inner World/a.md', '04 Inner World/Notes/b.md'],
+  }).open();
 
   /* A ResizeObserver delivers BEFORE paint but AFTER the current task, so the
      widened host above has not been observed yet. Two frames, then the marker
