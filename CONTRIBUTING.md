@@ -1,6 +1,8 @@
 # Contributing
 
-Pull requests are welcome.
+Changes land as direct commits on `main`. This repository has pull requests
+disabled, so there is no branch to open: commit to `main` with a Conventional
+Commits message and push.
 
 By submitting a pull request you grant Paperless Movement S.L. the rights
 described in Section 7 of the LICENSE.
@@ -30,8 +32,8 @@ By hand, in this order. `main` is the release branch.
 else. The Obsidian directory rebuilds from the tagged source and compares byte for byte, and an asset built
 from any other tree will not match.
 
-Run the repo's gate (`npm run gate` where it exists) before opening the
-pull request.
+Run `npm run gate` before you commit. `main` is the release branch, so a commit
+that lands red breaks it for everybody.
 
 For security issues, use the process in SECURITY.md instead of a public
 pull request.
