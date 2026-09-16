@@ -4,8 +4,11 @@ Changes land as direct commits on `main`. This repository has pull requests
 disabled, so there is no branch to open: commit to `main` with a Conventional
 Commits message and push.
 
-By submitting a pull request you grant Paperless Movement S.L. the rights
-described in Section 7 of the LICENSE.
+By submitting a contribution intended for inclusion in this repository, in any
+form and through any channel, including a patch, a commit, an issue containing
+code, or an email or other message containing code, you grant Paperless
+Movement, S.L. the rights described in Section 7 of the LICENSE for that
+contribution.
 
 Keep changes small and describe the behaviour change in the commit message.
 
