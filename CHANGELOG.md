@@ -21,10 +21,11 @@ messages (`git log --grep='^0\.'`) and on the GitHub releases page.
   row at the top and the bottom. The Team Insights session rows and the
   history rows carried the same cut. Each row's text still truncates with
   an ellipsis where it has to; what stopped is the row itself being cut.
-- **A screenshot you paste into a message is a picture again.** The cell
-  that holds it in your own turn was cut to that same 30px, so a 150px
-  screenshot was shown through a 30px strip. The cell now grows to the
-  picture, which caps itself at 240 by 180 as before. Found by Iris while
+- **The cell that holds a screenshot you paste into a message stated no
+  height.** Under Obsidian's bare-button rule it computed to 30px in the
+  test fixture in all four rooms while holding a 150px picture; it now
+  grows to the picture, capped at 240 by 180 as before. Measured in the
+  fixture, not yet confirmed on a live vault. Found by Iris while
   reviewing the question card Holger Schwan reported in 0.14.0.
 - **The gate counts the controls now rather than listing them.** A test
   fails the build if any button under a plugin root computes to a height
