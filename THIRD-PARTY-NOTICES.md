@@ -11,6 +11,10 @@ The built `main.js` bundles one third-party component.
 - Used for: launching and talking to the locally installed Claude Code CLI,
   session listing and resume, subagent message forwarding, and permission
   callbacks.
+- Licence boundary: the plugin's own source is MIT, and the built
+  `main.js` is a mixed bundle. It also contains this SDK, Copyright (c)
+  Anthropic PBC, which is not under MIT; forks that redistribute `main.js`
+  redistribute it on Anthropic's terms.
 
 The plugin does not bundle the Claude Code CLI itself. It talks to the copy
 already installed on the machine and never handles, stores, or transmits any

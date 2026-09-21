@@ -3,6 +3,11 @@
 Notable changes per release. Older releases are described in their commit
 messages (`git log --grep='^0\.'`) and on the GitHub releases page.
 
+## 0.16.0
+
+- Relicensed under MIT. Releases before 0.16.0 remain under the ICOR for Life
+  Source-Available License (Code) v1.0.
+
 ## 0.15.1
 
 - **Fourteen controls now state their own height instead of taking
