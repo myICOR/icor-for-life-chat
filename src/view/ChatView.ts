@@ -48,6 +48,8 @@ import type { PinnedPrompt } from '../model/pins';
 import type { TrayChip } from './composer/Composer';
 import { cliModule, missingProviderMessage, providerFor } from '../provider/registry';
 import { launchModelFor } from '../model/catalogCache';
+import { SCRATCHPAD_FOLDER, captureBase, captureFolders, uniquePath } from '../model/scratchpad';
+import { localDate } from '../wip/naming';
 import { approvalEvent } from '../provider/questions';
 import { isProviderId } from '../provider/types';
 import type { Provider, ProviderId, ProviderSession, SessionHooks, SessionStore } from '../provider/types';
@@ -656,25 +658,24 @@ export class ChatView extends ItemView {
   }
 
   /**
-   * The reply as its own note. Into the Daily Scratchpad room when the vault
-   * has one, else the vault root; named by the date and the reply's first
-   * words; stamped with the session so the note can find its conversation.
+   * The reply as its own note. A quick capture in the Daily Scratchpad room
+   * when the vault has one: `YYYY/MM/YYYY-MM-DD-HHmmss.md`, named and dated
+   * by the moment in the machine's own day, the one shape the room takes
+   * (issue #1). Else the vault root, named by the reply's first words.
+   * Stamped with the session so the note can find its conversation.
    */
   async saveAsNote(text: string): Promise<void> {
-    const stamp = new Date().toISOString().slice(0, 10);
-    const slug = slugOf(text) || 'reply';
-    const roomPath = '00 Daily Scratchpad';
-    const room = this.app.vault.getAbstractFileByPath(roomPath);
-    const folder = room && !(room instanceof TFile) ? roomPath : '';
-    const base = folder ? `${folder}/${stamp}-${slug}` : slug;
-    let path = normalizePath(`${base}.md`);
-    for (let n = 2; this.app.vault.getAbstractFileByPath(path) !== null; n += 1) {
-      path = normalizePath(`${base}-${n}.md`);
-    }
+    const now = Date.now();
+    const exists = (path: string): boolean => this.app.vault.getAbstractFileByPath(path) !== null;
+    const room = this.app.vault.getAbstractFileByPath(SCRATCHPAD_FOLDER);
+    const inRoom = room !== null && !(room instanceof TFile);
+    // The year and the month folder may not exist yet; createFolder throws on one that does.
+    if (inRoom) for (const folder of captureFolders(now)) if (!exists(folder)) await this.app.vault.createFolder(folder);
+    const path = normalizePath(uniquePath(inRoom ? captureBase(now) : slugOf(text) || 'reply', exists));
     const sessionId = this.store.state.sessionId ?? this.resumeSessionId ?? '';
     const frontmatter = [
       '---',
-      `date: ${stamp}`,
+      `date: ${localDate(now)}`,
       'source: icor-chat',
       `session_ids: [${sessionId ? `"${sessionId}"` : ''}]`,
       '---',
