@@ -125,11 +125,23 @@ export function sortWipFolders(folders: readonly WipFolderInfo[]): WipFolderInfo
 
 const WIP_PATH = /03 WiP\/([^/"'`\s\\]+)/g;
 
+/**
+ * A WiP work folder's own name never carries a file extension - only the
+ * room's root-level files do (`README.md`, and any note a member drops
+ * there directly). A first path segment shaped like a file, most often the
+ * room's own README, is not a deliverable folder and must never be treated
+ * as one downstream: joining a filename onto it is what produces `03
+ * WiP/README.md/README.md`, ENOTDIR against the real file.
+ */
+function isWipFolderName(name: string): boolean {
+  return !!name && name !== WIP_ARCHIVE && !name.startsWith('_') && !/\.[a-z0-9]+$/i.test(name);
+}
+
 function wipFolderOf(text: string): string[] {
   const out: string[] = [];
   for (const m of text.matchAll(WIP_PATH)) {
     const name = m[1];
-    if (!name || name === WIP_ARCHIVE || name.startsWith('_')) continue;
+    if (!name || !isWipFolderName(name)) continue;
     out.push(`${WIP_FOLDER}/${name}`);
   }
   return out;
@@ -149,7 +161,7 @@ export function wipFoldersTouched(events: readonly ChatEvent[], attached: readon
     for (const f of wipFolderOf(`${path}/`)) seen.add(f);
     if (path.startsWith(`${WIP_FOLDER}/`)) {
       const name = path.slice(WIP_FOLDER.length + 1).split('/')[0] ?? '';
-      if (name && name !== WIP_ARCHIVE && !name.startsWith('_')) seen.add(`${WIP_FOLDER}/${name}`);
+      if (isWipFolderName(name)) seen.add(`${WIP_FOLDER}/${name}`);
     }
   }
   for (const event of events) {
