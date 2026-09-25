@@ -70,6 +70,17 @@ test('the folders a session touched come from writes and Bash commands, never fr
   assert.deepEqual(wipFoldersTouched([], []), []);
 });
 
+test('the room README is never mistaken for a work folder', () => {
+  // The bug: `03 WiP/README.md` reached the archive's folder list, which then
+  // joined a filename onto it as if it were a directory - `03
+  // WiP/README.md/README.md`, ENOTDIR against the real file.
+  const events = [
+    { kind: 'tool-call', toolUseId: '1', name: 'Read', target: '03 WiP/README.md', input: {}, purpose: '', stream: null },
+    { kind: 'tool-call', toolUseId: '2', name: 'Bash', target: 'cat', input: { command: 'cat "03 WiP/README.md"' }, purpose: '', stream: null },
+  ];
+  assert.deepEqual(wipFoldersTouched(events, ['03 WiP/README.md']), []);
+});
+
 test('a README gains one session line, once, under a heading created once', () => {
   const line = sessionLine('06 AI Team/AI Sessions/2026-09-04_1200_x_abc123', 'A session');
   assert.equal(line, '- [[06 AI Team/AI Sessions/2026-09-04_1200_x_abc123/conversation|A session]]');
