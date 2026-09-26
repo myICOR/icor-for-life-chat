@@ -1,0 +1,115 @@
+name: Release
+
+# A release is a bare version tag (0.16.3, never v0.16.3: the Obsidian
+# directory reads the tag as the version). A plain push to main never cuts
+# a release; it only ever lands code. Tom decisions r7k and t5m, 2026-09-07.
+#
+# manifest.json stays the source of truth for the version. The guard job
+# refuses a tag that does not equal manifest.json's version, and a tag that
+# is not on main. Only then does the shared release logic run.
+#
+# main.js is build output and is not in git (kind plugin-source). The shared
+# workflow builds it in a read-only job from the tagged commit, with the Node
+# in .node-version and exactly the lockfile (npm ci), and publishes it with
+# manifest.json and styles.css from the same tree. The provenance job signs
+# the three published files. The verify job rebuilds the same tag in a
+# separate job and goes red unless the published main.js equals the rebuild,
+# so a release that is not reproducible from its tag cannot pass quietly.
+#
+# Rehearsal: run this workflow by hand (Actions, Release, Run workflow, or
+# `gh workflow run release.yml -R myICOR/icor-for-life-chat -f tag=<tag>`)
+# with an EXISTING tag, normally the current release. It runs the guard,
+# builds the tag, runs the release gate as a dry run (nothing is tagged,
+# published or signed) and runs the verify job against the published release.
+# It cannot cut a release: a manual run is always a dry run.
+#
+# The gate runs AFTER the release job, never beside it. Run in parallel they
+# race: the gate reads the repo before the release exists.
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: An existing release tag to rehearse. Nothing is published.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.guard.outputs.sha }}
+    steps:
+      - name: The tag is a bare version
+        env:
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::$TAG is not X.Y.Z"; exit 1; }
+
+      - name: Check out the tagged commit (full history)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: The tag is the manifest version, and it sits on main
+        id: guard
+        env:
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          SHA=$(git rev-parse HEAD)
+          [ "$(git rev-parse "refs/tags/$TAG^{commit}")" = "$SHA" ] \
+            || { echo "::error::checkout $SHA is not tag $TAG"; exit 1; }
+          MANIFEST=$(python3 -c "import json; print(json.load(open('manifest.json'))['version'])")
+          if [ "$MANIFEST" != "$TAG" ]; then
+            echo "::error::tag $TAG does not equal manifest.json version $MANIFEST"
+            exit 1
+          fi
+          git fetch --no-tags --force origin "+refs/heads/main:refs/remotes/origin/main"
+          if ! git merge-base --is-ancestor "$SHA" origin/main; then
+            echo "::error::tag $TAG points at $SHA, which is not on main"
+            exit 1
+          fi
+          echo "tag $TAG == manifest.json $MANIFEST at $SHA, on main"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: guard
+    # id-token and attestations: the shared workflow's `provenance` job signs
+    # main.js, manifest.json and styles.css after the release job publishes
+    # them. A called workflow gets no more than its caller grants, and GitHub
+    # checks the grant when the run starts, dry run or not.
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    uses: myICOR/.github/.github/workflows/obsidian-release.yml@main
+    with:
+      kind: plugin-source
+      ref: ${{ needs.guard.outputs.sha }}
+      build-command: npm ci && npm run build
+      node-version-file: .node-version
+      dry-run: ${{ github.event_name == 'workflow_dispatch' }}
+
+  verify:
+    needs: release
+    permissions:
+      contents: read
+      issues: write
+    uses: myICOR/.github/.github/workflows/obsidian-version-gate.yml@main
+    with:
+      kind: plugin-source
+      build-command: npm ci && npm run build
+      node-version-file: .node-version
+      open-issue: ${{ github.event_name != 'workflow_dispatch' }}
