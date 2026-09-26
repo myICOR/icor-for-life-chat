@@ -48,7 +48,7 @@ import type { PinnedPrompt } from '../model/pins';
 import type { TrayChip } from './composer/Composer';
 import { cliModule, missingProviderMessage, providerFor } from '../provider/registry';
 import { launchModelFor } from '../model/catalogCache';
-import { SCRATCHPAD_FOLDER, captureBase, captureFolders, uniquePath } from '../model/scratchpad';
+import { SCRATCHPAD_FOLDER, captureFolders, capturePath, uniquePath } from '../model/scratchpad';
 import { localDate } from '../wip/naming';
 import { approvalEvent } from '../provider/questions';
 import { isProviderId } from '../provider/types';
@@ -659,9 +659,10 @@ export class ChatView extends ItemView {
 
   /**
    * The reply as its own note. A quick capture in the Daily Scratchpad room
-   * when the vault has one: `YYYY/MM/YYYY-MM-DD-HHmmss.md`, named and dated
-   * by the moment in the machine's own day, the one shape the room takes
-   * (issue #1). Else the vault root, named by the reply's first words.
+   * when the vault has one: `YYYY/MM/YYYYMMDDHHmm.md` (` 2` on a same-minute
+   * collision), named and dated by the moment in the machine's own day, the
+   * capture shape the room takes (issue #1). Else the vault root, named by
+   * the reply's first words.
    * Stamped with the session so the note can find its conversation.
    */
   async saveAsNote(text: string): Promise<void> {
@@ -671,7 +672,7 @@ export class ChatView extends ItemView {
     const inRoom = room !== null && !(room instanceof TFile);
     // The year and the month folder may not exist yet; createFolder throws on one that does.
     if (inRoom) for (const folder of captureFolders(now)) if (!exists(folder)) await this.app.vault.createFolder(folder);
-    const path = normalizePath(uniquePath(inRoom ? captureBase(now) : slugOf(text) || 'reply', exists));
+    const path = normalizePath(inRoom ? capturePath(now, exists) : uniquePath(slugOf(text) || 'reply', exists));
     const sessionId = this.store.state.sessionId ?? this.resumeSessionId ?? '';
     const frontmatter = [
       '---',
