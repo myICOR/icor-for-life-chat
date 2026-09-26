@@ -3,6 +3,26 @@
 Notable changes per release. Older releases are described in their commit
 messages (`git log --grep='^0\.'`) and on the GitHub releases page.
 
+## 0.16.1
+
+- **A session no longer crashes on archive when the WiP room's README was
+  in it.** A file lying directly in `03 WiP/`, most often the room's own
+  `README.md` attached or written during the session, was taken for a work
+  folder, and the archive then tried to write `03 WiP/README.md/README.md`
+  and failed with ENOTDIR. A name that carries a file extension is never
+  treated as a work folder now. Thanks to Andrejs Gailis (@dzhejs) for the
+  fix (#4, closes #3), and to Olivier Van Biervliet for reporting the
+  crash.
+- **"Save as note" files the reply as a quick capture in `YYYY/MM/`.** In
+  a vault with a Daily Scratchpad room, the reply was written to the root
+  of `00 Daily Scratchpad/`, named by its first words and dated by the UTC
+  day, all three of which the Scaffold's check reports. It now goes to
+  `00 Daily Scratchpad/YYYY/MM/YYYY-MM-DD-HHmmss.md`, named and dated by
+  the moment in your own local day, and the year and month folders are
+  created when they are missing. A vault with no Daily Scratchpad room
+  still gets the note at the vault root, named by the reply's first words.
+  Thanks to Ian Slattery (@ipslatte) for the fix (#2, closes #1).
+
 ## 0.16.0
 
 - Relicensed under MIT. Releases before 0.16.0 remain under the ICOR for Life
