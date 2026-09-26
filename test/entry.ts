@@ -51,6 +51,8 @@ export * from '../src/team/usage';
 export * from '../src/team/insights';
 export * from "../src/archive/agents";
 export * from '../src/wip/naming';
+/* The Daily Scratchpad room's naming rule, for "Save as note" (issue #1). */
+export * from '../src/model/scratchpad';
 export * from '../src/provider/codex/normalize';
 export * from '../src/provider/codex/modes';
 export { modelChoicesOf } from '../src/provider/codex/session';
