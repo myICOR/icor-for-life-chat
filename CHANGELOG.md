@@ -3,6 +3,21 @@
 Notable changes per release. Older releases are described in their commit
 messages (`git log --grep='^0\.'`) and on the GitHub releases page.
 
+## 0.16.2
+
+- **"Save as note" names the capture `YYYYMMDDHHmm`, the Scaffold's
+  quick-capture name.** Since 0.16.1 the reply went to
+  `00 Daily Scratchpad/YYYY/MM/` named `YYYY-MM-DD-HHmmss.md`, with `-2`
+  on a collision, a name the Scaffold's check does not accept for a
+  quick capture. It is now named by the minute of your local time, for
+  example `202609261530.md`, and a second save in the same minute gets
+  `202609261530 2.md` (a space, then the number), as the ICOR for Life
+  Scratchpad plugin writes it. The folder and the local day are
+  unchanged. A vault with no Daily Scratchpad room still gets the note at
+  the vault root, named by the reply's first words (#7). This builds on
+  Ian Slattery's (@ipslatte) fix in #2, which moved the note into
+  `YYYY/MM/` and onto your local day.
+
 ## 0.16.1
 
 - **A session no longer crashes on archive when the WiP room's README was
