@@ -185,6 +185,21 @@ test('a subagent left running when the turn closes is orphaned, and says so', as
   assert.notEqual(bus.get('a').endedAt, null);
 });
 
+/* The bus is plugin-wide: every chat tab, and every conversation a tab has held
+ * since Obsidian started, opens its subagents on the same one. An archive is one
+ * conversation, so it takes only the subagents that conversation launched. */
+test('a conversation archives only the subagents its own sessions launched', async () => {
+  const { SubagentBus } = await import('./build/pure.mjs');
+  const bus = new SubagentBus();
+  bus.open({ agentId: 'a', agentType: 'pax', description: '', task: '', sessionId: 'earlier' });
+  bus.open({ agentId: 'b', agentType: 'quinn', description: '', task: '', sessionId: 'other-tab' });
+  bus.open({ agentId: 'c', agentType: 'pax', description: '', task: '', sessionId: 'mine' });
+  bus.open({ agentId: 'd', agentType: 'quinn', description: '', task: '', sessionId: null });
+  bus.open({ agentId: 'e', agentType: 'pax', description: '', task: '', sessionId: 'mine-resumed' });
+  assert.deepEqual(bus.forSessions(['mine', 'mine-resumed']).map((t) => t.agentId), ['c', 'e']);
+  assert.deepEqual(bus.forSessions([]), [], 'no session yet, no subagents');
+});
+
 /* ============ WHEN A SESSION EVENT FIRES, and why a ruling depends on it ====
  *
  * The empty-strip ruling rests on one mechanical fact: a `session` event
@@ -244,6 +259,19 @@ test('a query begins in exactly two places, and both are deliberate', () => {
   // And the other one, in the session itself: sending starts the query.
   assert.match(strip(sessionSrc), /send\([^)]*\)[^{]*\{[\s\S]{0,200}this\.start\(\);/,
     'send() no longer starts the query, so a first message would go nowhere');
+});
+
+test('the archive asks the bus for this conversation\'s subagents, never all of them', () => {
+  const code = strip(chatView);
+  const at = code.indexOf('private async archive(');
+  assert.ok(at > 0, 'archive() was renamed - this pin is no longer attached to anything');
+  const rest = code.slice(at);
+  const end = rest.search(/\n  (?:override |private |public |async |get |\/\*\*)/);
+  const body = rest.slice(0, end === -1 ? rest.length : end);
+  assert.match(body, /subagents:\s*this\.plugin\.subagents\.forSessions\(this\.sessionIds\)/,
+    'the archive no longer scopes subagents to this conversation\'s sessions');
+  assert.equal(/subagents\.all\(\)/.test(body), false,
+    'the archive takes every subagent on the plugin-wide bus, other conversations included');
 });
 
 /* ================= where a chat opens: the right sidebar, never the centre ==
