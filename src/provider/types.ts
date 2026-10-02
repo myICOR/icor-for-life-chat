@@ -288,6 +288,8 @@ export interface RuntimeInstall {
   command: string;
   /** The vendor's own setup page. */
   page: string;
+  /** The vendor's documented update line, where there is one. Handed over like `command`, never run. */
+  update?: string;
 }
 
 export interface Provider {

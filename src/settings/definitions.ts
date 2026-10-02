@@ -53,12 +53,13 @@ export interface NoteDefinition {
 /* A ROW OF BUTTONS, nothing persisted. `install` hands the vendor's one-line
    install to the member (a terminal pane or the clipboard, never run by the
    plugin: Obsidian forbids a plugin installing its own dependencies, and the
-   vault's rule is that a runtime is started by the user); `recheck` reruns
-   detection after the member has. */
+   vault's rule is that a runtime is started by the user); `update` hands over
+   the vendor's update line the same way; `recheck` reruns detection after the
+   member has. */
 export interface ActionDefinition {
   name: string;
   desc: string;
-  actions: Array<{ label: string; icon: string; run: 'install' | 'recheck' | 'page'; provider: ProviderId }>;
+  actions: Array<{ label: string; icon: string; run: 'install' | 'update' | 'recheck' | 'page'; provider: ProviderId }>;
 }
 
 export type ItemDefinition = ControlDefinition | NoteDefinition | ActionDefinition;
@@ -85,7 +86,7 @@ export interface DefinitionInput {
   /** What detection found per runtime; absent while it has not run. */
   detections?: Partial<Record<ProviderId, Detection | null>>;
   /** Each runtime's install line and page, for the rows of runtimes not found. */
-  installations?: Partial<Record<ProviderId, { command: string; page: string }>>;
+  installations?: Partial<Record<ProviderId, { command: string; page: string; update?: string }>>;
 }
 
 /* THE RUNTIME DROPDOWN OFFERS ONLY WHAT WAS FOUND, plus the stored choice so
@@ -142,11 +143,35 @@ function installRow(input: DefinitionInput, id: ProviderId, displayName: string)
   };
 }
 
-/** The rows one runtime contributes to the Providers group: its note, its install row when missing, its path. */
+/* THE UPDATE ROW, only for a runtime detection found and whose vendor
+   documents an update line (issue #13). A Claude Code started only through
+   the Agent SDK was seen staying on one version for weeks while releases
+   shipped, and the model menu is that version's own catalogue, so it aged
+   with it. Nothing here knows the latest version - that would be a network
+   request this engine does not make - so the row says what is installed and
+   hands over the vendor's line, the same way the install row does. */
+function updateRow(input: DefinitionInput, id: ProviderId, displayName: string): ActionDefinition | null {
+  const d = input.detections?.[id];
+  const line = input.installations?.[id]?.update;
+  if (!d?.found || !line) return null;
+  const have = d.version ? `You have ${displayName} ${d.version}. ` : '';
+  return {
+    name: `Update ${displayName}`,
+    desc: `${have}Started only from this chat, ${displayName} may not update itself, and the model menu lists only the models your version knows. Update puts the vendor's update line (${line}) into a terminal pane or onto the clipboard; nothing is run by the plugin. Press Enter there, then Check again.`,
+    actions: [
+      { label: 'Update', icon: 'download', run: 'update', provider: id },
+      { label: 'Check again', icon: 'refresh-cw', run: 'recheck', provider: id },
+    ],
+  };
+}
+
+/** The rows one runtime contributes to the Providers group: its note, its install row when missing or update row when found, its path. */
 export function runtimeRows(input: DefinitionInput, id: ProviderId, displayName: string, pathKey: SettingKey, pathDesc: string, placeholder: string): ItemDefinition[] {
   const rows: ItemDefinition[] = [detectionNote(input, id, displayName)];
   const install = installRow(input, id, displayName);
   if (install) rows.push(install);
+  const update = updateRow(input, id, displayName);
+  if (update) rows.push(update);
   rows.push({ name: `${displayName} location`, desc: pathDesc, control: { type: 'text', key: pathKey, placeholder } });
   return rows;
 }

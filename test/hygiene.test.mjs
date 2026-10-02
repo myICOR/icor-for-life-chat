@@ -278,6 +278,40 @@ test('every runtime carries an install line and a vendor page, and the plugin ru
   assert.doesNotMatch(install, /spawn|exec\(|child_process/, 'the install offer runs a process');
 });
 
+test('a Claude Code that is here gets an Update row that hands over `claude update`, and runs nothing', async () => {
+  /* Issue #13. A Claude Code started only through the Agent SDK was seen
+     staying on one version for weeks while releases shipped, and the model
+     menu, which is that CLI's own catalogue, aged with it. The row names the
+     installed version and hands the member the vendor's update line the way
+     the Install row hands over the install line. */
+  const { availableProviders } = await import('./build/pure.mjs');
+  const installations = Object.fromEntries(availableProviders().map((p) => [p.id, p.installation]));
+  assert.equal(installations.claude.update, 'claude update');
+  const detections = {
+    claude: { found: true, path: '/opt/claude', version: '2.1.271', signedIn: null, hint: 'Claude Code 2.1.271 at /opt/claude' },
+    codex: { found: true, path: '/opt/codex', version: '1.0.0', signedIn: null, hint: 'Codex 1.0.0 at /opt/codex' },
+  };
+  const input = { settings: DEFAULT_SETTINGS, installations, detections };
+  const update = runtimeRows(input, 'claude', 'Claude Code', 'cliPath', 'd', 'p').find((r) => r.name === 'Update Claude Code');
+  assert.ok(update, 'a found Claude Code has no Update row');
+  assert.deepEqual(update.actions.map((a) => a.run), ['update', 'recheck']);
+  assert.match(update.desc, /2\.1\.271/, 'the row does not name the installed version');
+  assert.match(update.desc, /claude update/, 'the row does not show the line it hands over');
+  assert.match(update.desc, /nothing is run by the plugin/);
+  // Version unreadable: the row still offers the update, without a "null".
+  const unread = { ...input, detections: { claude: { ...detections.claude, version: null } } };
+  const unreadRow = runtimeRows(unread, 'claude', 'Claude Code', 'cliPath', 'd', 'p').find((r) => r.name === 'Update Claude Code');
+  assert.ok(unreadRow);
+  assert.doesNotMatch(unreadRow.desc, /null|undefined/);
+  // No documented update line for Codex in this build, so no row for it.
+  assert.equal(runtimeRows(input, 'codex', 'Codex', 'codexPath', 'd', 'p').some((r) => r.name === 'Update Codex'), false);
+  // Not found (always the case on a phone or tablet): Install, never Update.
+  const missing = { ...input, detections: { claude: { found: false, path: null, version: null, signedIn: null, hint: 'not found' } } };
+  const names = runtimeRows(missing, 'claude', 'Claude Code', 'cliPath', 'd', 'p').map((r) => r.name);
+  assert.ok(names.includes('Install Claude Code'));
+  assert.ok(!names.includes('Update Claude Code'));
+});
+
 test('the view and main.ts reach Codex through the registry only, the same rule as for Claude', () => {
   const offenders = [...tsFilesUnder('src/view'), 'src/main.ts', ...tsFilesUnder('src/state'), ...tsFilesUnder('src/model')]
     .filter((f) => /from '[^']*provider\/codex[^']*'/.test(read(f)));
