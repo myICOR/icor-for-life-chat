@@ -1,10 +1,12 @@
 /* The decision lifecycle, derived and never stored.
  *
- * A decision is RESOLVED when a LATER USER message contains its code. That is
- * the whole rule, and it is recomputed on every render rather than written down
- * anywhere, so the transcript is always the record and there is no flag to fall
- * out of sync. An assistant repeating a code is a re-surface, never a
- * resolution: only the user's own pen closes a decision. */
+ * A decision is RESOLVED when a LATER USER message contains its code, or when
+ * the assistant surfaces the code again as CLEARED. A later DECISION or BLOCKED
+ * surfacing of the same code opens it again: the latest word on a code wins.
+ * That is the whole rule, and it is recomputed on every render rather than
+ * written down anywhere, so the transcript is always the record and there is
+ * no flag to fall out of sync. An assistant naming a code in prose is a
+ * mention, never a resolution. */
 
 import type { DecisionBlock } from './model';
 import { isCode } from './model';
@@ -49,20 +51,39 @@ export interface SurfacedDecision {
 }
 
 /**
+ * Record what one rendered block surfaced. Every block counts, so a later
+ * CLEARED or DECISION for a code already known reaches `trackDecisions`; a
+ * block that renders twice is recorded once.
+ */
+export function recordSurfaced(
+  surfaced: SurfacedDecision[],
+  decisions: DecisionBlock[],
+  index: number,
+  at: number,
+): void {
+  for (const decision of decisions) {
+    if (surfaced.some((s) => s.decision.code === decision.code && s.index === index)) continue;
+    surfaced.push({ decision, index, at });
+  }
+}
+
+/**
  * Fold the transcript and every decision surfaced in it into current state.
- * A `cleared` block is a record of a gate that was already closed, so it starts
- * resolved without needing a user mention.
+ * A `cleared` block is a record of a gate that was already closed, so it
+ * resolves without needing a user mention.
  */
 export function trackDecisions(
   surfaced: SurfacedDecision[],
   transcript: TranscriptEntry[],
 ): TrackedDecision[] {
   const byCode = new Map<string, TrackedDecision>();
-  for (const item of surfaced) {
+  const ordered = [...surfaced].sort((a, b) => a.index - b.index);
+  for (const item of ordered) {
     const existing = byCode.get(item.decision.code);
     if (existing) {
-      // A re-surfaced decision keeps its original age and title.
-      if (!existing.title && item.decision.title) existing.title = item.decision.title;
+      // A re-surfaced decision keeps its original age and takes the newer words.
+      if (item.decision.title) existing.title = item.decision.title;
+      existing.variant = item.decision.variant;
       continue;
     }
     byCode.set(item.decision.code, {
@@ -77,11 +98,18 @@ export function trackDecisions(
   }
 
   for (const tracked of byCode.values()) {
+    // The latest word on the code decides: each surfacing opens or clears it,
+    // and a later user message naming it resolves it.
+    const words = ordered
+      .filter((s) => s.decision.code === tracked.code)
+      .map((s) => ({ index: s.index, resolved: s.decision.variant === 'cleared' }));
     for (const entry of transcript) {
       if (!mentionsCode(entry.text, tracked.code)) continue;
       tracked.mentions.push(entry.index);
-      if (entry.role === 'user' && entry.index > tracked.index) tracked.resolved = true;
+      if (entry.role === 'user' && entry.index > tracked.index) words.push({ index: entry.index, resolved: true });
     }
+    words.sort((a, b) => a.index - b.index);
+    tracked.resolved = words[words.length - 1]?.resolved ?? false;
     tracked.mentions.sort((a, b) => a - b);
   }
 

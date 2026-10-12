@@ -24,7 +24,7 @@ import type { Composer } from './composer/Composer';
 import type { Statusline } from './composer/Statusline';
 import type { DecisionBadge } from './composer/DecisionBadge';
 import { buildPane } from './pane';
-import { trackDecisions, openDecisions, mentionsCode } from '../structured/decisions';
+import { trackDecisions, openDecisions, mentionsCode, recordSurfaced } from '../structured/decisions';
 import type { SurfacedDecision, TranscriptEntry, TrackedDecision } from '../structured/decisions';
 import { repaintDecisions } from '../structured/render';
 import { renderChipTray } from './SubagentView';
@@ -1854,11 +1854,7 @@ export class ChatView extends ItemView {
   private recordDecisions(decisions: Array<{ code: string; title: string; body: string; variant: 'decision' | 'blocked' | 'cleared' }>, blockId: string): void {
     if (decisions.length === 0) return;
     const index = this.indexForBlock(blockId);
-    const at = Date.now();
-    for (const decision of decisions) {
-      if (this.surfaced.some((s) => s.decision.code === decision.code)) continue;
-      this.surfaced.push({ decision, index, at });
-    }
+    recordSurfaced(this.surfaced, decisions, index, Date.now());
     this.refreshDecisions();
   }
 

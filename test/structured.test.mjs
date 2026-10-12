@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseStructured, decisionsOf, stripGlyphs, trackDecisions, openDecisions,
-  badgeLabel, mentionsCode, isCode, STRUCTURED_REPLY_PROMPT,
+  badgeLabel, mentionsCode, isCode, STRUCTURED_REPLY_PROMPT, recordSurfaced,
 } from './build/pure.mjs';
 
 const card = [
@@ -208,6 +208,58 @@ test('a user message BEFORE the decision cannot resolve it', () => {
 test('a cleared gate arrives already resolved', () => {
   const tracked = trackDecisions([surfaced('ccccc', 1, 'cleared')], []);
   assert.equal(tracked[0].resolved, true);
+});
+
+/* A RE-SURFACE IS THE LATEST WORD on its code. The prompt keeps a code the
+ * same whenever a decision is surfaced again and closes a gate with CLEARED,
+ * so a later block for a known code must reach the tracker. */
+
+test('a later CLEARED for an open decision closes it', () => {
+  const tracked = trackDecisions([surfaced('a1b2c', 1), surfaced('a1b2c', 3, 'cleared')], [
+    { role: 'assistant', text: 'DECISION a1b2c', index: 1, at: 1 },
+    { role: 'user', text: 'go on', index: 2, at: 2 },
+    { role: 'assistant', text: 'CLEARED a1b2c', index: 3, at: 3 },
+  ]);
+  assert.equal(tracked.length, 1, 'one code is one decision');
+  assert.equal(tracked[0].resolved, true);
+  assert.deepEqual(openDecisions(tracked), []);
+});
+
+test('a decision surfaced again after a user mention is open again, in its newer words', () => {
+  const tracked = trackDecisions([
+    surfaced('a1b2c', 1),
+    { decision: { code: 'a1b2c', title: 'the sharper question', body: 'new body', variant: 'decision' }, index: 3, at: 1003 },
+  ], [
+    { role: 'assistant', text: 'DECISION a1b2c', index: 1, at: 1 },
+    { role: 'user', text: 'a1b2c - what does this need from me?', index: 2, at: 2 },
+    { role: 'assistant', text: 'DECISION a1b2c', index: 3, at: 3 },
+  ]);
+  assert.equal(tracked[0].resolved, false, 'the re-surface reopened it');
+  assert.equal(tracked[0].title, 'the sharper question');
+  assert.equal(tracked[0].at, 1001, 'it keeps the age of its first surfacing');
+  assert.equal(openDecisions(tracked).length, 1);
+});
+
+test('a user answer after the last surfacing still resolves it', () => {
+  const tracked = trackDecisions([surfaced('a1b2c', 1), surfaced('a1b2c', 3)], [
+    { role: 'assistant', text: 'DECISION a1b2c', index: 1, at: 1 },
+    { role: 'user', text: 'a1b2c what is it?', index: 2, at: 2 },
+    { role: 'assistant', text: 'DECISION a1b2c', index: 3, at: 3 },
+    { role: 'user', text: 'a1b2c go ahead', index: 4, at: 4 },
+  ]);
+  assert.equal(tracked[0].resolved, true);
+});
+
+test('every block that surfaces a code is recorded, once per block', () => {
+  const list = [];
+  const open = { code: 'a1b2c', title: 'first', body: '', variant: 'decision' };
+  const done = { code: 'a1b2c', title: 'first', body: '', variant: 'cleared' };
+  recordSurfaced(list, [open], 1, 101);
+  recordSurfaced(list, [open], 1, 102);
+  assert.equal(list.length, 1, 'a block that renders twice counts once');
+  recordSurfaced(list, [done], 3, 103);
+  assert.deepEqual(list.map((s) => [s.index, s.decision.variant]), [[1, 'decision'], [3, 'cleared']]);
+  assert.equal(trackDecisions(list, [])[0].resolved, true);
 });
 
 test('a code inside a longer token is not a mention', () => {
