@@ -3,6 +3,14 @@
 Notable changes per release. Older releases are described in their commit
 messages (`git log --grep='^0\.'`) and on the GitHub releases page.
 
+## 0.16.3
+
+- **"Save as note" is unchanged for you; its fields are now tested.** A saved
+  reply still carries `source: icor-chat` and `session_ids`, which is how it
+  finds its conversation to resume, and what it writes has not changed. A
+  test now holds both fields to valid YAML. The quality check that calls them
+  invented is the Scaffold's, so that part is fixed there.
+
 ## 0.16.2
 
 - **"Save as note" names the capture `YYYYMMDDHHmm`, the Scaffold's

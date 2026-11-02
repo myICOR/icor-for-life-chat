@@ -44,3 +44,8 @@ export function uniquePath(base: string, exists: (path: string) => boolean, sepa
 export function capturePath(now: number, exists: (path: string) => boolean): string {
   return uniquePath(captureBase(now), exists, ' ');
 }
+
+/** The frontmatter of a saved reply. `source` and `session_ids` are what lets the note find its conversation: `archivedSession` in main.ts reads both to resume it. */
+export function captureFrontmatter(date: string, sessionId: string): string {
+  return ['---', `date: ${date}`, 'source: icor-chat', `session_ids: ${JSON.stringify(sessionId ? [sessionId] : [])}`, '---', ''].join('\n');
+}

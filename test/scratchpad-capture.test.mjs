@@ -11,7 +11,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SCRATCHPAD_FOLDER, captureBase, captureFolders, capturePath, localDate, uniquePath } from './build/pure.mjs';
+import { SCRATCHPAD_FOLDER, captureBase, captureFolders, captureFrontmatter, capturePath, localDate, resumableSessionId, uniquePath } from './build/pure.mjs';
 
 /* validate-scaffold.py check 3: three path parts under the room, YYYY then MM,
    then a name in one of the room's shapes; the canonical quick-capture shape
@@ -91,4 +91,21 @@ test('a note outside the room, named by its slug, keeps its -2 suffix', () => {
   assert.equal(uniquePath('reply', exists), 'reply-2.md');
   taken.add('reply-2.md');
   assert.equal(uniquePath('reply', exists), 'reply-3.md');
+});
+
+/* Tool Lab item 14. Resume reads `source` and `session_ids` back, so both stay
+   in a saved reply; a double-quoted flow list is YAML and JSON alike. */
+test('a saved reply carries its session as a quoted YAML list, and resume can read it back', () => {
+  const id = '3f2b8c1e-0d4a-4e6b-9a77-1c2d3e4f5a6b';
+  const text = captureFrontmatter('2026-11-02', id);
+  assert.equal(text, `---\ndate: 2026-11-02\nsource: icor-chat\nsession_ids: ["${id}"]\n---\n`);
+  const value = JSON.parse(/^session_ids: (.*)$/m.exec(text)[1]);
+  assert.deepEqual(value, [id]);
+  assert.equal(resumableSessionId(value), id);
+});
+
+test('a saved reply with no session writes an empty list, not a null or a blank string', () => {
+  const text = captureFrontmatter('2026-11-02', '');
+  assert.match(text, /^session_ids: \[\]$/m);
+  assert.equal(resumableSessionId(JSON.parse(/^session_ids: (.*)$/m.exec(text)[1])), null);
 });

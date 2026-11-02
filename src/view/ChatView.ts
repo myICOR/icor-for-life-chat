@@ -48,7 +48,7 @@ import type { PinnedPrompt } from '../model/pins';
 import type { TrayChip } from './composer/Composer';
 import { cliModule, missingProviderMessage, providerFor } from '../provider/registry';
 import { launchModelFor } from '../model/catalogCache';
-import { SCRATCHPAD_FOLDER, captureFolders, capturePath, uniquePath } from '../model/scratchpad';
+import { SCRATCHPAD_FOLDER, captureFolders, captureFrontmatter, capturePath, uniquePath } from '../model/scratchpad';
 import { localDate } from '../wip/naming';
 import { approvalEvent } from '../provider/questions';
 import { isProviderId } from '../provider/types';
@@ -674,14 +674,7 @@ export class ChatView extends ItemView {
     if (inRoom) for (const folder of captureFolders(now)) if (!exists(folder)) await this.app.vault.createFolder(folder);
     const path = normalizePath(inRoom ? capturePath(now, exists) : uniquePath(slugOf(text) || 'reply', exists));
     const sessionId = this.store.state.sessionId ?? this.resumeSessionId ?? '';
-    const frontmatter = [
-      '---',
-      `date: ${localDate(now)}`,
-      'source: icor-chat',
-      `session_ids: [${sessionId ? `"${sessionId}"` : ''}]`,
-      '---',
-      '',
-    ].join('\n');
+    const frontmatter = captureFrontmatter(localDate(now), sessionId);
     const file = await this.app.vault.create(path, `${frontmatter}${text.trim()}\n`);
     await this.app.workspace.getLeaf(true).openFile(file);
     new Notice(`Saved as ${file.basename}.`);
