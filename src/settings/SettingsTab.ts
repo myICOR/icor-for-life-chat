@@ -218,8 +218,8 @@ export class ChatSettingsTab extends PluginSettingTab {
   private async runAction(action: ActionDefinition['actions'][number]): Promise<void> {
     const provider = availableProviders().find((p) => p.id === action.provider);
     if (!provider) return;
-    if (action.run === 'install') {
-      await offerInstall(this.app, provider, this.plugin.vaultPath);
+    if (action.run === 'install' || action.run === 'update') {
+      await offerInstall(this.app, provider, this.plugin.vaultPath, action.run);
       return;
     }
     if (action.run === 'page') {

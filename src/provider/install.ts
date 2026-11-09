@@ -53,9 +53,13 @@ export type InstallRoute = 'typed' | 'terminal' | 'clipboard';
  * so the caller's words match what happened: `typed` when the line sits after
  * the prompt of a new terminal pane, `terminal` when a pane opened and the line
  * is on the clipboard, `clipboard` when there is no terminal plugin at all.
+ * `which` picks the line: the install line, or the vendor's update line for a
+ * runtime that is already here (issue #13). Either way the member runs it.
  */
-export async function offerInstall(app: App, provider: Provider, cwd?: string): Promise<InstallRoute> {
-  const { command, page } = provider.installation;
+export async function offerInstall(app: App, provider: Provider, cwd?: string, which: 'install' | 'update' = 'install'): Promise<InstallRoute> {
+  const { page } = provider.installation;
+  const command = which === 'update' ? provider.installation.update : provider.installation.command;
+  if (!command) return 'clipboard';
   let copied = false;
   try {
     await navigator.clipboard.writeText(command);
@@ -72,7 +76,7 @@ export async function offerInstall(app: App, provider: Provider, cwd?: string): 
       typed = false;
     }
     if (typed) {
-      new Notice(`${provider.displayName}: the install command is typed into the terminal pane. Read it, then press Enter.`, 12000);
+      new Notice(`${provider.displayName}: the ${which} command is typed into the terminal pane. Read it, then press Enter.`, 12000);
       window.open(page, '_blank');
       return 'typed';
     }
@@ -81,11 +85,11 @@ export async function offerInstall(app: App, provider: Provider, cwd?: string): 
   const route: InstallRoute = terminalPluginPresent(app) && host.commands?.executeCommandById?.(TERMINAL_NEW_COMMAND) ? 'terminal' : 'clipboard';
   if (route === 'terminal') {
     new Notice(copied
-      ? `${provider.displayName}: install command copied. Paste it into the terminal pane and press Enter.`
+      ? `${provider.displayName}: ${which} command copied. Paste it into the terminal pane and press Enter.`
       : `${provider.displayName}: run this in the terminal pane: ${command}`, 12000);
   } else {
     new Notice(copied
-      ? `${provider.displayName}: install command copied. Paste it into a terminal and press Enter.`
+      ? `${provider.displayName}: ${which} command copied. Paste it into a terminal and press Enter.`
       : `${provider.displayName}: run this in a terminal: ${command}`, 12000);
   }
   window.open(page, '_blank');

@@ -15,4 +15,5 @@ export const CLAUDE_DISPLAY_NAME = 'Claude Code';
 export const CLAUDE_INSTALLATION: RuntimeInstall = {
   command: 'curl -fsSL https://claude.ai/install.sh | bash',
   page: 'https://code.claude.com/docs/en/setup',
+  update: 'claude update',
 };
