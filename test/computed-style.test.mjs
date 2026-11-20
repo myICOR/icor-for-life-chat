@@ -1119,7 +1119,7 @@ async function snapshot(chrome, room) {
      unmeasured in all four rooms and every assertion still green. */
   const HOVERED = ['.aic-thinking-probe .aic-thinking-head',
                    '.aic-send', '.aic-approve-always', '.aic-seg-btn',
-                   '.aic-agent-chip', '.aic-icon-btn', '.aic-text-btn',
+                   '.aic-agent-chip', '.aic-header-probe .aic-icon-btn', '.aic-text-btn',
                    '.aic-provider-btn',
                    '.aic-chip-x', '.aic-thumb-x',
                    /* The expandable tool row. `forcePseudos` THROWS on a selector
