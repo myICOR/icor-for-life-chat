@@ -8,11 +8,12 @@
   ],
   "rooms": {
     "00 Daily Scratchpad": "your raw writing, one note a day; never edited by an AI",
-    "01 Inbox": "what someone else made arrives in Outer World/; scans in Scanner Inbox/",
+    "01 Inbox": "scans (Scanner Inbox/) and anything not yet sorted",
     "02 Planner": "tasks synced from your task apps by the Planner plugin",
     "03 WiP": "work in progress, dated, in Workstreams/, Projects/ or Operations/; finished work goes to _archive/",
     "04 Inner World": "what you know and who you know: Journal, Notes, Contacts, My Life",
     "05 Assets": "files only (Images/, Audio/, Documents/), embedded from notes",
+    "06 Outer World": "what others made: one source note per book, article, video, podcast, post or paper, with your highlights",
     "07 Databases": "data too large or row-shaped for notes; sources only"
   },
   "my_life": [
@@ -22,10 +23,14 @@
     "topic",
     "habit"
   ],
+  "worlds": {
+    "inner": "04 Inner World",
+    "outer": "06 Outer World"
+  },
   "types": {
     "capture": {
       "label": "Capture",
-      "description": "Something someone else made, clipped into the Outer World inbox.",
+      "description": "Older clips from the Outer World inbox, before sources had their own room.",
       "folder": "01 Inbox/Outer World",
       "template": null,
       "icon": "inbox",
@@ -317,7 +322,7 @@
     },
     "note": {
       "label": "Note",
-      "description": "Knowledge about one subject: a reference, an idea, an outline, meeting notes, a draft.",
+      "description": "Your knowledge about one subject: an idea, an outline, meeting notes, a draft. What someone else made is a source in 06 Outer World.",
       "folder": "04 Inner World/Notes",
       "template": "note.md",
       "icon": "file-text",
@@ -329,7 +334,6 @@
         "ai_summary",
         "audio_retained",
         "companies",
-        "consumed",
         "created",
         "idea_status",
         "key_elements",
@@ -344,7 +348,6 @@
       ],
       "values": {
         "note_type": [
-          "reference",
           "idea",
           "outline",
           "meeting",
@@ -683,6 +686,61 @@
       "links": {
         "related_topics": {
           "to": "topic",
+          "many": true
+        }
+      }
+    },
+    "source": {
+      "label": "Source",
+      "description": "Something someone else made: a book, article, video, podcast, post or paper, with your highlights. Synced by the Web Clipper or Readwise, linked to what it serves.",
+      "folder": "06 Outer World",
+      "template": "source.md",
+      "icon": "library",
+      "owner": "you",
+      "required": [
+        "source_type"
+      ],
+      "fields": [
+        "author",
+        "captured",
+        "consumed",
+        "created",
+        "key_elements",
+        "my_thought",
+        "people",
+        "projects",
+        "published",
+        "source_type",
+        "source_url",
+        "tags",
+        "topics"
+      ],
+      "values": {
+        "source_type": [
+          "book",
+          "article",
+          "video",
+          "podcast",
+          "post",
+          "paper",
+          "other"
+        ]
+      },
+      "links": {
+        "projects": {
+          "to": "project",
+          "many": true
+        },
+        "key_elements": {
+          "to": "key-element",
+          "many": true
+        },
+        "topics": {
+          "to": "topic",
+          "many": true
+        },
+        "people": {
+          "to": "person",
           "many": true
         }
       }

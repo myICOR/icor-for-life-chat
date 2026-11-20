@@ -1,7 +1,9 @@
 /* WHAT THE VAULT SAYS ABOUT ITSELF (0.17.0): AGENTS.md, the skills in
- * `.agents/skills/<name>/SKILL.md` and `.icor-for-life/schema.json`, read
- * through the adapter because Obsidian does not index dot folders. The schema
- * fixture is the ICOR for Life vault's own (18 types), copied verbatim. */
+ * `_System/Skills/<name>/SKILL.md` and `_System/schema.json`, with the hidden
+ * copies older vaults keep (`.agents/skills/`, `.icor-for-life/schema.json`)
+ * as fallbacks, all read through the adapter because Obsidian does not index
+ * dot folders. The schema fixture is the ICOR for Life vault's own (19 types),
+ * copied verbatim. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -9,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import {
   parseSkill, schemaSummary, schemaTypeCount, vaultContextParts, vaultSystemPrompt, readVaultContext,
-  isReadableVaultFile, runReadNote, AGENTS_CAP, SCHEMA_PATH, EMPTY_VAULT_CONTEXT,
+  isReadableVaultFile, runReadNote, AGENTS_CAP, SCHEMA_PATH, LEGACY_SCHEMA_PATH, EMPTY_VAULT_CONTEXT,
 } from './build/pure.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -48,7 +50,7 @@ test('a skill is named by its frontmatter, and by its folder when the name is mi
 });
 
 test('the schema summary names every type with its folder, fields, values and links', () => {
-  assert.equal(schemaTypeCount(SCHEMA), 18);
+  assert.equal(schemaTypeCount(SCHEMA), 19);
   const summary = schemaSummary(SCHEMA);
   for (const type of Object.keys(JSON.parse(SCHEMA).types)) {
     assert.match(summary, new RegExp(`^- ${type}: `, 'm'), `${type} is missing from the summary`);
@@ -63,23 +65,40 @@ test('the schema summary names every type with its folder, fields, values and li
   assert.equal(schemaTypeCount('[]'), null);
 });
 
-test('the vault is read through the adapter: AGENTS.md, both skill folders deduplicated, the schema', async () => {
+test('the vault is read through the adapter: AGENTS.md, _System first, the skill copies deduplicated', async () => {
   const adapter = adapterOf({
     'AGENTS.md': '# AGENTS.md: how this folder works\n',
     'CLAUDE.md': '@AGENTS.md\n',
-    '.agents/skills/capture/SKILL.md': SKILL('capture', 'Save this.'),
-    '.agents/skills/weekly-review/SKILL.md': SKILL('weekly-review', 'Plan my week.'),
-    '.claude/skills/capture/SKILL.md': SKILL('capture', 'The copy.'),
+    '_System/Skills/capture/SKILL.md': SKILL('capture', 'Save this.'),
+    '_System/Skills/weekly-review/SKILL.md': SKILL('weekly-review', 'Plan my week.'),
+    '.agents/skills/capture/SKILL.md': SKILL('capture', 'The hidden copy.'),
+    '.agents/skills/only-agents/SKILL.md': SKILL('only-agents', 'Not in _System yet.'),
+    '.claude/skills/capture/SKILL.md': SKILL('capture', 'The Claude copy.'),
     '.claude/skills/only-here/SKILL.md': SKILL('only-here', 'A Claude-only skill.'),
-    '.agents/skills/empty-folder/README.md': 'not a skill',
+    '_System/Skills/empty-folder/README.md': 'not a skill',
     [SCHEMA_PATH]: SCHEMA,
+    [LEGACY_SCHEMA_PATH]: '{"types": {"old": {}}}',
   });
   const ctx = await readVaultContext(adapter);
   assert.equal(ctx.instructions.path, 'AGENTS.md');
-  assert.deepEqual(ctx.skills.map((s) => s.name), ['capture', 'weekly-review', 'only-here']);
-  assert.equal(ctx.skills[0].description, 'Save this.', 'the .claude copy outranked .agents');
-  assert.equal(ctx.schema.types, 18);
-  assert.deepEqual(vaultContextParts(ctx), ['AGENTS.md', '3 skills', 'schema, 18 types']);
+  assert.deepEqual(ctx.skills.map((s) => s.name), ['capture', 'weekly-review', 'only-agents', 'only-here']);
+  assert.equal(ctx.skills[0].description, 'Save this.', 'a hidden copy outranked _System');
+  assert.equal(ctx.skills[0].path, '_System/Skills/capture/SKILL.md');
+  assert.equal(ctx.schema.path, SCHEMA_PATH, 'the old hidden schema outranked _System');
+  assert.equal(ctx.schema.types, 19);
+  assert.deepEqual(vaultContextParts(ctx), ['AGENTS.md', '4 skills', 'schema, 19 types']);
+});
+
+test('a vault built before _System is read from its hidden folders', async () => {
+  const ctx = await readVaultContext(adapterOf({
+    'AGENTS.md': '# old layout\n',
+    '.agents/skills/capture/SKILL.md': SKILL('capture', 'Save this.'),
+    [LEGACY_SCHEMA_PATH]: SCHEMA,
+  }));
+  assert.deepEqual(ctx.skills.map((s) => s.path), ['.agents/skills/capture/SKILL.md']);
+  assert.equal(ctx.schema.path, LEGACY_SCHEMA_PATH);
+  const broken = await readVaultContext(adapterOf({ [SCHEMA_PATH]: '{ half a file', [LEGACY_SCHEMA_PATH]: SCHEMA }));
+  assert.equal(broken.schema.path, LEGACY_SCHEMA_PATH, 'a broken _System schema hid the readable fallback');
 });
 
 test('a bare vault reads as nothing, CLAUDE.md stands in for a missing AGENTS.md, and a broken schema is skipped', async () => {
@@ -95,13 +114,13 @@ test('a bare vault reads as nothing, CLAUDE.md stands in for a missing AGENTS.md
 test('the own-key prompt carries the vault\'s words and nothing of the plugin\'s own beyond the tools', async () => {
   const ctx = await readVaultContext(adapterOf({
     'AGENTS.md': 'The person\'s words are sacred.\n',
-    '.agents/skills/capture/SKILL.md': SKILL('capture', 'Save this.'),
+    '_System/Skills/capture/SKILL.md': SKILL('capture', 'Save this.'),
     [SCHEMA_PATH]: SCHEMA,
   }));
   const prompt = vaultSystemPrompt(ctx, ['read_note', 'search_notes']);
   assert.match(prompt, /read_note, search_notes/);
   assert.match(prompt, /The person's words are sacred\./);
-  assert.match(prompt, /- capture \(\.agents\/skills\/capture\/SKILL\.md\): Save this\./);
+  assert.match(prompt, /- capture \(_System\/Skills\/capture\/SKILL\.md\): Save this\./);
   assert.match(prompt, /^- journal: /m);
   for (const gone of ['06 AI Team', 'Larry', 'ICOR card', 'specialist']) {
     assert.ok(!prompt.includes(gone), `the prompt still says ${gone}`);
@@ -117,24 +136,26 @@ test('a long AGENTS.md is cut at the cap, and the cut is said', () => {
   assert.ok(prompt.length < AGENTS_CAP + 600);
 });
 
-test('read_note reaches the skills, the schema and the templates in the hidden folders, and never an env file', async () => {
-  for (const ok of ['.agents/skills/capture/SKILL.md', '.claude/skills/x/SKILL.md', SCHEMA_PATH, '.icor-for-life/templates/journal.md']) {
+test('read_note reaches the hidden skill copies and the old schema and templates, and never an env file', async () => {
+  for (const ok of ['.agents/skills/capture/SKILL.md', '.claude/skills/x/SKILL.md', LEGACY_SCHEMA_PATH, '.icor-for-life/templates/journal.md']) {
     assert.equal(isReadableVaultFile(ok), true, ok);
   }
   for (const no of ['.icor-for-life/.env', '.agents/skills/x/.env', '.agents/skills/../../.ssh/id', '.obsidian/plugins/x/data.json',
-    '.icor-for-life/tools/check-quality.py', '06 AI Team/AI Team Knowledge/.env', '.agents/skills//SKILL.md', '']) {
+    '.icor-for-life/tools/check-quality.py', '06 AI Team/AI Team Knowledge/.env', '.agents/skills//SKILL.md', '',
+    /* _System is a visible folder: the Vault API reads it, never this door. */
+    SCHEMA_PATH, '_System/Skills/capture/SKILL.md']) {
     assert.equal(isReadableVaultFile(no), false, no);
   }
-  const hidden = { [SCHEMA_PATH]: SCHEMA };
+  const hidden = { [LEGACY_SCHEMA_PATH]: SCHEMA };
   const ctx = {
     vault: { getFileByPath: () => null },
     readHidden: async (p) => (isReadableVaultFile(p) && p in hidden ? hidden[p] : null),
   };
-  const read = await runReadNote(ctx, { path: SCHEMA_PATH });
+  const read = await runReadNote(ctx, { path: LEGACY_SCHEMA_PATH });
   assert.equal(read.ok, true);
   assert.ok(read.output.startsWith('{'));
   const refused = await runReadNote(ctx, { path: '.icor-for-life/.env' });
   assert.equal(refused.ok, false);
-  const missing = await runReadNote({ vault: { getFileByPath: () => null } }, { path: SCHEMA_PATH });
+  const missing = await runReadNote({ vault: { getFileByPath: () => null } }, { path: LEGACY_SCHEMA_PATH });
   assert.equal(missing.ok, false, 'a context without readHidden answered for a hidden file');
 });

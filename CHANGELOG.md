@@ -12,13 +12,15 @@ to have it all in one place"). The ICOR for Life vault no longer has a
 
 - **Its instructions come from your vault, and only from there.** The chat
   reads `AGENTS.md` at the vault root (or `CLAUDE.md`), the skills in
-  `.agents/skills/<name>/SKILL.md` (and `.claude/skills/`), and the
-  structure in `.icor-for-life/schema.json`, through Obsidian's file adapter
-  because Obsidian does not index dot folders. Claude Code and Codex read the
-  same files themselves; with your own API key the plugin now sends them as
-  the instructions, and `read_note` can open a skill, the schema or a
-  template. The empty chat lists what it found, for example
-  `AGENTS.md · 9 skills · schema, 18 types`.
+  `_System/Skills/<name>/SKILL.md`, and the structure in
+  `_System/schema.json`. A vault set up before `_System/` existed is read
+  from `.agents/skills/` (and `.claude/skills/`) and
+  `.icor-for-life/schema.json`, through Obsidian's file adapter because
+  Obsidian does not index dot folders. Claude Code and Codex read the same
+  files themselves; with your own API key the plugin now sends them as the
+  instructions, and `read_note` can open a skill, the schema or a template.
+  The empty chat lists what it found, for example
+  `AGENTS.md · 9 skills · schema, 19 types`.
 - **The AI team is gone.** No more `06 AI Team/Agents` roster, team strip,
   Team Insights tab, one-click team setup, last-sessions and open-tasks
   block, "remember this", WiP deliverable and capture-as-task actions, the
@@ -41,7 +43,7 @@ to have it all in one place"). The ICOR for Life vault no longer has a
   strip, Vault layout and the eight statusline switches (the statusline shows
   the same five readouts it showed by default). A `data.json` that still
   carries them reads without them.
-- **Smaller.** `main.js` 1,962,063 to 1,283,396 bytes (852 KB to 374 KB
+- **Smaller.** `main.js` 1,962,063 to 1,283,559 bytes (852 KB to 374 KB
   gzipped), `styles.css` 151,272 to 114,950 bytes. The embedded starter team
   (`src/team/bundle.ts`, 610 KB) and `npm run embed:team` are gone.
 - Unchanged: Claude Code, Codex and your own key (Anthropic, OpenRouter) with

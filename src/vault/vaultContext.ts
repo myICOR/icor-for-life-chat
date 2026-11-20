@@ -6,10 +6,16 @@
  *
  *   AGENTS.md                         the principles and where to look
  *                                     (CLAUDE.md when there is no AGENTS.md)
- *   .agents/skills/<name>/SKILL.md    how to do the work, one skill a folder
- *                                     (.claude/skills/ holds the same copy)
- *   .icor-for-life/schema.json        every note type: its folder, fields,
+ *   _System/Skills/<name>/SKILL.md    how to do the work, one skill a folder
+ *                                     (.agents/skills/ and .claude/skills/
+ *                                     hold the same copies on each computer)
+ *   _System/schema.json               every note type: its folder, fields,
  *                                     allowed values and link targets
+ *
+ * `_System/` is a visible folder on purpose (2026-11-20): Obsidian Sync never
+ * copies a dot folder, so a phone would otherwise have no schema and no
+ * skills. Vaults built before that keep them in `.icor-for-life/schema.json`
+ * and `.agents/skills/`, which are read as fallbacks.
  *
  * The Claude Code and Codex engines read AGENTS.md / CLAUDE.md and their skill
  * folders themselves, because they run with the vault as their working
@@ -17,16 +23,21 @@
  * what tells its model the same things.
  *
  * Every read goes through `app.vault.adapter`: Obsidian does not index folders
- * whose name starts with a dot, so the Vault API cannot see `.agents/` or
- * `.icor-for-life/`, and no vault event ever fires for them. The pure half
+ * whose name starts with a dot, so the Vault API cannot see the `.agents/` or
+ * `.icor-for-life/` fallbacks, and one reader serves both kinds of path. The pure half
  * (parsing a skill, summarising the schema, writing the prompt) takes strings,
  * so it is tested without a vault. */
 
 export const AGENTS_FILE = 'AGENTS.md';
 export const CLAUDE_FILE = 'CLAUDE.md';
-/** Searched in this order; a skill name found in the first is not read again from the second. */
-export const SKILL_ROOTS = ['.agents/skills', '.claude/skills'] as const;
-export const SCHEMA_PATH = '.icor-for-life/schema.json';
+/** Searched in this order; a skill name found in an earlier root is not read again from a later one. */
+export const SKILL_ROOTS = ['_System/Skills', '.agents/skills', '.claude/skills'] as const;
+/** The schema's home, and where vaults built before 2026-11-20 keep it. The first that parses wins. */
+export const SCHEMA_PATH = '_System/schema.json';
+export const LEGACY_SCHEMA_PATH = '.icor-for-life/schema.json';
+export const SCHEMA_PATHS = [SCHEMA_PATH, LEGACY_SCHEMA_PATH] as const;
+/** The hidden skill folders, which only the adapter can read. */
+const HIDDEN_SKILL_ROOTS = ['.agents/skills', '.claude/skills'] as const;
 
 /** The longest AGENTS.md sent whole. A longer one is cut, and the cut is said. */
 export const AGENTS_CAP = 24_000;
@@ -211,15 +222,17 @@ export function vaultSystemPrompt(ctx: VaultContext, tools: readonly string[]): 
 
 /**
  * True for a hidden path the own-key engine's `read_note` may read through the
- * adapter: the skills and the schema, and the templates beside it. Never an
- * env file or anything else in a dot folder, and never a path that climbs.
+ * adapter: the skill copies, and the schema and templates of a vault built
+ * before `_System/` existed. Never an env file or anything else in a dot
+ * folder, and never a path that climbs. (`_System/` itself is a visible
+ * folder, so the Vault API reads it like any note.)
  */
 export function isReadableVaultFile(path: string): boolean {
   if (!path || path.split('/').some((part) => part === '..' || part === '')) return false;
   if (/(^|\/)\.env(\.|$)/.test(path)) return false;
-  if (path === SCHEMA_PATH) return true;
+  if (path === LEGACY_SCHEMA_PATH) return true;
   if (path.startsWith('.icor-for-life/templates/') && path.endsWith('.md')) return true;
-  return SKILL_ROOTS.some((root) => path.startsWith(`${root}/`));
+  return HIDDEN_SKILL_ROOTS.some((root) => path.startsWith(`${root}/`));
 }
 
 /* ------------------------------------------------------- the adapter half */
@@ -257,12 +270,21 @@ async function readSkills(adapter: AdapterLike): Promise<VaultSkill[]> {
 }
 
 /** Read what the vault says about itself. Never throws; a missing part is null or empty. */
+async function readSchema(adapter: AdapterLike): Promise<VaultContext['schema']> {
+  for (const path of SCHEMA_PATHS) {
+    const text = await readIfThere(adapter, path);
+    const types = text === null ? null : schemaTypeCount(text);
+    if (text !== null && types !== null) return { path, text, types };
+  }
+  return null;
+}
+
 export async function readVaultContext(adapter: AdapterLike): Promise<VaultContext> {
-  const [agents, claude, skills, schemaText] = await Promise.all([
+  const [agents, claude, skills, schema] = await Promise.all([
     readIfThere(adapter, AGENTS_FILE),
     readIfThere(adapter, CLAUDE_FILE),
     readSkills(adapter),
-    readIfThere(adapter, SCHEMA_PATH),
+    readSchema(adapter),
   ]);
   const instructions =
     agents !== null && agents.trim()
@@ -270,7 +292,5 @@ export async function readVaultContext(adapter: AdapterLike): Promise<VaultConte
       : claude !== null && claude.trim()
         ? { path: CLAUDE_FILE, text: claude }
         : null;
-  const types = schemaText === null ? null : schemaTypeCount(schemaText);
-  const schema = schemaText !== null && types !== null ? { path: SCHEMA_PATH, text: schemaText, types } : null;
   return { instructions, skills, schema };
 }

@@ -27,23 +27,25 @@ Everything the chat knows about how to work comes from the vault:
 
 - **`AGENTS.md`** at the vault root (or `CLAUDE.md` when there is no
   `AGENTS.md`): the principles and where things live.
-- **Skills**, one folder each in `.agents/skills/<name>/SKILL.md` (the same
-  copies in `.claude/skills/` count too): how to do a piece of work, step by
-  step.
-- **`.icor-for-life/schema.json`**: every type of note, its folder, its
-  fields, the values a field allows and which type a link points to.
+- **Skills**, one folder each in `_System/Skills/<name>/SKILL.md`: how to do a
+  piece of work, step by step. The copies in `.agents/skills/` and
+  `.claude/skills/` count too, so a vault set up before `_System/` existed
+  still works.
+- **`_System/schema.json`** (in older vaults `.icor-for-life/schema.json`):
+  every type of note, its folder, its fields, the values a field allows and
+  which type a link points to.
 - **The note you have open**, the text you selected, and the notes you name
   with `[[`, `@` or the `+` menu.
 
 The ICOR for Life vault ships all three files. In any other vault the chat
 works with whatever is there, and with none of them it is a plain chat with
 your notes as context. The empty chat lists what it found, for example
-`AGENTS.md · 9 skills · schema, 18 types`.
+`AGENTS.md · 9 skills · schema, 19 types`.
 
 Claude Code and Codex read `AGENTS.md`, `CLAUDE.md` and their skill folders
 themselves, because they run with your vault as their working folder. With
 your own API key, the plugin reads the three files (through Obsidian's file
-adapter, because Obsidian does not index folders whose name starts with a dot)
+adapter, which also reaches the older hidden folders Obsidian does not index)
 and sends them as the instructions with every message; the model reads a
 skill's full text when it needs it.
 
