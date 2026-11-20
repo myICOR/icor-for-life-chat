@@ -1,10 +1,11 @@
-/* ICOR for Life - AI Chat - the ICOR AI team inside the vault.
+/* ICOR for Life - AI Chat - a chat panel inside the vault.
  *
  * The plugin is a window, not a second brain: it hosts an agent runtime's
- * session (Claude Code today, behind the Provider seam) whose working
- * directory is the vault, so the vault's own CLAUDE.md, AGENTS.md and .claude/
- * are what the team reads. The plugin contributes no system prompt
- * of its own beyond one opt-in, plugin-owned format instruction.
+ * session (Claude Code or Codex, behind the Provider seam) whose working
+ * directory is the vault, so the vault's own AGENTS.md, CLAUDE.md and skill
+ * folders are what the model reads. On the own-key engine the plugin hands
+ * the same files over itself (src/vault/vaultContext.ts). It contributes no
+ * instructions of its own.
  *
  * Independent implementation from a behavioural specification; no code is
  * inherited from any other repository. */
@@ -17,15 +18,12 @@ import type { WorkspaceLeaf } from 'obsidian';
  * top-of-file `import` would `require('node:os')` the instant the plugin
  * loads; the `get homeDir()` getter below defers that call and never makes
  * it off the desktop, where `Platform.isDesktopApp` guards it. */
-import { INK_PLUGIN_ATTR, INK_PLUGIN_NAME, VIEW_TYPE_CHAT, VIEW_TYPE_INSIGHTS, VIEW_TYPE_SUBAGENT } from './constants';
+import { INK_PLUGIN_ATTR, INK_PLUGIN_NAME, VIEW_TYPE_CHAT, VIEW_TYPE_SUBAGENT } from './constants';
 import { SubagentView } from './view/SubagentView';
-import { InsightsView } from './view/InsightsView';
-import { detectTeam } from './team/detect';
-import type { TeamRoster } from './team/detect';
 import { SubagentBus } from './state/subagents';
 import { ReplyActionRegistry } from './view/actions';
-import type { RenderHost } from './structured/render';
-import type { ItemView } from 'obsidian';
+import type { RenderHost } from './view/stream/StreamRenderer';
+
 import { availableProviders, missingProviderMessage, providerFor, providerMaturity } from './provider/registry';
 import { catalogFor, parseCatalogCache, withCatalog } from './model/catalogCache';
 import type { CatalogCache } from './model/catalogCache';
@@ -33,19 +31,17 @@ import { needsAdoption } from './view/leafRoute';
 import { providerFromFrontmatter, resumableSessionId } from './archive/resume';
 import { shortAge } from './view/dom';
 import { ChatView } from './view/ChatView';
-import { captureTaskAction, startDeliverableAction } from './wip/actions';
-import { openTaskCount } from './team/load';
 import { routeChatLeaf } from './view/leafRoute';
 import { terminalHoldsSession, terminalLeafFor } from './view/handoff';
 import { ChatSettingsTab } from './settings/SettingsTab';
 import { DEFAULT_SETTINGS, archiveRoot, pathSettingKey, settingsFrom } from './model/settings';
+import { ARCHIVE_FOLDER_LEGACY } from './constants';
 import { offerInstall } from './provider/install';
 import type { ChatSettings } from './model/settings';
 import type { ModelChoice } from './model/types';
 import type { AuthSource, DetectEnvironment, Detection, Provider, ProviderId } from './provider/types';
 import { splitExtraPath } from './provider/extraPath';
 import { handoverText } from './archive/handover';
-import { installMemory } from './team/memory';
 import { parseHeldSessions } from './remoteControl/held';
 import { OWN_KEY_STORAGE_KEY, effectiveBackend, loadOwnKeySettings, migratePlaintextKeys, secretStorageOf } from './engine';
 
@@ -64,7 +60,7 @@ const TREE_LAUNCHER_CLASS = 'aic-tree-launcher';
 const RIBBON_SESSION_LIMIT = 6;
 
 /** The launcher's tooltip and its menu's token-carrier class. */
-const INK_RIBBON_TOOLTIP = 'AI Team';
+const INK_RIBBON_TOOLTIP = 'AI chat';
 const RIBBON_MENU_CLASS = 'aic-menu';
 
 export default class IcorChatPlugin extends Plugin {
@@ -72,8 +68,8 @@ export default class IcorChatPlugin extends Plugin {
   /** One bus per vault: a subagent transcript outlives the chip that opened it. */
   readonly subagents = new SubagentBus();
   /* EVERY ACTION A REPLY OFFERS, from one list. The view registers the
-     built-ins (copy, insert, save, edit and resend, regenerate); the rooms
-     (WiP, tasks, memory) register theirs here and the bar draws them all alike. */
+     built-ins (copy, insert, save, edit and resend, regenerate); anything
+     else registers here and the bar draws them all alike. */
   readonly replyActions = new ReplyActionRegistry();
 
   /* WHAT EACH RUNTIME'S DETECTION FOUND, refreshed at load and whenever a
@@ -143,7 +139,6 @@ export default class IcorChatPlugin extends Plugin {
     await this.loadSettings();
     await this.loadCatalogCache();
     await this.loadRemoteControlHeld();
-    installMemory(this);
     /* Claude Code and Codex are desktop CLIs, spawned as a child process;
      * neither can exist on mobile, which cannot spawn one. Probing for them
      * there would do nothing useful and would force `provider/registry.ts`
@@ -161,11 +156,10 @@ export default class IcorChatPlugin extends Plugin {
 
     this.registerView(VIEW_TYPE_CHAT, (leaf) => new ChatView(leaf, this));
     this.registerView(VIEW_TYPE_SUBAGENT, (leaf) => new SubagentView(leaf, this));
-    this.registerView(VIEW_TYPE_INSIGHTS, (leaf) => new InsightsView(leaf, this));
 
     this.addCommand({
       id: 'open-chat',
-      name: 'New conversation with the AI team',
+      name: 'New conversation',
       callback: () => void this.openChat(),
     });
 
@@ -213,37 +207,12 @@ export default class IcorChatPlugin extends Plugin {
       },
     });
 
-    this.addCommand({
-      id: 'open-insights',
-      name: 'Open AI team insights',
-      callback: () => void this.openInsights(),
-    });
-
-    /* THE WIP ROOM'S TWO REPLY ACTIONS (R1, R5), registered rather than
-       built into the bar, so the next room is a registration too. */
-    this.replyActions.register(startDeliverableAction());
-    this.replyActions.register(captureTaskAction());
-
-    /* Closing a session is a slash command the CLI already exposes; this
-       puts it in the composer of the active chat and hands over the caret,
-       so the ritual is one command away from the palette (R5). */
-    this.addCommand({
-      id: 'close-session',
-      name: 'Close session with the AI team',
-      checkCallback: (checking) => {
-        const view = this.activeChatView();
-        if (!view) return false;
-        if (!checking) view.insertIntoComposer('/close-session ');
-        return true;
-      },
-    });
-
     /* Resuming from the archive. The conversation note carries every session id
      * the thread ever had, so the vault itself is a way back into a
      * conversation - not just this session's memory of one. */
     this.addCommand({
       id: 'resume-conversation',
-      name: 'Resume this conversation with the AI team',
+      name: 'Resume this conversation',
       checkCallback: (checking) => {
         const file = this.app.workspace.getActiveFile();
         const archived = file ? this.archivedSession(file) : null;
@@ -639,25 +608,6 @@ export default class IcorChatPlugin extends Plugin {
     menu.showAtPosition(at);
   }
 
-  /** The AI team as the vault has it right now, or null in a bare vault. */
-  teamRoster(): TeamRoster | null {
-    return detectTeam(this.app);
-  }
-
-  /* THE INSIGHTS TAB: one per vault, in the main area. It is a page to read,
-   * so it does not ride the right sidebar the chat lives in, and a second
-   * click reveals the one that is open rather than minting another. */
-  async openInsights(): Promise<void> {
-    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_INSIGHTS)[0];
-    if (existing) {
-      await this.app.workspace.revealLeaf(existing);
-      return;
-    }
-    const leaf = this.app.workspace.getLeaf('tab');
-    await leaf.setViewState({ type: VIEW_TYPE_INSIGHTS, active: true });
-    await this.app.workspace.revealLeaf(leaf);
-  }
-
   /** Open a subagent's transcript in its own tab. */
   async openSubagent(agentId: string): Promise<void> {
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_SUBAGENT)) {
@@ -673,18 +623,9 @@ export default class IcorChatPlugin extends Plugin {
   }
 
 
-  /** The affordances a structured block needs, shared by both view types. */
-  renderHostFor(view: ItemView): RenderHost {
-    return {
-      home: this.homeDir,
-      insertCode: () => undefined,
-      openFile: (path) => void this.openPath(path),
-      revealFile: (path) => this.revealPath(path),
-      openUrl: (url) => window.open(url, '_blank'),
-      copy: (text) => void navigator.clipboard.writeText(text),
-      decisionState: () => null,
-      ...(view ? {} : {}),
-    };
+  /** What a rendered block can ask for, shared by both view types. */
+  renderHostFor(): RenderHost {
+    return { openFile: (path) => void this.openPath(path) };
   }
 
   async openPath(path: string): Promise<void> {
@@ -760,11 +701,6 @@ export default class IcorChatPlugin extends Plugin {
     return able.length === 1 ? able[0] ?? null : null;
   }
 
-  /** Open and in-progress task counts from the Tasks room, or null when the room is absent. */
-  openTaskCount(): Promise<{ open: number; inProgress: number } | null> {
-    return openTaskCount(this.app);
-  }
-
   /** The vault's absolute path: the working directory every session runs in. */
   get vaultPath(): string {
     const adapter = this.app.vault.adapter;
@@ -783,13 +719,13 @@ export default class IcorChatPlugin extends Plugin {
     }
   }
 
-  /** True when this looks like an ICOR for Life vault rather than a bare one. */
-  get scaffoldDetected(): boolean {
-    return this.app.vault.getAbstractFileByPath('06 AI Team') !== null;
+  /** True when the vault already keeps conversations where 0.16 and older put them. */
+  get legacyArchiveDetected(): boolean {
+    return this.app.vault.getAbstractFileByPath(ARCHIVE_FOLDER_LEGACY) !== null;
   }
 
   defaultArchiveFolder(): string {
-    return archiveRoot({ ...this.settings, archiveFolder: '' }, this.scaffoldDetected);
+    return archiveRoot({ ...this.settings, archiveFolder: '' }, this.legacyArchiveDetected);
   }
 
   /* THE CHAT OPENS IN THE RIGHT SIDEBAR, beside the planner tray - Tom,

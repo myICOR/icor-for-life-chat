@@ -1,8 +1,8 @@
 {
   "name": "icor-for-life-chat",
-  "version": "0.16.3",
+  "version": "0.17.0",
   "private": true,
-  "description": "ICOR for Life - AI Chat - the ICOR AI team inside your Obsidian vault.",
+  "description": "ICOR for Life - AI Chat - a chat panel inside your Obsidian vault.",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -12,8 +12,7 @@
     "test": "node --test test/*.test.mjs",
     "gate": "npm run typecheck && npm run build && npm run lint && npm test",
     "pretest": "node test/build.mjs",
-    "lint": "eslint src styles.css",
-    "embed:team": "node tools/embed-team.mjs"
+    "lint": "eslint src styles.css"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.226"

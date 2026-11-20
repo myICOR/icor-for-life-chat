@@ -3,6 +3,53 @@
 Notable changes per release. Older releases are described in their commit
 messages (`git log --grep='^0\.'`) and on the GitHub releases page.
 
+## 0.17.0
+
+A general-purpose chat that works from what is in your vault (Tom,
+2026-11-20: "a chat bot experience right into Obsidian for anyone who wants
+to have it all in one place"). The ICOR for Life vault no longer has a
+`06 AI Team` room, and the plugin no longer looks for one.
+
+- **Its instructions come from your vault, and only from there.** The chat
+  reads `AGENTS.md` at the vault root (or `CLAUDE.md`), the skills in
+  `.agents/skills/<name>/SKILL.md` (and `.claude/skills/`), and the
+  structure in `.icor-for-life/schema.json`, through Obsidian's file adapter
+  because Obsidian does not index dot folders. Claude Code and Codex read the
+  same files themselves; with your own API key the plugin now sends them as
+  the instructions, and `read_note` can open a skill, the schema or a
+  template. The empty chat lists what it found, for example
+  `AGENTS.md · 9 skills · schema, 18 types`.
+- **The AI team is gone.** No more `06 AI Team/Agents` roster, team strip,
+  Team Insights tab, one-click team setup, last-sessions and open-tasks
+  block, "remember this", WiP deliverable and capture-as-task actions, the
+  WiP and Open tasks pickers in the `+` menu, the `/close-session` command,
+  or the life snapshot line.
+- **No more ICOR card format.** Replies come back as plain Markdown,
+  rendered as they stream. The plugin no longer adds an instruction of its
+  own to Claude Code's system prompt, and the open-decisions badge went with
+  the cards.
+- **Your keys in an env file live in `.icor-for-life/.env`.** A vault that
+  keeps them in `06 AI Team/AI Team Knowledge/.env` keeps working: the
+  plugin reads that file when the new one has no key and writes to
+  whichever of the two exists. A stored setting naming the old default reads
+  as the new one.
+- **Conversations are archived in `AI Sessions/`**, unless the settings name
+  another folder; a vault that already has `06 AI Team/AI Sessions/` keeps
+  using it. The archive no longer writes a session line into a WiP folder's
+  README.
+- **Fifteen settings instead of twenty-five.** Gone: Structured replies, Team
+  strip, Vault layout and the eight statusline switches (the statusline shows
+  the same five readouts it showed by default). A `data.json` that still
+  carries them reads without them.
+- **Smaller.** `main.js` 1,962,063 to 1,283,396 bytes (852 KB to 374 KB
+  gzipped), `styles.css` 151,272 to 114,950 bytes. The embedded starter team
+  (`src/team/bundle.ts`, 610 KB) and `npm run embed:team` are gone.
+- Unchanged: Claude Code, Codex and your own key (Anthropic, OpenRouter) with
+  the same models, permission modes, approvals and questions, subagents,
+  pinned prompts, context from the open note and the notes you mention,
+  continue in the terminal, Remote Control, save as note, resume from the
+  archive.
+
 ## 0.16.3
 
 - **"Save as note" is unchanged for you; its fields are now tested.** A saved

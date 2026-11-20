@@ -26,7 +26,8 @@ export const MOBILE_TOOLS: readonly EngineToolDef[] = [
     name: READ_NOTE,
     description:
       'Read the full text of one note in the vault. Path is vault-relative, with the .md extension, ' +
-      'case-sensitive (e.g. "04 Inner World/My Life/Topics/example.md").',
+      'case-sensitive (e.g. "04 Inner World/My Life/Topics/example.md"). Also reads the vault\'s skills ' +
+      '(".agents/skills/<name>/SKILL.md") and its schema (".icor-for-life/schema.json").',
     inputSchema: {
       type: 'object',
       properties: { path: { type: 'string', description: 'Vault-relative path to the note.' } },

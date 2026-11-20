@@ -12,7 +12,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import {
-  DEFAULT_SETTINGS, RENDER_ORDER, FACT_SETTING_KEYS,
+  DEFAULT_SETTINGS,
   settingDefinitions, controlKeys, isNote, modelOptions, validateRetention,
   providerMaturity, ALPHA_NOTE, runtimeRows,
 } from './build/pure.mjs';
@@ -114,11 +114,36 @@ test('Bypass is offered as a default mode, and Ask is still what ships', () => {
   assert.equal(DEFAULT_SETTINGS.defaultPermissionMode, 'default');
 });
 
-test('the eight readout switches come in the strip\'s own render order', () => {
-  const strip = settingDefinitions(INPUT).find((g) => g.heading === 'Statusline');
-  const keys = strip.items.filter((i) => !isNote(i)).map((i) => i.control.key);
-  assert.deepEqual(keys, RENDER_ORDER.map((id) => FACT_SETTING_KEYS[id]));
-  assert.ok(strip.items.some(isNote), 'the measured-readouts note is gone from the strip section');
+test('the settings stay few: four groups, fifteen settings, no team or card switches', () => {
+  const groups = settingDefinitions(INPUT);
+  assert.deepEqual(groups.map((g) => g.heading), ['Providers', 'Conversations', 'Session archive'],
+    'a settings group came back');
+  assert.equal(Object.keys(DEFAULT_SETTINGS).length, 15, 'the setting count grew; say why in the changelog');
+  for (const gone of ['structuredReplies', 'vaultMode', 'factTeamStrip', 'factContext']) {
+    assert.ok(!(gone in DEFAULT_SETTINGS), `${gone} is back`);
+  }
+});
+
+/* The AI-team room is gone from the vault (2026-11-20): nothing in the source
+   may reach into it again, except the two fallbacks that keep an existing
+   vault working - the old archive folder and the old env file. */
+test('the source names 06 AI Team only for the two read fallbacks', () => {
+  const hits = [];
+  const walk = (dir) => {
+    for (const name of readdirSync(dir)) {
+      const path = resolve(dir, name);
+      if (statSync(path).isDirectory()) { walk(path); continue; }
+      if (!name.endsWith('.ts')) continue;
+      read(path).split('\n').forEach((line, i) => {
+        if (!line.includes('06 AI Team') || line.trim().startsWith('*') || line.trim().startsWith('//')) return;
+        if (/export const (ARCHIVE_FOLDER_LEGACY|LEGACY_ENV_FILE_PATH) = /.test(line)) return;
+        hits.push(`${path.slice(repo.length + 1)}:${i + 1}`);
+      });
+    }
+  };
+  walk(resolve(repo, 'src'));
+  assert.deepEqual(hits, [],
+    `06 AI Team is named outside the two fallbacks:\n  ${hits.join('\n  ')}`);
 });
 
 test('the model dropdown never invents a catalogue, and never loses a stored choice', () => {

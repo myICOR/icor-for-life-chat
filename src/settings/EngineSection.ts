@@ -34,6 +34,7 @@
 import { Notice, Platform, Setting } from 'obsidian';
 import type { App } from 'obsidian';
 import {
+  DEFAULT_ENV_FILE_PATH, LEGACY_ENV_FILE_PATH,
   ANTHROPIC_PRICES, BACKEND_LABEL, BACKEND_OPTIONS, DEFAULT_MODEL_FOR, GET_KEY_URL_FOR, MODEL_PROVIDER_IDS,
   MODEL_PROVIDER_NAMES, SECRETS_BACKENDS, effectiveBackend, isModelProviderId, isSecretsBackend, keyPresence,
   keyStatusLine, loadOwnKeySettings, missingKeyMessage, moveProviderKey, otherBackend, presentIn, readProviderKey,
@@ -234,7 +235,7 @@ export class EngineSettingsSection {
   private renderEnvPathRow(container: HTMLElement, block: HTMLElement, settings: OwnKeySettings): void {
     new Setting(block)
       .setName('Env file location')
-      .setDesc('Vault-relative. One variable per line as name=value; the plugin rewrites only its own lines and leaves the rest of the file exactly as it was.')
+      .setDesc(`Vault-relative. One variable per line as name=value; the plugin rewrites only its own lines and leaves the rest of the file exactly as it was. At ${DEFAULT_ENV_FILE_PATH}, a vault set up before November 2026 is also read at ${LEGACY_ENV_FILE_PATH}.`)
       .addText((t) => {
         t.setPlaceholder(settings.envFilePath);
         t.setValue(settings.envFilePath);

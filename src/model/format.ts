@@ -49,3 +49,10 @@ export function ownKeyCostLine(costUsd: number): string {
   const rounded = costUsd < 0.01 ? costUsd.toFixed(4) : costUsd.toFixed(2);
   return `about ${rounded} USD`;
 }
+
+/** `YYYY-MM-DD` in the machine's own day, the way the vault dates everything. */
+export function localDate(now = Date.now()): string {
+  const d = new Date(now);
+  const two = (n: number): string => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
+}

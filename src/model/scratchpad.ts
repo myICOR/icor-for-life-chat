@@ -8,10 +8,9 @@
  * the Scaffold's Unique note setting write; its validate-scaffold.py rejects
  * a file at the room root, or one named by a slug). A given moment has one
  * right answer for the folders and the name, so both are asserted in
- * test/scratchpad-capture.test.mjs without a vault, the way the WiP room's
- * names are. */
+ * test/scratchpad-capture.test.mjs without a vault. */
 
-import { localDate } from '../wip/naming';
+import { localDate } from './format';
 
 export const SCRATCHPAD_FOLDER = '00 Daily Scratchpad';
 

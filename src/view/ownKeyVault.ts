@@ -13,6 +13,7 @@ import { MarkdownView, TFile, TFolder } from 'obsidian';
 import type { App } from 'obsidian';
 import { readContext } from './context';
 import type { VaultToolsContext } from '../engine';
+import { isReadableVaultFile } from '../vault/vaultContext';
 /* `VaultLike` is not re-exported from `src/engine/index.ts`'s facade (only
  * `NoteLike` / `FolderLike` / `VaultToolsContext` / `ToolOutcome` are) - this
  * file needs it to type the adapter's own `vault` property, so it reaches
@@ -95,5 +96,13 @@ export function vaultToolsContextFor(app: App, activeMarkdownView: () => Markdow
      * `current_note` tool and the "open note" context chip never disagree
      * about what counts as selected text. */
     selection: () => readContext(app, activeMarkdownView())?.selection ?? '',
+    readHidden: async (path) => {
+      if (!isReadableVaultFile(path)) return null;
+      try {
+        return (await app.vault.adapter.exists(path)) ? await app.vault.adapter.read(path) : null;
+      } catch {
+        return null;
+      }
+    },
   };
 }

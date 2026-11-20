@@ -11,7 +11,7 @@
  * types. `SettingsTab.ts` maps this table onto the declarative API for 1.13
  * and walks the same table with `new Setting()` for the fallback. The table is
  * asserted headless: every persisted key appears exactly once, the option sets
- * match the composer's, the eight readout switches come in render order.
+ * match the composer's.
  *
  * The shapes below mirror Obsidian's `SettingDefinition*` types structurally
  * so the mapping in SettingsTab is one-to-one, but they are NOT imported from
@@ -24,9 +24,6 @@ import type { ModelChoice } from '../model/types';
 import type { Detection, ProviderId } from '../provider/types';
 import { isProviderId } from '../provider/types';
 import { ALPHA_NOTE, providerMaturity } from '../provider/registry';
-import { FACT_SETTING_KEYS, MEASURED_NOTE, NARROW_NOTE } from '../model/settings';
-import { DROP_GROUPS, FACT_NAMES, FACT_TOOLTIPS, RENDER_ORDER } from '../model/facts';
-import type { FactId } from '../model/facts';
 
 export type SettingKey = keyof ChatSettings;
 
@@ -151,7 +148,6 @@ export function runtimeRows(input: DefinitionInput, id: ProviderId, displayName:
   return rows;
 }
 
-const DROPPABLE = new Set<FactId>(DROP_GROUPS.flat());
 
 export function isNote(item: ItemDefinition): item is NoteDefinition {
   return 'note' in item;
@@ -178,23 +174,6 @@ export function modelOptions(input: DefinitionInput): Record<string, string> {
 }
 
 export function settingDefinitions(input: DefinitionInput): GroupDefinition[] {
-  const facts: ItemDefinition[] = [
-    /* ONE LINE, documentation rather than apology. A readout with no
-       measurement behind it is ABSENT, so a first-run strip renders nothing.
-       The cure is not a placeholder in the strip; it is this note, on the
-       surface someone opens when they want to ask. */
-    { name: 'How the readouts fill', desc: MEASURED_NOTE, note: true },
-  ];
-  /* EIGHT ROWS in the strip's own render order, so the list and the strip
-     agree. The description is the readout's tooltip VERBATIM, from the same
-     source. No master toggle and no reset: a ninth control that changes the
-     other eight is chrome about chrome. */
-  for (const id of RENDER_ORDER) {
-    const lines = [...FACT_TOOLTIPS[id]];
-    if (DROPPABLE.has(id)) lines.push(NARROW_NOTE);
-    facts.push({ name: FACT_NAMES[id], desc: lines.join(' '), control: { type: 'toggle', key: FACT_SETTING_KEYS[id] } });
-  }
-
   return [
     {
       index: '01', heading: 'Providers',
@@ -254,8 +233,6 @@ export function settingDefinitions(input: DefinitionInput): GroupDefinition[] {
       index: '02', heading: 'Conversations',
       items: [
         { name: 'Context awareness', desc: 'Send the note you have open and the text you have selected.', control: { type: 'toggle', key: 'contextAwareness' } },
-        { name: 'Structured replies', desc: 'Ask for the ICOR card format and render it natively. On by default; turn it off for plain chat.', control: { type: 'toggle', key: 'structuredReplies' } },
-        { name: 'Team strip', desc: 'Show who on the AI team did the work in this conversation, with their share of activity (tool calls and messages). Appears only in a vault with a 06 AI Team folder.', control: { type: 'toggle', key: 'factTeamStrip' } },
         {
           name: 'Continue chats on your phone (Remote Control)',
           desc: 'Shows a button on every chat that opens it in a terminal with Remote Control on, so the same chat appears in the Claude app on your phone under your own Claude account. With the ICOR for Life - Terminal plugin installed, the command is typed and waits for Enter; without it, the terminal that opens runs the command right away. Once handed off, permission prompts come from your own Claude Code, on desktop and phone, not from this plugin. Needs a Claude Pro, Max, Team or Enterprise plan (Team and Enterprise need the owner\'s Remote Control toggle turned on) and Claude Code signed in with your Claude account, not an API key.',
@@ -265,19 +242,12 @@ export function settingDefinitions(input: DefinitionInput): GroupDefinition[] {
         { name: 'Chime when a turn finishes', desc: 'Two quiet notes when a turn ends while you are looking elsewhere. Off by default.', control: { type: 'toggle', key: 'finishChime' } },
       ],
     },
-    { index: '03', heading: 'Statusline', items: facts },
     {
-      index: '04', heading: 'Session archive',
+      index: '03', heading: 'Session archive',
       items: [
         { name: 'Archive sessions into the vault', control: { type: 'toggle', key: 'archiveEnabled' } },
         { name: 'Archive folder', desc: `Empty uses ${input.defaultArchiveFolder}.`, control: { type: 'text', key: 'archiveFolder' } },
         { name: 'Keep archives for', desc: 'Number of days. Zero keeps everything.', control: { type: 'number', key: 'archiveRetentionDays', min: 0, step: 1 } },
-      ],
-    },
-    {
-      index: '05', heading: 'Advanced',
-      items: [
-        { name: 'Vault layout', desc: 'Where the AI Sessions folder lives.', control: { type: 'dropdown', key: 'vaultMode', options: { auto: 'Detect', scaffold: 'ICOR for Life', standalone: 'Standalone' } } },
       ],
     },
   ];

@@ -57,6 +57,7 @@ export interface TurnImage {
 
 /** One context chip on a sent turn. The label is what the chip says. */
 export interface TurnContext {
+  /** `wip` and `tasks` only arrive on turns stored before 0.17.0. */
   kind: 'active' | 'note' | 'folder' | 'tag' | 'property' | 'wip' | 'tasks' | 'linked';
   label: string;
   count: number;

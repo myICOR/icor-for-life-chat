@@ -174,7 +174,6 @@ export interface SessionConfig {
   model: string;
   effort: EffortName;
   permissionMode: PermissionModeName;
-  structuredReplies: boolean;
   resumeSessionId: string | null;
   /** The plugin's own version, for a runtime that identifies its client on a handshake. */
   pluginVersion?: string;
