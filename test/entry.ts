@@ -85,3 +85,6 @@ export * from '../src/engine/testKey';
  * backend door, both pure - the store and the adapter are parameters. */
 export * from '../src/engine/envFile';
 export * from '../src/engine/secrets';
+/* The safety rules for untrusted model output and the archive. */
+export * from '../src/safety/untrusted';
+export * from '../src/safety/secrets';

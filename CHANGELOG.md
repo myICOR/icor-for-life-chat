@@ -52,6 +52,22 @@ to have it all in one place"). The ICOR for Life vault no longer has a
   continue in the terminal, Remote Control, save as note, resume from the
   archive.
 
+### Security
+- **A reply can no longer send your notes anywhere by itself.** A prompt
+  injection hidden in a note or a web page could make the model write an
+  image whose address carried vault text; rendered, the image was fetched
+  the moment the reply appeared. Remote images in a reply now show as a link
+  you can click, raw HTML shows as text (bare `<kbd>`, `<br>` and similar
+  still format), and code is left exactly as it was. Copy still gives you the
+  reply as it was written.
+- **The assistant no longer reads keys without asking.** Keys files
+  (`.env`, wherever they are) and the vault's config folder (other plugins'
+  settings hold tokens there) are off limits to Claude Code's Read, Grep and
+  Glob unless you allow it.
+- **Archived conversations mask secrets.** Strings shaped like keys and
+  tokens (`sk-…`, `ghp_…`, `Bearer …`, `API_KEY=…`) are masked before
+  `conversation.md`, `transcript.json` and subagent files are written.
+
 ## 0.16.3
 
 - **"Save as note" is unchanged for you; its fields are now tested.** A saved
