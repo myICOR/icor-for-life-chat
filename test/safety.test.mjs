@@ -5,8 +5,8 @@
  *      image: it becomes a link the member may click. Raw HTML is shown as
  *      text, except harmless bare formatting tags. Code is untouched.
  *   2. Secret-shaped strings are masked before any archive file is written.
- *   3. The agent may not read keys files, the ICOR for Life system folder or
- *      the vault's config folder without asking.
+ *   3. The agent may not read keys files (wherever they are) or the vault's
+ *      config folder without asking; the rest of .icor-for-life stays readable.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -92,11 +92,12 @@ test('every archive file is masked on its way in', () => {
   assert.match(src, /maskSecretsDeep\(withoutImageBytes\(input\.events\)\)/);
 });
 
-test('the agent may not read keys files, the system folder or the config folder unasked', () => {
+test('the agent may not read keys files or the config folder unasked', () => {
   const rules = secretReadDeny('.obsidian');
   for (const tool of ['Read', 'Grep', 'Glob']) {
-    for (const p of ['./.obsidian/**', './.icor-for-life/**', '**/.env', '**/.env.*']) assert.ok(rules.includes(`${tool}(${p})`), `${tool}(${p})`);
+    for (const p of ['./.obsidian/**', '**/.env', '**/.env.*']) assert.ok(rules.includes(`${tool}(${p})`), `${tool}(${p})`);
   }
+  assert.ok(!rules.some((r) => r.includes('.icor-for-life/**')), 'the schema in .icor-for-life stays readable (older vaults point the agent at it)');
   assert.ok(secretReadDeny('.my-config/').includes('Read(./.my-config/**)'), 'a renamed config folder is covered');
   assert.ok(!secretReadDeny(undefined).some((r) => r.includes('undefined')));
   const session = readFileSync(new URL('../src/provider/claude/session.ts', import.meta.url), 'utf8');

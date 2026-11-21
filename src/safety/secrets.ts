@@ -57,13 +57,15 @@ export function maskSecretsDeep<T>(value: T): T {
   return value;
 }
 
-/* The files and folders no assistant reads without asking: keys files, the
- * ICOR for Life system folder (where the keys file now lives), and the
- * vault's config folder, whose plugins' data.json files hold tokens. Claude
+/* The files and folders no assistant reads without asking: keys files
+ * (wherever they sit, `.icor-for-life/.env` and the older `06 AI Team` one
+ * included) and the vault's config folder, whose plugins' data.json files
+ * hold tokens. The rest of `.icor-for-life/` stays readable: older vaults keep
+ * their schema there and their AGENTS.md points the agent at it. Claude
  * Code permission rules, handed to the session as disallowed tools. The
  * config folder comes from Vault#configDir: it is not always `.obsidian`. */
 export function secretReadDeny(configDir?: string): string[] {
-  const paths = ['./.icor-for-life/**', '**/.env', '**/.env.*'];
+  const paths = ['**/.env', '**/.env.*'];
   const dir = (configDir ?? '').replace(/^\.\//, '').replace(/\/+$/, '');
   if (dir && !dir.includes('..')) paths.unshift(`./${dir}/**`);
   const rules: string[] = [];

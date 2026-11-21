@@ -61,9 +61,9 @@ to have it all in one place"). The ICOR for Life vault no longer has a
   still format), and code is left exactly as it was. Copy still gives you the
   reply as it was written.
 - **The assistant no longer reads keys without asking.** Keys files
-  (`.env`), the `.icor-for-life` system folder and the vault's config folder
-  (other plugins' settings hold tokens there) are off limits to Claude Code's
-  Read, Grep and Glob unless you allow it.
+  (`.env`, wherever they are) and the vault's config folder (other plugins'
+  settings hold tokens there) are off limits to Claude Code's Read, Grep and
+  Glob unless you allow it.
 - **Archived conversations mask secrets.** Strings shaped like keys and
   tokens (`sk-…`, `ghp_…`, `Bearer …`, `API_KEY=…`) are masked before
   `conversation.md`, `transcript.json` and subagent files are written.
