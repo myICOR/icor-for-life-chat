@@ -64,6 +64,7 @@ import type {
 import type { EffortName, ModelChoice, PermissionModeName, RateLimitFacts } from '../../model/types';
 import { usageEvents } from './usage';
 import { authSourceFromApiKeySource } from './authSource';
+import { secretReadDeny } from '../../safety/secrets';
 
 export type { SessionConfig, SessionHooks, SessionImage } from '../types';
 
@@ -430,6 +431,10 @@ export class ChatSession implements ProviderSession {
         return toPermissionAnswer(choice, input, ctx.suggestions);
       },
     };
+    /* Keys files, other plugins' settings and Obsidian's config are never read
+       without asking: Claude Code's Read, Grep and Glob run unprompted in Ask
+       mode, and the working folder is the vault (src/safety/secrets.ts). */
+    options.disallowedTools = secretReadDeny(config.configDir);
     if (config.model) options.model = config.model;
     if (config.effort) options.effort = config.effort;
     if (config.resumeSessionId) options.resume = config.resumeSessionId;

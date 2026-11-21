@@ -21,6 +21,7 @@ import {
 } from './naming';
 import type { ArchiveManifest } from './naming';
 import { withoutImageBytes } from './redact';
+import { maskSecrets, maskSecretsDeep } from '../safety/secrets';
 
 export interface ArchiveInput {
   title: string;
@@ -163,15 +164,16 @@ export class ArchiveWriter {
       await this.ensureFolder(`${folder}/subagents`);
       for (const transcript of input.subagents) {
         const file = subagentFileName(transcript);
-        await adapter.write(`${folder}/subagents/${file}`, renderSubagent(transcript));
+        await adapter.write(`${folder}/subagents/${file}`, maskSecrets(renderSubagent(transcript)));
         subagentFiles.push(`subagents/${file}`);
       }
     }
 
-    await adapter.write(`${folder}/conversation.md`, renderConversation(input, folder));
+    // Secrets never reach the archive: every file is masked on its way in.
+    await adapter.write(`${folder}/conversation.md`, maskSecrets(renderConversation(input, folder)));
     await adapter.write(
       `${folder}/transcript.json`,
-      JSON.stringify({ events: withoutImageBytes(input.events) }, null, 2),
+      JSON.stringify({ events: maskSecretsDeep(withoutImageBytes(input.events)) }, null, 2),
     );
 
     const manifest: ArchiveManifest = {

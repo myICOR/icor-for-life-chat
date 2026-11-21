@@ -1665,6 +1665,7 @@ export class ChatView extends ItemView {
       provider: this.provider,
       cliPath: this.plugin.pathFor(this.provider),
       cwd: this.plugin.vaultPath,
+      configDir: this.app.vault.configDir,
       detect: {
         platform: Platform.isWin ? 'win32' as const : Platform.isMacOS ? 'darwin' as const : 'linux' as const,
         home: this.plugin.homeDir,
