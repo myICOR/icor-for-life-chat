@@ -1,4 +1,4 @@
-/* ICOR for Life - AI Chat - a chat panel inside the vault.
+/* ICOR AI Chat - a chat panel inside the vault.
  *
  * The plugin is a window, not a second brain: it hosts an agent runtime's
  * session (Claude Code or Codex, behind the Provider seam) whose working

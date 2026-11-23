@@ -1,4 +1,4 @@
-# ICOR for Life - AI Chat
+# ICOR AI Chat
 
 **A chat, right beside your notes.**
 

@@ -3,6 +3,10 @@
 Notable changes per release. Older releases are described in their commit
 messages (`git log --grep='^0\.'`) and on the GitHub releases page.
 
+## 0.17.4
+
+- The display name is now ICOR AI Chat (it was ICOR for Life - AI Chat). The plugin id stays `icor-for-life-chat`, so installed vaults, settings and hotkeys carry on unchanged.
+
 ## 0.17.3
 
 The robot lives in the ribbon on the left (Tom, 2026-11-23: every plugin's

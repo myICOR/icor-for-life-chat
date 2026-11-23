@@ -143,7 +143,7 @@ export function resolveExecutable(
     if (probe(candidate)) return candidate;
   }
   throw new Error(
-    `${base} was not found. ICOR for Life - AI Chat looked in ${candidates.length} locations on PATH.` +
+    `${base} was not found. ICOR AI Chat looked in ${candidates.length} locations on PATH.` +
       (installHint ? ` ${installHint}` : ''),
   );
 }
@@ -199,7 +199,7 @@ export function classifyCli(path: string): CliKind {
 export class CliNotFoundError extends Error {
   constructor(searched: number) {
     super(
-      `Claude Code was not found. ICOR for Life - AI Chat looked in ${searched} locations on PATH. ` +
+      `Claude Code was not found. ICOR AI Chat looked in ${searched} locations on PATH. ` +
         'Install it (https://claude.com/claude-code), or set the executable path in ' +
         'the plugin settings under Provider.',
     );

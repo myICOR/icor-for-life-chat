@@ -29,7 +29,7 @@ const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
  * this purely as an attribution label, and the plugin has no hosted page to
  * point it at. */
 const APP_REFERRER = 'https://myicor.com';
-const APP_TITLE = 'ICOR for Life - AI Chat';
+const APP_TITLE = 'ICOR AI Chat';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;

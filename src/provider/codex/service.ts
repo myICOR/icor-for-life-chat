@@ -67,7 +67,7 @@ async function ensure(cwd: string): Promise<CodexRpc> {
   rpc.start(resolveLaunch(cwd));
   const ready = rpc
     .request('initialize', {
-      clientInfo: { name: 'icor-for-life-chat', title: 'ICOR for Life - AI Chat', version: PLUGIN_VERSION_FOR_INIT },
+      clientInfo: { name: 'icor-for-life-chat', title: 'ICOR AI Chat', version: PLUGIN_VERSION_FOR_INIT },
       capabilities: { experimentalApi: false },
     })
     .then(() => rpc.notify('initialized', {}));
