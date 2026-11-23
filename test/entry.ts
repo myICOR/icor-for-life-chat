@@ -23,6 +23,7 @@ export * from '../src/model/pins';
 export * from '../src/model/activity';
 export * from '../src/view/actions';
 export * from '../src/team/memoryParse';
+export * from '../src/team/avatar';
 /* The life snapshot's reader: parse, staleness, the brief and the three
  * reader lines. Pure; only `src/team/snapshot.ts` touches the adapter. */
 export * from '../src/team/snapshotParse';

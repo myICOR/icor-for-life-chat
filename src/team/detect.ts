@@ -12,6 +12,7 @@
 
 import { TFile, TFolder } from 'obsidian';
 import type { App } from 'obsidian';
+import { pickAvatar } from './avatar';
 
 export const TEAM_ROOT = '06 AI Team';
 export const TEAM_AGENTS_FOLDER = `${TEAM_ROOT}/Agents`;
@@ -63,15 +64,14 @@ export function detectTeam(app: App): TeamRoster | null {
     const name = child.name;
     const slug = name.toLowerCase();
     const bio = fileAt(app, `${child.path}/${name}.md`);
-    const avatar =
-      fileAt(app, `${child.path}/avatar.png`) ?? fileAt(app, `${TEAM_AVATARS_FOLDER}/${slug}.png`);
+    const avatar = pickAvatar(child.path, slug, TEAM_AVATARS_FOLDER, (path) => fileAt(app, path) !== null);
     agents.push({
       name,
       slug,
       folder: child.path,
       role: roleOf(app, contract),
       bioPath: bio ? bio.path : null,
-      avatarPath: avatar ? avatar.path : null,
+      avatarPath: avatar,
     });
   }
   agents.sort((a, b) => a.name.localeCompare(b.name));
