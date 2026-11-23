@@ -97,6 +97,15 @@ export class SubagentBus {
   }
 
   /**
+   * The subagents one conversation launched. The bus is plugin-wide and lives
+   * until unload, so it also holds other tabs' subagents and the ones from
+   * conversations this tab held before; an archive takes only its own.
+   */
+  forSessions(sessionIds: readonly string[]): SubagentTranscript[] {
+    return this.all().filter((t) => t.sessionId !== null && sessionIds.includes(t.sessionId));
+  }
+
+  /**
    * What the tray shows. A finished subagent keeps its chip until its output
    * has been opened once or the parent turn is closed by the next user send,
    * whichever comes first: the green dot is a completion the user is meant to

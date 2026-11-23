@@ -2454,7 +2454,7 @@ export class ChatView extends ItemView {
         permissionMode: this.store.state.permissionMode,
         turns: record.turns,
         events: record.events,
-        subagents: this.plugin.subagents.all(),
+        subagents: this.plugin.subagents.forSessions(this.sessionIds),
         tokens: this.store.state.usage?.totalTokens ?? 0,
         ...(this.continuedFrom ? { continuedFrom: this.continuedFrom } : {}),
         pluginVersion: this.plugin.manifest.version,
