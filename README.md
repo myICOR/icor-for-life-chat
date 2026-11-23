@@ -1,6 +1,6 @@
 # ICOR for Life - AI Chat
 
-**A chat, in the room with your notes.**
+**A chat, right beside your notes.**
 
 Ask a question next to the note you are working on, and get an answer from a
 model that already knows which note is open and which lines you selected.
@@ -32,8 +32,9 @@ Everything the chat knows about how to work comes from the vault:
   `.claude/skills/` count too, so a vault set up before `_System/` existed
   still works.
 - **`_System/schema.json`** (in older vaults `.icor-for-life/schema.json`):
-  every type of note, its folder, its fields, the values a field allows and
-  which type a link points to.
+  the top folders grouped by stage (Input, Control, Output; Refine has no
+  folder), every type of note, its folder, its fields, the values a field
+  allows and which type a link points to.
 - **The note you have open**, the text you selected, and the notes you name
   with `[[`, `@` or the `+` menu.
 
@@ -116,7 +117,8 @@ The key lives where you choose:
   `icor-for-life-chat-openrouter-api-key`.
 - **An env file in the vault**, by default `.icor-for-life/.env`, as
   `ANTHROPIC_API_KEY=` and `OPENROUTER_API_KEY=`. A vault set up before
-  November 2026 keeps its keys in `06 AI Team/AI Team Knowledge/.env`; the
+  November 2026 (ICOR for Life 2.x) keeps its keys in
+  `06 AI Team/AI Team Knowledge/.env`; the
   plugin reads that file too when the new one has no key, and writes to
   whichever of the two exists. Keep the file out of anything that syncs or
   publishes your vault.
@@ -130,7 +132,8 @@ Plumbing only, by design, and few of them: where the program is, which
 model, how hard it thinks, the default permission mode, whether the open note
 travels with a message, and where conversations are archived and for how
 long. Conversations are archived in `AI Sessions/` unless you name another
-folder; a vault that already has `06 AI Team/AI Sessions/` keeps using it.
+folder; a 2.x vault that already has `06 AI Team/AI Sessions/` keeps using
+it.
 
 There is no prompt box, because your vault already has one: its `AGENTS.md`.
 
@@ -140,6 +143,10 @@ There is no prompt box, because your vault already has one: its `AGENTS.md`.
 - **Reads and writes notes in your vault**, with your permission, the same as
   you would.
 - **Archives your conversations** as notes in a folder you choose.
+- **Saves a reply as a note** when you ask, in your Daily notes folder as
+  `YYYY/MM/YYYYMMDDHHmm.md`: the folder Obsidian's Daily notes setting names,
+  else `00 Daily Notes/` when the vault has it, else the vault root. A 2.x
+  vault's `00 Daily Scratchpad/` keeps working while it exists.
 - **Reads your vault's `AGENTS.md`, skills and schema**, never writes them
   (see "What it reads").
 

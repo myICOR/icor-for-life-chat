@@ -1,7 +1,7 @@
 {
   "id": "icor-for-life-chat",
   "name": "ICOR for Life - AI Chat",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "minAppVersion": "1.8.7",
   "description": "A chat panel in your vault. Works from your vault's own AGENTS.md, skills and schema, reads the note you have open and the notes you mention, runs on Claude Code, Codex or your own API key, and files each conversation back as a note.",
   "author": "myICOR",

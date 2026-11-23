@@ -863,7 +863,7 @@ export class StreamRenderer {
 
   /* THE ROW SAYS WHAT WAS DONE, and opens onto how.
    *
-   * The closed row is an icon for the tool family and one sentence: "Read 04
+   * The closed row is an icon for the tool family and one sentence: "Read 02
    * Inner World/Contacts/People/bernd-martin.md", "Ran Open the demo note in
    * Obsidian". It used to be the tool's NAME in a kicker and the raw argument
    * beside it, which for Bash is the shell command - every row in a session

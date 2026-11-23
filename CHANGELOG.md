@@ -3,6 +3,31 @@
 Notable changes per release. Older releases are described in their commit
 messages (`git log --grep='^0\.'`) and on the GitHub releases page.
 
+## 0.17.1
+
+ICOR for Life 3.0's folders (Tom, 2026-11-23: the stages contract). The top
+folders are grouped by stage: Input (`00 Daily Notes`, `01 Inbox`), Control
+(`02 Inner World`, `03 Outer World`, `04 Assets`, `05 Databases`) and Output
+(`06 Planner`); Refine has no folder.
+
+- **"Save as note" goes to your Daily notes folder.** The folder Obsidian's
+  Daily notes setting names, else `00 Daily Notes/` when the vault has it,
+  else the vault root, as `YYYY/MM/YYYYMMDDHHmm.md` as before. A 2.x vault's
+  `00 Daily Scratchpad/` keeps working while it exists, and a Daily notes
+  setting that still names it moves to `00 Daily Notes/` once only that
+  folder is there. Folders are matched by their full name, never by the
+  number in front.
+- **The vault's structure is read from `folders`, grouped by stage.**
+  `_System/schema.json` now calls its folder list `folders` and adds
+  `stages`; with your own API key the model is told the folders under their
+  stage. A schema that still says `rooms` reads the same way.
+- **Folders, not rooms.** Nothing the chat shows or tells the model says
+  "room" any more, and the example path the model is given is
+  `02 Inner World/...`.
+- Unchanged: the 2.x places a vault may still use keep working, read only:
+  your keys in `06 AI Team/AI Team Knowledge/.env` and conversations in
+  `06 AI Team/AI Sessions/`.
+
 ## 0.17.0
 
 A general-purpose chat that works from what is in your vault (Tom,

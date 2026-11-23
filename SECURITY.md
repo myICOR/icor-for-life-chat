@@ -105,8 +105,9 @@ paste in yourself. It stores two, one per provider: an Anthropic API key and an
 OpenRouter API key. They go into one of two backends and you choose which. The
 default is Obsidian's keychain (Settings, General, Keychain), under the ids
 `icor-for-life-chat-anthropic-api-key` and `icor-for-life-chat-openrouter-api-key`.
-The other is an env file inside your vault, `06 AI Team/AI Team Knowledge/.env` by
-default, as `ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY`; that file is plain text,
+The other is an env file inside your vault, `.icor-for-life/.env` by default (a vault
+set up with ICOR for Life 2.x may keep it in `06 AI Team/AI Team Knowledge/.env`,
+which is read too), as `ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY`; that file is plain text,
 and anyone who can read your vault can read it. **The plugin reads only the backend
 you selected, and never the other one.** A key sitting in the backend you did not
 choose counts as not set and the settings tab says so, because a silent fallback is
