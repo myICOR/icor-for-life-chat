@@ -1014,10 +1014,11 @@ export class Composer {
 
   private autoGrow(): void {
     /* A computed value, so it rides the sanctioned dynamic channel rather than
-       a class: there is no finite set of heights to enumerate. The auto pass
-       first, because scrollHeight read under the previous fixed height reports
-       that height back and the field never shrinks. */
-    this.textarea.setCssStyles({ height: 'auto' });
+       a class: there is no finite set of heights to enumerate. Clearing the
+       inline height first (the stylesheet sets none, so the field is back to
+       its natural height), because scrollHeight read under the previous fixed
+       height reports that height back and the field never shrinks. */
+    this.textarea.setCssStyles({ height: '' });
     this.textarea.setCssStyles({ height: `${Math.min(this.textarea.scrollHeight, 260)}px` });
   }
 

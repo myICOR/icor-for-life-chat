@@ -3,6 +3,19 @@
 Notable changes per release. Older releases are described in their commit
 messages (`git log --grep='^0\.'`) and on the GitHub releases page.
 
+## 0.17.2
+
+Ready for the Obsidian community directory's review.
+
+- **Replies can no longer reach the network on their own, and keys stay out
+  of reach** (the security fixes of 0.17.0's `fix/untrusted-output`, now in
+  this line): an image, frame, video or sound in a reply loads only from the
+  vault or after a click; the agent cannot read keys files (`**/.env`,
+  `**/.env.*`) or Obsidian's settings folder; secrets are masked in every
+  archived file.
+- The composer resets its height by clearing it rather than by setting a
+  fixed value (the directory's review refuses fixed inline styles).
+
 ## 0.17.1
 
 ICOR for Life 3.0's folders (Tom, 2026-11-23: the stages contract). The top
