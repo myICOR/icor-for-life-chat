@@ -3,6 +3,17 @@
 Notable changes per release. Older releases are described in their commit
 messages (`git log --grep='^0\.'`) and on the GitHub releases page.
 
+## 0.17.3
+
+The robot lives in the ribbon on the left (Tom, 2026-11-23: every plugin's
+launcher moves to Obsidian's own ribbon).
+
+- **No more robot under the logo.** The icon in the file explorer's row of
+  icons is gone. The robot in the ribbon opens the same menu: start a
+  conversation, or pick up a recent one. Like any ribbon icon, you can move
+  or hide it in Settings, Appearance, Ribbon menu, and **New conversation**
+  in the command palette still opens one.
+
 ## 0.17.2
 
 Ready for the Obsidian community directory's review.
