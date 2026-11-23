@@ -18,6 +18,7 @@ import { fallbackPurpose } from '../../provider/tooling';
 import type { ApprovalChoice, QuestionAnswer } from '../../provider/types';
 import { isAnswered, joinChoices } from '../../provider/questions';
 import { Lightbox } from './Lightbox';
+import { neutraliseUntrustedMarkdown, stripRemoteMedia } from '../../safety/untrusted';
 
 const COLLAPSE_AFTER = 3;
 
@@ -557,7 +558,12 @@ export class StreamRenderer {
     el.empty();
 
     el.addClass('is-rendered');
-    await MarkdownRenderer.render(this.app, source, el, this.sourcePath, this.owner);
+    /* What the model wrote is untrusted: a remote image would be fetched the
+       moment it renders, carrying whatever the URL holds. Neutralised before
+       the renderer sees it, stripped again after (src/safety/untrusted.ts).
+       The action bar copies the reply as it was written. */
+    await MarkdownRenderer.render(this.app, neutraliseUntrustedMarkdown(source), el, this.sourcePath, this.owner);
+    stripRemoteMedia(el);
     this.renderActionBar(el, { blockId, text: source, el, role: 'assistant', key: null });
   }
 
