@@ -19,7 +19,7 @@ test('handoffActionPaint: available reads as the terminal icon, enabled, plain l
 });
 
 test('handoffActionPaint: unavailable disables and the label BECOMES the reason - one string, not two', () => {
-  const reason = 'Install ICOR for Life - Terminal';
+  const reason = 'Install ICOR Terminal';
   assert.deepEqual(handoffActionPaint(reason), { icon: 'terminal', label: reason, disabled: true });
 });
 

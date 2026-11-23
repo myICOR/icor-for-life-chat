@@ -802,8 +802,8 @@ export class ChatView extends ItemView {
   async continueInTerminal(): Promise<void> {
     const reason = this.handoffReason();
     if (reason) {
-      new Notice(reason === 'Install ICOR for Life - Terminal'
-        ? 'Install and enable ICOR for Life - Terminal to continue a conversation in a terminal pane.'
+      new Notice(reason === 'Install ICOR Terminal'
+        ? 'Install and enable ICOR Terminal to continue a conversation in a terminal pane.'
         : reason);
       return;
     }

@@ -41,7 +41,7 @@ test('the conservative guard walks terminal leaves by id, case-blind, and never 
 
 test('the hand-off is off for the right reason: not installed first, then not Claude, then no session', () => {
   const id = 'd6c87af6-1111-4222-8333-444455556666';
-  assert.equal(handoffUnavailableReason('claude', id, false), 'Install ICOR for Life - Terminal');
+  assert.equal(handoffUnavailableReason('claude', id, false), 'Install ICOR Terminal');
   assert.equal(handoffUnavailableReason('codex', id, true), 'Terminal hand-off is for Claude Code conversations');
   assert.match(handoffUnavailableReason('claude', null, true), /Send a message first/);
   assert.equal(handoffUnavailableReason('claude', id, true), null);
