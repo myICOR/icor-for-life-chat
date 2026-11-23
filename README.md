@@ -72,7 +72,8 @@ Optionally, the Codex command line tool as a second engine.
 ## Getting started
 
 1. Install the Claude Code command line tool and sign in.
-2. Enable the plugin and open the chat pane.
+2. Enable the plugin and open the chat pane from the robot in the ribbon on
+   the left (or **New conversation** in the command palette).
 3. Ask something about the note you have open.
 
 ## Continue on your phone
