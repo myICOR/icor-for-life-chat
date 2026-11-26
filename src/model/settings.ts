@@ -6,7 +6,7 @@ import type { EffortName, PermissionModeName } from './types';
 import type { ProviderId } from '../provider/types';
 import { isProviderId } from '../provider/types';
 import type { FactId } from './facts';
-import { ARCHIVE_FOLDER_DEFAULT, ARCHIVE_FOLDER_LEGACY } from '../constants';
+import { ARCHIVE_FOLDER_DEFAULT, ARCHIVE_FOLDER_LEGACY, ARCHIVE_SUBFOLDER_DATABASES } from '../constants';
 
 export interface ChatSettings {
   /** The runtime new conversations open with. A conversation keeps its provider for life. */
@@ -53,7 +53,9 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   model: '',
   effort: 'medium',
   defaultPermissionMode: 'default',
-  archiveEnabled: true,
+  /* OFF until the member turns it on (Tom, 2026-11-26): a conversation is
+     written into the vault only when they asked for that. */
+  archiveEnabled: false,
   archiveFolder: '',
   archiveRetentionDays: 90,
   contextAwareness: true,
@@ -82,12 +84,19 @@ export const FACT_VISIBILITY: Readonly<Record<FactId, boolean>> = {
 };
 
 /**
- * The archive root: the folder the settings name, else the folder 0.16 and
- * older archived into when this vault still has it, else `AI Sessions`.
+ * The archive root, first match wins:
+ *   1. the folder the settings name;
+ *   2. the folder 0.16 and older archived into, while this vault still has it;
+ *   3. `<Databases room>/AI Sessions` in an ICOR for Life vault (`databasesFolder`,
+ *      from `vault/databases.ts`; null when the vault is not one or has no such room);
+ *   4. `AI Sessions` at the vault root.
  */
-export function archiveRoot(settings: ChatSettings, legacyDetected: boolean): string {
-  if (settings.archiveFolder.trim()) return settings.archiveFolder.trim();
-  return legacyDetected ? ARCHIVE_FOLDER_LEGACY : ARCHIVE_FOLDER_DEFAULT;
+export function archiveRoot(settings: ChatSettings, legacyDetected: boolean, databasesFolder: string | null = null): string {
+  const named = settings.archiveFolder.trim().replace(/^\/+|\/+$/g, '');
+  if (named) return named;
+  if (legacyDetected) return ARCHIVE_FOLDER_LEGACY;
+  if (databasesFolder) return `${databasesFolder}/${ARCHIVE_SUBFOLDER_DATABASES}`;
+  return ARCHIVE_FOLDER_DEFAULT;
 }
 
 /* STORED SETTINGS BECOME SETTINGS HERE, and nowhere else. Untyped JSON from

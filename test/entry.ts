@@ -25,6 +25,7 @@ export * from '../src/view/actions';
 /* What the vault says about itself (AGENTS.md, skills, schema): the parsers,
  * the prompt and the adapter reader, which takes its adapter as a parameter. */
 export * from '../src/vault/vaultContext';
+export { databasesRoom } from '../src/vault/databases';
 export { INK_PLUGIN_NAME, PLUGIN_ID, ARCHIVE_FOLDER_DEFAULT, ARCHIVE_FOLDER_LEGACY } from '../src/constants';
 export * from '../src/model/facts';
 export * from '../src/model/format';

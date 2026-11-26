@@ -41,8 +41,11 @@ export const VIEW_TYPE_SUBAGENT = 'icor-chat-subagent-view';
 /** The SDK version this build is compiled and tested against. Pre-1.0: pinned exactly. */
 export const SDK_VERSION = '0.3.226';
 
-/** Where conversations are archived when the settings name no folder. */
+/** Where conversations are saved when the settings name no folder and the vault is not an ICOR for Life vault. */
 export const ARCHIVE_FOLDER_DEFAULT = 'AI Sessions';
+/** The subfolder of an ICOR for Life vault's Databases room that conversations are saved in by default
+ * (Tom, 2026-11-26: "if ICOR for Life scaffold is installed, it should be placed in the /databases folder"). */
+export const ARCHIVE_SUBFOLDER_DATABASES = 'AI Sessions';
 /** Where 0.16 and older archived them in an ICOR for Life 2.x vault; kept while the folder exists.
  * Read only, matched by the full name: 3.0's `06 Planner` shares only the number. */
 export const ARCHIVE_FOLDER_LEGACY = '06 AI Team/AI Sessions';

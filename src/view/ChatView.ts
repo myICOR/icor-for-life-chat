@@ -25,7 +25,7 @@ import type { Statusline } from './composer/Statusline';
 import { buildPane } from './pane';
 import { renderChipTray } from './SubagentView';
 import { ArchiveWriter } from '../archive/writer';
-import { FACT_VISIBILITY, archiveRoot } from '../model/settings';
+import { FACT_VISIBILITY } from '../model/settings';
 import { SDK_VERSION } from '../constants';
 import {
   listFolders, listProperties, listTags, readContext, resolveFolder, resolveProperty, resolveTag,
@@ -2162,7 +2162,7 @@ export class ChatView extends ItemView {
     if (this.transcript.length === 0 || this.sessionIds.length === 0) return;
     this.archiving = true;
     try {
-      const root = archiveRoot(this.plugin.settings, this.plugin.legacyArchiveDetected);
+      const root = this.plugin.archiveFolder();
       const writer = new ArchiveWriter(this.app, root);
       // Read the session back rather than archiving this tab's own slice: a
       // second tab on the same conversation sees only its own half, and an

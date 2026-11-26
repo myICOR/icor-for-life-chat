@@ -116,7 +116,7 @@ test('Bypass is offered as a default mode, and Ask is still what ships', () => {
 
 test('the settings stay few: four groups, fifteen settings, no team or card switches', () => {
   const groups = settingDefinitions(INPUT);
-  assert.deepEqual(groups.map((g) => g.heading), ['Providers', 'Conversations', 'Session archive'],
+  assert.deepEqual(groups.map((g) => g.heading), ['Providers', 'Conversations', 'Saved conversations'],
     'a settings group came back');
   assert.equal(Object.keys(DEFAULT_SETTINGS).length, 15, 'the setting count grew; say why in the changelog');
   for (const gone of ['structuredReplies', 'vaultMode', 'factTeamStrip', 'factContext']) {

@@ -3,6 +3,22 @@
 Notable changes per release. Older releases are described in their commit
 messages (`git log --grep='^0\.'`) and on the GitHub releases page.
 
+## 0.17.5
+
+Saving conversations is your choice (Tom, 2026-11-26).
+
+- **Off by default.** A conversation is written into the vault only after
+  you turn on **Save conversations in the vault** in the settings, under
+  Saved conversations. A vault that already turned it on keeps saving.
+- **Pick the folder.** The folder field suggests your vault's folders as you
+  type, and the folder button beside it opens a list of every folder.
+- **In an ICOR for Life vault the default is `05 Databases/AI Sessions/`.**
+  The vault is recognised by its `_System/schema.json` and the folder by its
+  name (`NN Databases`), so it is found on a phone too. Any other vault
+  saves in `AI Sessions/`, and a 2.x vault that already has
+  `06 AI Team/AI Sessions/` keeps using it. Conversations saved earlier stay
+  where they are and still resume from their note.
+
 ## 0.17.4
 
 - The display name is now ICOR AI Chat (it was ICOR for Life - AI Chat). The plugin id stays `icor-for-life-chat`, so installed vaults, settings and hotkeys carry on unchanged.

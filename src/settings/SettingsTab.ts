@@ -20,6 +20,7 @@ import { controlKeys, isAction, isNote, settingDefinitions, validateRetention } 
 import type { ActionDefinition, ControlSpec, DefinitionInput, GroupDefinition, ItemDefinition } from './definitions';
 import { offerInstall } from '../provider/install';
 import { EngineSettingsSection } from './EngineSection';
+import { addFolderPicker } from './folderPicker';
 
 /* The 1.13 shapes, derived from the class rather than imported by name.
    `SettingDefinitionItem` and friends are `@since 1.13.0`, and the manifest
@@ -131,6 +132,20 @@ export class ChatSettingsTab extends PluginSettingTab {
       };
     }
     const c = item.control;
+    /* A folder field has no declarative control in 1.13, so it renders
+       itself, exactly as on the fallback path, and saves through the same
+       `saveSettings` the framework's own controls go through. */
+    if (c.type === 'folder') {
+      return {
+        name: item.name,
+        desc: item.desc,
+        render: (setting: Setting) => {
+          setting.setName(item.name);
+          if (item.desc) setting.setDesc(item.desc);
+          this.bindFolder(setting, c);
+        },
+      };
+    }
     const control =
       c.type === 'number'
         ? { ...c, validate: validateRetention }
@@ -232,6 +247,13 @@ export class ChatSettingsTab extends PluginSettingTab {
     this.display();
   }
 
+  private bindFolder(row: Setting, c: Extract<ControlSpec, { type: 'folder' }>): void {
+    addFolderPicker(this.app, row, String(this.record()[c.key] ?? ''), c.placeholder, (path) => {
+      Object.assign(this.plugin.settings, { [c.key]: path });
+      void this.plugin.saveSettings();
+    });
+  }
+
   private bind(row: Setting, c: ControlSpec): void {
     const settings = this.record();
     const save = async (value: unknown): Promise<void> => {
@@ -247,6 +269,9 @@ export class ChatSettingsTab extends PluginSettingTab {
           if (c.placeholder) t.setPlaceholder(c.placeholder);
           t.setValue(String(settings[c.key] ?? '')).onChange((v) => void save(v));
         });
+        return;
+      case 'folder':
+        this.bindFolder(row, c);
         return;
       case 'textarea':
         row.addTextArea((t) => t.setValue(String(settings[c.key] ?? '')).onChange((v) => void save(v)));
