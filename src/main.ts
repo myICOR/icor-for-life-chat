@@ -35,6 +35,7 @@ import { routeChatLeaf } from './view/leafRoute';
 import { terminalHoldsSession, terminalLeafFor } from './view/handoff';
 import { ChatSettingsTab } from './settings/SettingsTab';
 import { DEFAULT_SETTINGS, archiveRoot, pathSettingKey, settingsFrom } from './model/settings';
+import { detectDatabasesRoom } from './vault/databases';
 import { ARCHIVE_FOLDER_LEGACY } from './constants';
 import { offerInstall } from './provider/install';
 import type { ChatSettings } from './model/settings';
@@ -679,8 +680,18 @@ export default class IcorChatPlugin extends Plugin {
     return this.app.vault.getAbstractFileByPath(ARCHIVE_FOLDER_LEGACY) !== null;
   }
 
+  /** The ICOR for Life vault's Databases room (`05 Databases`), or null in any other vault. */
+  get databasesRoom(): string | null {
+    return detectDatabasesRoom(this.app);
+  }
+
+  /** Where conversations are saved right now. */
+  archiveFolder(): string {
+    return archiveRoot(this.settings, this.legacyArchiveDetected, this.databasesRoom);
+  }
+
   defaultArchiveFolder(): string {
-    return archiveRoot({ ...this.settings, archiveFolder: '' }, this.legacyArchiveDetected);
+    return archiveRoot({ ...this.settings, archiveFolder: '' }, this.legacyArchiveDetected, this.databasesRoom);
   }
 
   /* THE CHAT OPENS IN THE RIGHT SIDEBAR, beside the planner tray - Tom,

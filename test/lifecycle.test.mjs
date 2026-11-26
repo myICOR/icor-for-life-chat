@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ApprovalBroker, toPermissionAnswer, ChatStore, reduce, emptyState,
-  skipPermissions, archiveRoot, DEFAULT_SETTINGS,
+  skipPermissions, archiveRoot, databasesRoom, DEFAULT_SETTINGS,
   contextPreamble, withContext, selectionRangeLabel, MAX_SELECTION_CHARS,
   settingsFrom,
   routeChatLeaf,
@@ -91,15 +91,29 @@ test('skip-permissions is reachable from exactly one mode', () => {
   for (const m of ['default', 'plan', 'acceptEdits']) assert.equal(skipPermissions(m), false);
 });
 
-test('the archive root keeps the folder an older vault used, else AI Sessions', () => {
+test('the archive root: the named folder, the older vault\'s, the Databases room, else AI Sessions', () => {
   assert.equal(archiveRoot(DEFAULT_SETTINGS, true), '06 AI Team/AI Sessions');
   assert.equal(archiveRoot(DEFAULT_SETTINGS, false), 'AI Sessions');
   assert.equal(archiveRoot({ ...DEFAULT_SETTINGS, archiveFolder: ' Chats ' }, true), 'Chats');
+  assert.equal(archiveRoot(DEFAULT_SETTINGS, false, '05 Databases'), '05 Databases/AI Sessions');
+  assert.equal(archiveRoot(DEFAULT_SETTINGS, true, '05 Databases'), '06 AI Team/AI Sessions', 'an older vault keeps its folder');
+  assert.equal(archiveRoot({ ...DEFAULT_SETTINGS, archiveFolder: 'Chats' }, false, '05 Databases'), 'Chats');
+  assert.equal(archiveRoot({ ...DEFAULT_SETTINGS, archiveFolder: '/05 Databases/Chats/' }, false), '05 Databases/Chats', 'a picked path is vault-relative');
+});
+
+test('the Databases room counts only in an ICOR for Life vault, matched by name', () => {
+  const root = ['00 Daily Notes', '01 Inbox', '04 Assets', '05 Databases', '06 Planner', '_System'];
+  assert.equal(databasesRoom(root, true), '05 Databases');
+  assert.equal(databasesRoom(root, false), null, 'a folder name alone is not an ICOR vault');
+  assert.equal(databasesRoom(['07 Databases', '06 AI Team'], true), '07 Databases');
+  assert.equal(databasesRoom(['Databases', 'Notes'], true), null);
+  assert.equal(databasesRoom(['07 Databases', '05 Databases'], true), '05 Databases');
 });
 
 test('the shipped defaults are the safe ones', () => {
   assert.equal(DEFAULT_SETTINGS.defaultPermissionMode, 'default');
   assert.equal(DEFAULT_SETTINGS.cliPath, '');
+  assert.equal(DEFAULT_SETTINGS.archiveEnabled, false, 'conversations are saved only once the member turns it on');
 });
 
 /* The plugin brings no instructions of its own (0.17.0): the ICOR card format

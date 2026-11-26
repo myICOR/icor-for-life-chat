@@ -131,10 +131,11 @@ each key is and can move it. No key is ever shown back.
 
 Plumbing only, by design, and few of them: where the program is, which
 model, how hard it thinks, the default permission mode, whether the open note
-travels with a message, and where conversations are archived and for how
-long. Conversations are archived in `AI Sessions/` unless you name another
-folder; a 2.x vault that already has `06 AI Team/AI Sessions/` keeps using
-it.
+travels with a message, and whether conversations are saved, where and for
+how long. Saving is off until you turn it on. Pick the folder with the folder
+field or its folder button; left empty, an ICOR for Life vault saves in
+`05 Databases/AI Sessions/`, any other vault in `AI Sessions/`, and a 2.x
+vault that already has `06 AI Team/AI Sessions/` keeps using it.
 
 There is no prompt box, because your vault already has one: its `AGENTS.md`.
 
@@ -143,7 +144,7 @@ There is no prompt box, because your vault already has one: its `AGENTS.md`.
 - **Runs the command line tool you already installed**, in your vault folder.
 - **Reads and writes notes in your vault**, with your permission, the same as
   you would.
-- **Archives your conversations** as notes in a folder you choose.
+- **Saves your conversations** as notes in a folder you choose, once you turn saving on.
 - **Saves a reply as a note** when you ask, in your Daily notes folder as
   `YYYY/MM/YYYYMMDDHHmm.md`: the folder Obsidian's Daily notes setting names,
   else `00 Daily Notes/` when the vault has it, else the vault root. A 2.x

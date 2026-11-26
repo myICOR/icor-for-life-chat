@@ -30,6 +30,9 @@ export type SettingKey = keyof ChatSettings;
 export type ControlSpec =
   | { type: 'toggle'; key: SettingKey }
   | { type: 'text'; key: SettingKey; placeholder?: string }
+  /* A vault folder: a text field that suggests the vault's folders as you
+     type, and a button that opens a folder picker. Empty is a real value. */
+  | { type: 'folder'; key: SettingKey; placeholder?: string }
   | { type: 'textarea'; key: SettingKey; placeholder?: string; rows?: number }
   | { type: 'dropdown'; key: SettingKey; options: Record<string, string> }
   | { type: 'number'; key: SettingKey; min?: number; step?: number };
@@ -243,11 +246,19 @@ export function settingDefinitions(input: DefinitionInput): GroupDefinition[] {
       ],
     },
     {
-      index: '03', heading: 'Session archive',
+      index: '03', heading: 'Saved conversations',
       items: [
-        { name: 'Archive sessions into the vault', control: { type: 'toggle', key: 'archiveEnabled' } },
-        { name: 'Archive folder', desc: `Empty uses ${input.defaultArchiveFolder}.`, control: { type: 'text', key: 'archiveFolder' } },
-        { name: 'Keep archives for', desc: 'Number of days. Zero keeps everything.', control: { type: 'number', key: 'archiveRetentionDays', min: 0, step: 1 } },
+        {
+          name: 'Save conversations in the vault',
+          desc: 'Writes each conversation as a note after every reply, so you can read it later and resume it. Off by default: nothing is saved until you turn this on.',
+          control: { type: 'toggle', key: 'archiveEnabled' },
+        },
+        {
+          name: 'Folder for saved conversations',
+          desc: `Pick a folder or type its path. Empty uses ${input.defaultArchiveFolder}.`,
+          control: { type: 'folder', key: 'archiveFolder', placeholder: input.defaultArchiveFolder },
+        },
+        { name: 'Keep saved conversations for', desc: 'Number of days. Zero keeps everything.', control: { type: 'number', key: 'archiveRetentionDays', min: 0, step: 1 } },
       ],
     },
   ];
