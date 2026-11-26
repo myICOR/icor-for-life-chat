@@ -1,4 +1,4 @@
-/* ICOR for Life - AI Chat - a chat panel inside the vault.
+/* ICOR AI Chat - a chat panel inside the vault.
  *
  * The plugin is a window, not a second brain: it hosts an agent runtime's
  * session (Claude Code or Codex, behind the Provider seam) whose working
@@ -10,7 +10,7 @@
  * Independent implementation from a behavioural specification; no code is
  * inherited from any other repository. */
 
-import { FileSystemAdapter, Menu, Notice, Platform, Plugin, TFile, setIcon } from 'obsidian';
+import { FileSystemAdapter, Menu, Notice, Platform, Plugin, TFile } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 /* `node:os` is NOT imported at module scope on purpose (2026-09-06, mobile
  * hardening): this file is the plugin's entry point, loaded on every
@@ -49,12 +49,9 @@ import { OWN_KEY_STORAGE_KEY, effectiveBackend, loadOwnKeySettings, migratePlain
  * whole panel section, not an icon. It is gone for good; the name survives
  * only so an upgrade that happens while Obsidian is running can sweep the node
  * the previous build left behind, which would otherwise sit there unstyled -
- * its CSS went with it. The toolbar launcher below is a different element with
- * a different class ON PURPOSE, or this sweep would delete it at load. */
+ * its CSS went with it. (The icon in the explorer's tool-button row, 0.16 to
+ * 0.17.1, needs no sweep: the build that made it removes it on unload.) */
 const RETIRED_LAUNCHER_CLASS = 'aic-launcher';
-
-/** The icon-only entry in the file explorer's tool-button row. */
-const TREE_LAUNCHER_CLASS = 'aic-tree-launcher';
 
 /** Recent conversations offered in the launcher menu. */
 const RIBBON_SESSION_LIMIT = 6;
@@ -262,74 +259,32 @@ export default class IcorChatPlugin extends Plugin {
 
     this.addSettingTab(new ChatSettingsTab(this.app, this));
 
-    /* TWO VISIBLE ENTRY POINTS, AND THE DIFFERENCE BETWEEN THEM IS THE HOST.
+    /* ONE VISIBLE ENTRY POINT: OBSIDIAN'S OWN RIBBON.
      *
-     * The ribbon is Obsidian's own place for a plugin entry, and for a plain
-     * Obsidian vault it is the right one and the only one this plugin should
-     * need. But the ICOR for Life scaffold HIDES the left ribbon, and an icon
-     * on a hidden surface is not an entry point - measured the hard way: the
-     * robot was invisible in that vault for as long as the ribbon was its only
-     * home. So the file-tree toolbar carries a second one, which is the only
-     * visible route wherever the ribbon is hidden and a duplicate wherever it
-     * is not.
-     *
-     * Both open the same menu. Neither is the only route: `open-chat` is a
-     * command, so the palette and a hotkey always reach the same function. */
+     * The ribbon is Obsidian's place for a plugin entry, and since 0.17.2 it
+     * is this plugin's only one (Tom, 2026-11-23): the icon that also sat in
+     * the file explorer's tool-button row is gone, and a member reorders or
+     * hides the robot in Settings, Appearance, Ribbon menu like any other
+     * plugin's icon. It is not the only route: `open-chat` is a command, so
+     * the palette and a hotkey always reach a conversation. Obsidian removes
+     * the icon on unload. */
     this.addRibbonIcon('bot', INK_RIBBON_TOOLTIP, (evt) =>
       void this.openLauncherMenu({ x: evt.clientX, y: evt.clientY }));
 
-    this.app.workspace.onLayoutReady(() => {
-      // An in-place upgrade from a build that injected into the file tree
-      // leaves its node behind, and its stylesheet is gone.
-      this.sweepRetiredLauncher();
-      this.mountTreeLauncher();
-    });
-    this.registerEvent(this.app.workspace.on('layout-change', () => this.mountTreeLauncher()));
+    // An in-place upgrade from a build that injected into the file tree
+    // leaves its node behind, and its stylesheet is gone.
+    this.app.workspace.onLayoutReady(() => this.sweepRetiredLauncher());
   }
 
   override onunload(): void {
     // A runtime with a shared service process releases it here.
     for (const provider of availableProviders()) provider.dispose?.();
     this.sweepRetiredLauncher();
-    for (const el of Array.from(document.querySelectorAll(`.${TREE_LAUNCHER_CLASS}`))) el.remove();
     this.subagents.clear();
   }
 
   private sweepRetiredLauncher(): void {
     for (const el of Array.from(document.querySelectorAll(`.${RETIRED_LAUNCHER_CLASS}`))) el.remove();
-  }
-
-  /* The icon-only launcher in the file explorer's tool-button row, under the
-   * ICOR for Life mark. The suite's own pattern: ICOR for Life - Focus mounts its map
-   * launcher in the same row the same way, and the INKLINE theme styles the
-   * whole slot rather than any one plugin's button.
-   *
-   * The menu is anchored to the BUTTON rather than to the cursor, so a click
-   * and a keypress put it in the same place. The role, the tabindex and the
-   * key handler are deliberately more than Obsidian's own `addNavButton`,
-   * which makes a bare div with a click listener and no tab stop: the INKLINE
-   * theme already ships a `:focus-visible` ring for this slot, and a ring
-   * nothing can ever focus is a rule that reads as enforced and never fires. */
-  private mountTreeLauncher(): void {
-    for (const leaf of this.app.workspace.getLeavesOfType('file-explorer')) {
-      const row = leaf.view?.containerEl?.querySelector('.nav-buttons-container');
-      if (!row || row.querySelector(`.${TREE_LAUNCHER_CLASS}`)) continue;
-      const btn = row.createDiv({ cls: `clickable-icon nav-action-button ${TREE_LAUNCHER_CLASS}` });
-      setIcon(btn, 'bot');
-      btn.setAttr('aria-label', INK_RIBBON_TOOLTIP);
-      btn.setAttr('role', 'button');
-      btn.setAttr('tabindex', '0');
-      const open = (): void => {
-        const rect = btn.getBoundingClientRect();
-        void this.openLauncherMenu({ x: rect.left, y: rect.bottom });
-      };
-      this.registerDomEvent(btn, 'click', open);
-      this.registerDomEvent(btn, 'keydown', (evt: KeyboardEvent) => {
-        if (evt.key !== 'Enter' && evt.key !== ' ') return;
-        evt.preventDefault();
-        open();
-      });
-    }
   }
 
   /* ------------------------------------------------------------ runtimes */
@@ -539,9 +494,9 @@ export default class IcorChatPlugin extends Plugin {
   }
 
   /* The launcher menu: start a conversation, or pick up one of the recent
-   * ones. Shared by both entry points, which is why it takes a POINT rather
-   * than an event - a keypress has no cursor, and a menu that lands at 0,0 for
-   * keyboard users is a menu that only works for a mouse.
+   * ones. It takes a POINT rather than an event, so a caller without a cursor
+   * (a keypress) can still place it; a menu that lands at 0,0 for keyboard
+   * users is a menu that only works for a mouse.
    *
    * Obsidian's own Menu chrome, deliberately. The dropdown carries the plugin's
    * token block and its INKLINE declaration so a theme can skin it, and no

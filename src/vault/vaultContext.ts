@@ -124,13 +124,59 @@ export function schemaTypeCount(text: string): number | null {
   }
 }
 
+function record(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
 /**
- * The schema as a short list a model can work from: one line per note type
- * with its folder, then its required fields, other fields, allowed values and
- * link targets. Returns null for text that is not a schema.
+ * The schema's top folders, name to one line. `folders` since ICOR for Life
+ * 3.0; a schema written before it calls the same map `rooms`, which is read
+ * the same way.
+ */
+export function schemaFolders(parsed: { folders?: unknown; rooms?: unknown }): Record<string, unknown> | null {
+  return record(parsed.folders ?? parsed.rooms);
+}
+
+/**
+ * The folders as lines: grouped under their stage when the schema has
+ * `stages` (a stage with no folder says what it is instead), any folder no
+ * stage names after them, and a flat list when there are no stages.
+ */
+function folderLines(folders: Record<string, unknown> | null, stages: Record<string, unknown> | null): string[] {
+  const about = (name: string): string => {
+    const what = folders?.[name];
+    return `- ${name}: ${typeof what === 'string' ? what : ''}`.trimEnd();
+  };
+  if (!stages) return folders ? ['Folders:', ...Object.keys(folders).map(about)] : [];
+  const lines = ['Folders, grouped by stage:'];
+  const placed = new Set<string>();
+  for (const [id, raw] of Object.entries(stages)) {
+    const stage = record(raw) ?? {};
+    const label = typeof stage.label === 'string' && stage.label ? stage.label : id;
+    const own = strings(stage.folders);
+    if (!own.length) {
+      lines.push(`${label}: ${typeof stage.about === 'string' && stage.about ? stage.about : 'no folder'}`);
+      continue;
+    }
+    lines.push(`${label}:`);
+    for (const name of own) {
+      placed.add(name);
+      lines.push(about(name));
+    }
+  }
+  const rest = Object.keys(folders ?? {}).filter((name) => !placed.has(name));
+  if (rest.length) lines.push('Other folders:', ...rest.map(about));
+  return lines;
+}
+
+/**
+ * The schema as a short list a model can work from: the folders by stage,
+ * then one line per note type with its folder, then its required fields,
+ * other fields, allowed values and link targets. Returns null for text that
+ * is not a schema.
  */
 export function schemaSummary(text: string): string | null {
-  let parsed: { types?: unknown; rooms?: unknown; common?: unknown };
+  let parsed: { types?: unknown; folders?: unknown; rooms?: unknown; stages?: unknown; common?: unknown };
   try {
     parsed = JSON.parse(text) as typeof parsed;
   } catch {
@@ -140,12 +186,7 @@ export function schemaSummary(text: string): string | null {
   const lines: string[] = [];
   const common = strings(parsed.common);
   if (common.length) lines.push(`Every note carries: ${common.join(', ')}.`);
-  if (typeof parsed.rooms === 'object' && parsed.rooms !== null) {
-    lines.push('Rooms:');
-    for (const [room, what] of Object.entries(parsed.rooms as Record<string, unknown>)) {
-      lines.push(`- ${room}: ${typeof what === 'string' ? what : ''}`.trimEnd());
-    }
-  }
+  lines.push(...folderLines(schemaFolders(parsed), record(parsed.stages)));
   lines.push('Note types (type: folder):');
   for (const [id, raw] of Object.entries(parsed.types as Record<string, SchemaType>)) {
     const t = raw ?? {};

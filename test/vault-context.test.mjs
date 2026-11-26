@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import {
-  parseSkill, schemaSummary, schemaTypeCount, vaultContextParts, vaultSystemPrompt, readVaultContext,
+  parseSkill, schemaSummary, schemaTypeCount, schemaFolders, vaultContextParts, vaultSystemPrompt, readVaultContext,
   isReadableVaultFile, runReadNote, AGENTS_CAP, SCHEMA_PATH, LEGACY_SCHEMA_PATH, EMPTY_VAULT_CONTEXT,
 } from './build/pure.mjs';
 
@@ -63,6 +63,64 @@ test('the schema summary names every type with its folder, fields, values and li
   assert.equal(schemaSummary('not json'), null);
   assert.equal(schemaSummary('{"types": 3}'), null);
   assert.equal(schemaTypeCount('[]'), null);
+});
+
+/* THE 3.0 SCHEMA (the stages contract, 2026-11-23): `rooms` is `folders`,
+   with a `stages` map beside it, and the folders carry their new names. Built
+   from the 2.x fixture the way the contract maps it, so the two cannot drift
+   apart; the wording the vault itself changes ("room" to "folder") goes with
+   it. */
+const RENAMED = [
+  ['00 Daily Scratchpad', '00 Daily Notes'], ['04 Inner World', '02 Inner World'], ['06 Outer World', '03 Outer World'],
+  ['05 Assets', '04 Assets'], ['07 Databases', '05 Databases'], ['02 Planner', '06 Planner'],
+];
+const STAGES = {
+  input: { label: 'Input', color: '#5271FC', folders: ['00 Daily Notes', '01 Inbox'] },
+  control: { label: 'Control', color: '#52F49A', folders: ['02 Inner World', '03 Outer World', '04 Assets', '05 Databases'] },
+  output: { label: 'Output', color: '#FD63FF', folders: ['06 Planner'] },
+  refine: { label: 'Refine', folders: [], about: 'no folder: the plugins (AI Chat, Connect, Focus) and the weekly review' },
+};
+function schema30() {
+  let text = SCHEMA;
+  for (const [from, to] of RENAMED) text = text.split(from).join(to);
+  const parsed = JSON.parse(text.replace(/\brooms?\b/g, (w) => (w === 'rooms' ? 'folders' : 'folder')));
+  delete parsed.folders['03 WiP'];
+  parsed.stages = STAGES;
+  return JSON.stringify(parsed, null, 2);
+}
+
+test('a 3.0 schema: the folders by stage, under their new names, read from `folders`', () => {
+  const text = schema30();
+  assert.ok('folders' in JSON.parse(text) && !('rooms' in JSON.parse(text)));
+  assert.equal(schemaTypeCount(text), 19);
+  const summary = schemaSummary(text);
+  assert.match(summary, /^Folders, grouped by stage:\nInput:\n- 00 Daily Notes: your raw writing[^\n]*\n- 01 Inbox: [^\n]+\nControl:\n- 02 Inner World: [^\n]+\n- 03 Outer World: [^\n]+\n- 04 Assets: [^\n]+\n- 05 Databases: [^\n]+\nOutput:\n- 06 Planner: [^\n]+\nRefine: no folder: the plugins/m);
+  assert.match(summary, /^- journal: 02 Inner World\/Journal\//m);
+  assert.doesNotMatch(summary, /Other folders:/, 'a staged folder was listed again');
+  const loose = JSON.parse(text);
+  loose.folders['99 Extra'] = 'not in a stage';
+  assert.match(schemaSummary(JSON.stringify(loose)), /^Other folders:\n- 99 Extra: not in a stage$/m, 'a folder no stage names went missing');
+});
+
+test('a schema written before 3.0 is read from `rooms` and still shown as folders', () => {
+  assert.deepEqual(Object.keys(schemaFolders(JSON.parse(SCHEMA))), Object.keys(JSON.parse(SCHEMA).rooms));
+  assert.deepEqual(Object.keys(schemaFolders(JSON.parse(schema30()))), Object.keys(JSON.parse(schema30()).folders));
+  assert.equal(schemaFolders({ folders: { a: 'new' }, rooms: { b: 'old' } }).a, 'new', '`folders` wins over `rooms`');
+  assert.equal(schemaFolders({ types: {} }), null);
+  const summary = schemaSummary(SCHEMA);
+  assert.match(summary, /^Folders:\n- 00 Daily Scratchpad: your raw writing/m);
+  for (const name of Object.keys(JSON.parse(SCHEMA).rooms)) assert.ok(summary.includes(`- ${name}: `), `${name} is missing`);
+  assert.doesNotMatch(summary, /^Rooms?\b/m, 'the summary heads the list with "Rooms"');
+});
+
+test('no "room" reaches the model from the plugin: a 3.0 vault\'s prompt says folders and stages only', async () => {
+  const ctx = await readVaultContext(adapterOf({ 'AGENTS.md': 'Be kind.\n', [SCHEMA_PATH]: schema30() }));
+  const prompt = vaultSystemPrompt(ctx, ['read_note', 'list_folder']);
+  assert.doesNotMatch(prompt, /\brooms?\b/i);
+  assert.match(prompt, /Folders, grouped by stage:/);
+  for (const old of ['00 Daily Scratchpad', '04 Inner World', '06 Outer World', '05 Assets', '07 Databases', '02 Planner', '03 WiP']) {
+    assert.ok(!prompt.includes(old), `the prompt names the old folder ${old}`);
+  }
 });
 
 test('the vault is read through the adapter: AGENTS.md, _System first, the skill copies deduplicated', async () => {

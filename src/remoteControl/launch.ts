@@ -1,7 +1,7 @@
 /* Putting the Remote Control command where a member can run it.
  *
  * Two different guarantees, and this file is honest about which route gives
- * which (Vex H2, 2026-09-07). With the ICOR for Life - Terminal plugin
+ * which (Vex H2, 2026-09-07). With the ICOR Terminal plugin
  * installed, the command is TYPED into a new pane and the member presses
  * Enter - the plugin never runs it for them, the same rule
  * `provider/install.ts` follows for a vendor's install line. WITHOUT that
@@ -13,7 +13,7 @@
  *
  * Every side effect is a PORT, so the decision tree here is asserted headless
  * with fakes; `adapters.ts` is the one file that touches the real clipboard,
- * the real child process and the real ICOR for Life - Terminal plugin. */
+ * the real child process and the real ICOR Terminal plugin. */
 
 import type { CommandPlatform } from './command';
 import { quoteWindows } from './command';

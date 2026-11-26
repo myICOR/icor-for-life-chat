@@ -1,5 +1,5 @@
 /* The one file that touches the real clipboard, the real child process and
- * the real ICOR for Life - Terminal plugin for Remote Control. Everything in
+ * the real ICOR Terminal plugin for Remote Control. Everything in
  * `launch.ts` takes these as parameters instead, so the routing decision is
  * asserted headless; this file is what `ChatView` actually calls. */
 

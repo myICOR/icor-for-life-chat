@@ -61,7 +61,7 @@ async function testOpenRouterKey(apiKey: string, transports: Transports, signal:
       'content-type': 'application/json',
       authorization: `Bearer ${apiKey}`,
       'HTTP-Referer': 'https://myicor.com',
-      'X-Title': 'ICOR for Life - AI Chat',
+      'X-Title': 'ICOR AI Chat',
     },
     body: JSON.stringify({
       model: 'anthropic/claude-haiku-4-5',

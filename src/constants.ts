@@ -43,5 +43,6 @@ export const SDK_VERSION = '0.3.226';
 
 /** Where conversations are archived when the settings name no folder. */
 export const ARCHIVE_FOLDER_DEFAULT = 'AI Sessions';
-/** Where 0.16 and older archived them in an ICOR for Life vault; kept while the folder exists. */
+/** Where 0.16 and older archived them in an ICOR for Life 2.x vault; kept while the folder exists.
+ * Read only, matched by the full name: 3.0's `06 Planner` shares only the number. */
 export const ARCHIVE_FOLDER_LEGACY = '06 AI Team/AI Sessions';

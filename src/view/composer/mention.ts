@@ -17,7 +17,7 @@
  *
  * A bare path with a space in it is not a reference the CLI can parse: it stops
  * at the space. In this vault almost every path has one - `06 AI Team`,
- * `04 Inner World`, `AI Team Knowledge` - so the obvious implementation would
+ * `02 Inner World`, `AI Team Knowledge` - so the obvious implementation would
  * have inserted a mention that looked right, sent cleanly, and delivered
  * nothing, on nearly every note in the vault. That is the failure this file
  * exists to avoid, and it is only visible if you go and ask the CLI.

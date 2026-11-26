@@ -23,8 +23,11 @@ import type { ModelProviderId } from './types';
  * who moved it once changes the setting, not this default. */
 export const DEFAULT_ENV_FILE_PATH = '.icor-for-life/.env';
 
-/** Where 0.16 and older (and the rest of the suite) put it. A vault that
- * still has a key there keeps working: see `envFileCandidates`. */
+/** Where 0.16 and older (and the rest of the suite) put it, in the ICOR for
+ * Life 2.x layout. Read only, never offered as a default: a vault that still
+ * has a key there keeps working (see `envFileCandidates`). `06 AI Team` is a
+ * 2.x folder and matched by its full name; 3.0's `06 Planner` shares only
+ * the number. */
 export const LEGACY_ENV_FILE_PATH = '06 AI Team/AI Team Knowledge/.env';
 
 /**

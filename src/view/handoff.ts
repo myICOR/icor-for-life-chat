@@ -54,7 +54,7 @@ export function handoffUnavailableReason(
   sessionId: string | null,
   installed: boolean,
 ): string | null {
-  if (!installed) return 'Install ICOR for Life - Terminal';
+  if (!installed) return 'Install ICOR Terminal';
   if (provider !== 'claude') return 'Terminal hand-off is for Claude Code conversations';
   if (!sessionId) return 'Send a message first: a fresh pane has no session to hand over';
   return null;

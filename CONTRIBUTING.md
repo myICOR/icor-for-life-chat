@@ -75,7 +75,7 @@ update for at least 6 months, and that "If your project diverges from
 existing options, it should not be a fork. Start fresh with a new repository
 and your own code." So a project that diverges from this plugin ships under
 its own plugin id and its own name, never `icor-for-life-chat` or
-"ICOR for Life - AI Chat": the id is unique to this entry and its Owner, the
+"ICOR AI Chat": the id is unique to this entry and its Owner, the
 name is covered by `TRADEMARK.md`, and the MIT licence grants you the code,
 not the listing and not the name.
 
@@ -97,7 +97,7 @@ By hand, in this order. `main` is the release branch.
 4. `npm run gate` at that commit. It typechecks, builds `main.js`, lints and runs the tests. Do not tag a
    commit whose gate is red.
 5. `git tag <version>` with no `v` prefix, then `git push origin <version>`.
-6. `gh release create <version> --title "ICOR for Life - AI Chat <version>" main.js manifest.json styles.css`.
+6. `gh release create <version> --title "ICOR AI Chat <version>" main.js manifest.json styles.css`.
 
 `main.js` is gitignored and exists only as a release asset, so it is built at the tagged commit and nowhere
 else. The Obsidian directory rebuilds from the tagged source and compares byte for byte, and an asset built

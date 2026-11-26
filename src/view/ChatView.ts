@@ -43,7 +43,7 @@ import type { PinnedPrompt } from '../model/pins';
 import type { TrayChip } from './composer/Composer';
 import { cliModule, missingProviderMessage, providerFor } from '../provider/registry';
 import { launchModelFor } from '../model/catalogCache';
-import { SCRATCHPAD_FOLDER, captureFolders, captureFrontmatter, capturePath, uniquePath } from '../model/scratchpad';
+import { captureFolders, captureFrontmatter, capturePath, dailyNotesFolderOf, scratchFolder, uniquePath } from '../model/scratchpad';
 import { localDate } from '../model/format';
 import { approvalEvent } from '../provider/questions';
 import { isProviderId } from '../provider/types';
@@ -576,26 +576,38 @@ export class ChatView extends ItemView {
   }
 
   /**
-   * The reply as its own note. A quick capture in the Daily Scratchpad room
-   * when the vault has one: `YYYY/MM/YYYYMMDDHHmm.md` (` 2` on a same-minute
-   * collision), named and dated by the moment in the machine's own day, the
-   * capture shape the room takes (issue #1). Else the vault root, named by
-   * the reply's first words.
+   * The reply as its own note. A quick capture in the vault's Daily notes
+   * folder (Obsidian's Daily notes setting, else `00 Daily Notes` when the
+   * vault has it; see `scratchFolder`): `YYYY/MM/YYYYMMDDHHmm.md` (` 2` on a
+   * same-minute collision), named and dated by the moment in the machine's
+   * own day (issue #1). Else the vault root, named by the reply's first words.
    * Stamped with the session so the note can find its conversation.
    */
   async saveAsNote(text: string): Promise<void> {
     const now = Date.now();
     const exists = (path: string): boolean => this.app.vault.getAbstractFileByPath(path) !== null;
-    const room = this.app.vault.getAbstractFileByPath(SCRATCHPAD_FOLDER);
-    const inRoom = room !== null && !(room instanceof TFile);
-    // The year and the month folder may not exist yet; createFolder throws on one that does.
-    if (inRoom) for (const folder of captureFolders(now)) if (!exists(folder)) await this.app.vault.createFolder(folder);
-    const path = normalizePath(inRoom ? capturePath(now, exists) : uniquePath(slugOf(text) || 'reply', exists));
+    const isFolder = (path: string): boolean => {
+      const found = this.app.vault.getAbstractFileByPath(path);
+      return found !== null && !(found instanceof TFile);
+    };
+    const target = scratchFolder(await this.dailyNotesSetting(), isFolder);
+    // The folder, its year and its month may not exist yet; createFolder throws on one that does.
+    if (target) for (const folder of captureFolders(now, target)) if (!exists(folder)) await this.app.vault.createFolder(folder);
+    const path = normalizePath(target ? capturePath(now, exists, target) : uniquePath(slugOf(text) || 'reply', exists));
     const sessionId = this.store.state.sessionId ?? this.resumeSessionId ?? '';
     const frontmatter = captureFrontmatter(localDate(now), sessionId);
     const file = await this.app.vault.create(path, `${frontmatter}${text.trim()}\n`);
     await this.app.workspace.getLeaf(true).openFile(file);
     new Notice(`Saved as ${file.basename}.`);
+  }
+
+  /** Obsidian's Daily notes folder, read from its settings file; '' when there is none. */
+  private async dailyNotesSetting(): Promise<string> {
+    try {
+      return dailyNotesFolderOf(await this.app.vault.adapter.read(normalizePath(`${this.app.vault.configDir}/daily-notes.json`)));
+    } catch {
+      return '';
+    }
   }
 
   /* EDIT AND RESEND, which is a REWIND when the runtime can do one.
@@ -790,8 +802,8 @@ export class ChatView extends ItemView {
   async continueInTerminal(): Promise<void> {
     const reason = this.handoffReason();
     if (reason) {
-      new Notice(reason === 'Install ICOR for Life - Terminal'
-        ? 'Install and enable ICOR for Life - Terminal to continue a conversation in a terminal pane.'
+      new Notice(reason === 'Install ICOR Terminal'
+        ? 'Install and enable ICOR Terminal to continue a conversation in a terminal pane.'
         : reason);
       return;
     }
@@ -1665,6 +1677,7 @@ export class ChatView extends ItemView {
       provider: this.provider,
       cliPath: this.plugin.pathFor(this.provider),
       cwd: this.plugin.vaultPath,
+      configDir: this.app.vault.configDir,
       detect: {
         platform: Platform.isWin ? 'win32' as const : Platform.isMacOS ? 'darwin' as const : 'linux' as const,
         home: this.plugin.homeDir,

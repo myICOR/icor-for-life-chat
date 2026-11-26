@@ -143,7 +143,7 @@ export type ChatEventBody =
       /** The raw argument: the command, the path, the pattern. What the row OPENS onto. */
       target: string;
       /* WHAT WAS DONE, in one plain sentence, and it is what the row SHOWS.
-       * "Read 04 Inner World/Contacts/People/bernd-martin.md", "Ran Open the
+       * "Read 02 Inner World/Contacts/People/bernd-martin.md", "Ran Open the
        * demo note in Obsidian". A row that printed the shell command said what
        * the agent typed and never what it meant; every Bash row in a session
        * began with the same cd and the part that differed was the part cut

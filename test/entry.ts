@@ -41,7 +41,7 @@ export * from '../src/view/statusbar';
 export * from '../src/archive/redact';
 export * from '../src/provider/claude/launch';
 export * from '../src/settings/definitions';
-/* The Daily Scratchpad room's naming rule, for "Save as note" (issue #1). */
+/* Where "Save as note" puts a reply and how it names it (issue #1; 0.17.1). */
 export * from '../src/model/scratchpad';
 export * from '../src/provider/codex/normalize';
 export * from '../src/provider/codex/modes';
@@ -85,3 +85,6 @@ export * from '../src/engine/testKey';
  * backend door, both pure - the store and the adapter are parameters. */
 export * from '../src/engine/envFile';
 export * from '../src/engine/secrets';
+/* The safety rules for untrusted model output and the archive. */
+export * from '../src/safety/untrusted';
+export * from '../src/safety/secrets';

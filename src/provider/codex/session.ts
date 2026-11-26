@@ -144,7 +144,7 @@ export class CodexSession implements ProviderSession {
   private async handshake(): Promise<void> {
     await this.rpc.request('initialize', {
       // Lex, 2026-09-04: an honest client name, never a first-party one.
-      clientInfo: { name: 'icor-for-life-chat', title: 'ICOR for Life - AI Chat', version: this.config.pluginVersion ?? '0.0.0' },
+      clientInfo: { name: 'icor-for-life-chat', title: 'ICOR AI Chat', version: this.config.pluginVersion ?? '0.0.0' },
       capabilities: { experimentalApi: false },
     });
     this.rpc.notify('initialized', {});

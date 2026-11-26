@@ -146,6 +146,50 @@ test('the source names 06 AI Team only for the two read fallbacks', () => {
     `06 AI Team is named outside the two fallbacks:\n  ${hits.join('\n  ')}`);
 });
 
+/* ICOR for Life 3.0's folders (the stages contract, 2026-11-23): "room" is
+   "folder" wherever a member or the model reads it, and the 2.x folder names
+   are named only where a 2.x vault's old place is read. The source is read
+   for its string literals, the text that reaches the pane, a notice or the
+   model; comments are internal and may keep the old word (the stylesheet's
+   colour "rooms" are not folders). README.md and SECURITY.md are read whole. */
+const OLD_FOLDERS = ['00 Daily Scratchpad', '04 Inner World', '06 Outer World', '05 Assets', '07 Databases', '02 Planner', '03 WiP'];
+const NEVER = /\brooms?\b|scaffold|local folder|full stack|harness/i;
+function sourceLiterals() {
+  const out = [];
+  const walk = (dir) => {
+    for (const name of readdirSync(dir)) {
+      const path = resolve(dir, name);
+      if (statSync(path).isDirectory()) { walk(path); continue; }
+      if (!name.endsWith('.ts')) continue;
+      const code = read(path).replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '));
+      code.split('\n').forEach((raw, i) => {
+        const line = raw.replace(/(^|\s)\/\/.*$/, '');
+        for (const m of line.matchAll(/(['"`])((?:\\.|(?!\1)[^\\])*)\1/g)) {
+          out.push({ where: `${path.slice(repo.length + 1)}:${i + 1}`, text: m[2], line });
+        }
+      });
+    }
+  };
+  walk(resolve(repo, 'src'));
+  return out;
+}
+
+test('no "room", and none of the words members must not see, in the text the source shows or sends, or in README and SECURITY', () => {
+  const hits = sourceLiterals().filter((l) => NEVER.test(l.text)).map((l) => `${l.where}: ${l.text}`);
+  for (const doc of ['README.md', 'SECURITY.md']) {
+    read(doc).split('\n').forEach((line, i) => { if (NEVER.test(line)) hits.push(`${doc}:${i + 1}: ${line.trim()}`); });
+  }
+  assert.deepEqual(hits, [], `member- or model-visible text says a word it must not:\n  ${hits.join('\n  ')}`);
+});
+
+test('the 2.x folder names appear in the source only where a 2.x vault is read', () => {
+  const hits = sourceLiterals()
+    .filter((l) => OLD_FOLDERS.some((old) => l.text.includes(old)))
+    .filter((l) => !/export const LEGACY_DAILY_NOTES_FOLDER = /.test(l.line))
+    .map((l) => `${l.where}: ${l.text}`);
+  assert.deepEqual(hits, [], `a 2.x folder name is used outside the legacy read:\n  ${hits.join('\n  ')}`);
+});
+
 test('the model dropdown never invents a catalogue, and never loses a stored choice', () => {
   assert.deepEqual(modelOptions(INPUT), { '': 'CLI default' }, 'an empty catalogue grew names from nowhere');
   const withStored = modelOptions({ ...INPUT, settings: { ...DEFAULT_SETTINGS, model: 'opus' } });
