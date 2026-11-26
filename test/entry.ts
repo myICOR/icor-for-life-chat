@@ -22,18 +22,12 @@ export * from '../src/model/followups';
 export * from '../src/model/pins';
 export * from '../src/model/activity';
 export * from '../src/view/actions';
-export * from '../src/team/memoryParse';
-/* The life snapshot's reader: parse, staleness, the brief and the three
- * reader lines. Pure; only `src/team/snapshot.ts` touches the adapter. */
-export * from '../src/team/snapshotParse';
-export { STRUCTURED_REPLY_PROMPT, INK_PLUGIN_NAME, PLUGIN_ID } from '../src/constants';
+/* What the vault says about itself (AGENTS.md, skills, schema): the parsers,
+ * the prompt and the adapter reader, which takes its adapter as a parameter. */
+export * from '../src/vault/vaultContext';
+export { INK_PLUGIN_NAME, PLUGIN_ID, ARCHIVE_FOLDER_DEFAULT, ARCHIVE_FOLDER_LEGACY } from '../src/constants';
 export * from '../src/model/facts';
 export * from '../src/model/format';
-export * from '../src/structured/model';
-export * from '../src/structured/parser';
-export * from '../src/structured/decisions';
-export * from '../src/structured/rails';
-export * from '../src/structured/icons';
 export * from '../src/archive/naming';
 export * from '../src/archive/resume';
 export * from '../src/provider/claude/renderer-compat';
@@ -47,11 +41,7 @@ export * from '../src/view/statusbar';
 export * from '../src/archive/redact';
 export * from '../src/provider/claude/launch';
 export * from '../src/settings/definitions';
-export * from '../src/team/usage';
-export * from '../src/team/insights';
-export * from "../src/archive/agents";
-export * from '../src/wip/naming';
-/* The Daily Scratchpad room's naming rule, for "Save as note" (issue #1). */
+/* Where "Save as note" puts a reply and how it names it (issue #1; 0.17.1). */
 export * from '../src/model/scratchpad';
 export * from '../src/provider/codex/normalize';
 export * from '../src/provider/codex/modes';
@@ -95,3 +85,6 @@ export * from '../src/engine/testKey';
  * backend door, both pure - the store and the adapter are parameters. */
 export * from '../src/engine/envFile';
 export * from '../src/engine/secrets';
+/* The safety rules for untrusted model output and the archive. */
+export * from '../src/safety/untrusted';
+export * from '../src/safety/secrets';

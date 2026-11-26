@@ -295,8 +295,6 @@ ${HELPERS}
     root: '.aic-root',
     composer: '.aic-composer',
     send: '.aic-send',
-    badge: '.aic-badge',
-    codeChip: '.aic-code-chip',
     agentChip: '.aic-agent-chip',
     chipX: '.aic-chip-x',
     approveOnce: '.aic-approve-once',
@@ -311,15 +309,11 @@ ${HELPERS}
     segActive: '.aic-seg-btn.is-active',
     textBtn: '.aic-text-btn',
     providerBtn: '.aic-provider-btn',
-    iconBtn: '.aic-icon-btn',
+    iconBtn: '.aic-header-probe .aic-icon-btn',
     textarea: 'textarea.aic-input',
-    insight: '.aic-insight',
-    decision: '.aic-decision',
-    decisionBody: '.aic-decision-body',
     warnDot: '.aic-probe .aic-dot-warning',
     successDot: '.aic-probe .aic-dot-success',
     destructiveDot: '.aic-probe .aic-dot-destructive',
-    rail: '.aic-rail',
     /* The warning DOT is gone from this strip and its absence is the ruling,
        not an omission: the ring REPLACES the state dot on a budget fact,
        because the dot job was already "how bad is this" and the ring is that
@@ -329,10 +323,6 @@ ${HELPERS}
        (No backticks in here: this map is inside a template literal.) */
     thinkingLabel: '.aic-thinking-probe .aic-thinking-label',
     thinkingHead: '.aic-thinking-probe .aic-thinking.is-readable .aic-thinking-head',
-    bandAsked: '.aic-band-asked',
-    bandAnswer: '.aic-band-answer',
-    askedText: '.aic-asked-text',
-    bandAnswerIcon: '.aic-band-answer .aic-band-icon',
     statusWarnArc: '.aic-facts .aic-fact.is-warning .aic-ring-arc',
     statusWarnTrack: '.aic-facts .aic-fact.is-warning .aic-ring-track',
     statusWarnFact: '.aic-facts .aic-fact.is-warning',
@@ -351,8 +341,6 @@ ${HELPERS}
     toolFailedName: '.aic-tool.is-failed .aic-tool-purpose',
     toolFailedGlyph: '.aic-tool.is-failed .aic-glyph-fail',
     toolSummary: '.aic-tool-summary',
-    decisionBlocked: '.aic-decision.is-blocked',
-    decisionCleared: '.aic-decision.is-cleared',
     dangerArc: '.aic-facts-probe .aic-fact.is-danger .aic-ring-arc',
     dangerFact: '.aic-facts-probe .aic-fact.is-danger',
     dangerLabel: '.aic-facts-probe .aic-fact.is-danger .aic-fact-label',
@@ -372,16 +360,6 @@ ${HELPERS}
        this map is inside a template literal.) */
     toolChevron: '.aic-tool-summary .aic-chevron',
     toolRowExpandable: '.aic-tool.is-expandable',
-    /* A card row measured as cut (R1). Listed so a fixture whose long row
-       stopped being cut, or a measurer that stopped firing, is a red build
-       and not a silently vacuous row test. */
-    srowExpandable: '.aic-srow.is-expandable',
-    srowChevron: '.aic-srow.is-expandable .aic-srow-chevron',
-    /* The same claim for a FINDING (R1.4). Listed for the same reason: a
-       fixture whose long claim stopped being cut is a red build, not a
-       silently vacuous test. */
-    findingExpandable: '.aic-finding.is-expandable',
-    findingChevron: '.aic-finding.is-expandable .aic-srow-chevron',
     /* The question card (Q1). A new control shape, so it is named here: a
        control that is not in this map is one the loser sweep walks past by
        name even though it still walks it by element. */
@@ -557,108 +535,6 @@ ${HELPERS}
       out.toolExpanded = null;
       out.toolReCollapsed = null;
       out.toolRail = null;
-    }
-  }
-
-  /* THE CARD ROWS (R1). Every row: is it a control, and does its label still
-     have width. Then the cut row OPENED, which is the state the click makes:
-     nothing may be cut once open. Read closed first so the numbers above are
-     not the ones the click changed. */
-  out.srows = Array.from(document.querySelectorAll('.aic-srow')).map((r) => {
-    const label = r.querySelector('.aic-srow-label');
-    const value = r.querySelector('.aic-srow-value');
-    return {
-      label: (label?.textContent || '').trim(),
-      labelWidth: label ? label.clientWidth : 0,
-      labelCut: label ? label.scrollWidth > label.clientWidth + 1 : false,
-      valueCut: value ? value.scrollWidth > value.clientWidth + 1 : false,
-      expandable: r.classList.contains('is-expandable'),
-      role: r.getAttribute('role'),
-      tabindex: r.getAttribute('tabindex'),
-      expanded: r.getAttribute('aria-expanded'),
-      name2: r.getAttribute('aria-label') || '',
-      cursor: getComputedStyle(r).cursor,
-      chevrons: Array.from(r.querySelectorAll('.aic-srow-chevron')).filter((c) => getComputedStyle(c).display !== 'none').length,
-      columns: getComputedStyle(r).gridTemplateColumns.split(' ').length,
-    };
-  });
-  {
-    const long = Array.from(document.querySelectorAll('.aic-srow')).find(
-      (r) => (r.querySelector('.aic-srow-label')?.textContent || '') === 'a row with a long value',
-    );
-    if (long) {
-      const collapsedHeight = Math.round(long.getBoundingClientRect().height);
-      long.click();
-      const label = long.querySelector('.aic-srow-label');
-      const value = long.querySelector('.aic-srow-value');
-      const qual = long.querySelector('.aic-srow-qual');
-      const right = long.querySelector('.aic-srow-right');
-      out.srowExpanded = {
-        expanded: long.getAttribute('aria-expanded'),
-        name2: long.getAttribute('aria-label') || '',
-        wrap: value ? getComputedStyle(value).whiteSpace : null,
-        valueCut: value ? value.scrollWidth > value.clientWidth + 1 : null,
-        labelCut: label ? label.scrollWidth > label.clientWidth + 1 : null,
-        qualCut: qual ? qual.scrollWidth > qual.clientWidth + 1 : null,
-        qualText: (qual?.textContent || '').trim(),
-        collapsedHeight,
-        expandedHeight: Math.round(long.getBoundingClientRect().height),
-        rowRight: Math.round(long.getBoundingClientRect().right),
-        rightRight: right ? Math.round(right.getBoundingClientRect().right) : 0,
-        /* The value moved UNDER the label: its top is below the label's top. */
-        valueBelowLabel: label && value ? value.getBoundingClientRect().top > label.getBoundingClientRect().top + 4 : null,
-        chevronRotation: (() => {
-          const svg = long.querySelector('.aic-srow-chevron .svg-icon');
-          return svg ? getComputedStyle(svg).transform : null;
-        })(),
-      };
-      long.click();
-      out.srowReCollapsed = long.getAttribute('aria-expanded');
-    } else {
-      out.srowExpanded = null;
-      out.srowReCollapsed = null;
-    }
-  }
-
-  /* THE FINDINGS CLAIM (R1.4). Same three questions as the card row: is a cut
-     claim a control, does it carry a door, and does opening it hide nothing. */
-  out.findings = Array.from(document.querySelectorAll('.aic-finding')).map((r) => {
-    const claim = r.querySelector('.aic-finding-claim');
-    return {
-      claim: (claim?.textContent || '').trim().slice(0, 40),
-      claimCut: claim ? claim.scrollWidth > claim.clientWidth + 1 : false,
-      expandable: r.classList.contains('is-expandable'),
-      role: r.getAttribute('role'),
-      tabindex: r.getAttribute('tabindex'),
-      expanded: r.getAttribute('aria-expanded'),
-      cursor: getComputedStyle(r).cursor,
-      chevrons: Array.from(r.querySelectorAll('.aic-srow-chevron')).filter((c) => getComputedStyle(c).display !== 'none').length,
-      columns: getComputedStyle(r).gridTemplateColumns.split(' ').length,
-    };
-  });
-  {
-    const cut = Array.from(document.querySelectorAll('.aic-finding')).find(
-      (r) => r.classList.contains('is-expandable'),
-    );
-    if (cut) {
-      const collapsedHeight = Math.round(cut.getBoundingClientRect().height);
-      cut.click();
-      const claim = cut.querySelector('.aic-finding-claim');
-      out.findingExpanded = {
-        expanded: cut.getAttribute('aria-expanded'),
-        name2: cut.getAttribute('aria-label') || '',
-        wrap: claim ? getComputedStyle(claim).whiteSpace : null,
-        claimCut: claim ? claim.scrollWidth > claim.clientWidth + 1 : null,
-        collapsedHeight,
-        expandedHeight: Math.round(cut.getBoundingClientRect().height),
-        rowRight: Math.round(cut.getBoundingClientRect().right),
-        claimRight: claim ? Math.round(claim.getBoundingClientRect().right) : 0,
-      };
-      cut.click();
-      out.findingReCollapsed = cut.getAttribute('aria-expanded');
-    } else {
-      out.findingExpanded = null;
-      out.findingReCollapsed = null;
     }
   }
 
@@ -1242,8 +1118,8 @@ async function snapshot(chrome, room) {
      shrugged at an empty match would have left the mode control's hover state
      unmeasured in all four rooms and every assertion still green. */
   const HOVERED = ['.aic-thinking-probe .aic-thinking-head',
-                   '.aic-send', '.aic-approve-always', '.aic-badge', '.aic-seg-btn',
-                   '.aic-code-chip', '.aic-agent-chip', '.aic-icon-btn', '.aic-text-btn',
+                   '.aic-send', '.aic-approve-always', '.aic-seg-btn',
+                   '.aic-agent-chip', '.aic-header-probe .aic-icon-btn', '.aic-text-btn',
                    '.aic-provider-btn',
                    '.aic-chip-x', '.aic-thumb-x',
                    /* The expandable tool row. `forcePseudos` THROWS on a selector
@@ -1390,34 +1266,6 @@ test('the disabled send pill carries no opacity dial, only a token step', () => 
     assert.equal(send.bg, s.base.mixes.sendDisabled, `${room}: disabled fill is not the 55% marker/input mix`);
     assert.equal(send.fg, s.base.tokens['--aic-paper'], `${room}: disabled label is not --aic-paper`);
     assert.ok(send.fgOnOwnBg >= 4.5, `${room}: disabled label measures ${send.fgOnOwnBg}:1, under the 4.5 floor - the quiet step has to stay readable`);
-  });
-});
-
-test('the open-decisions badge renders as authored, border included', () => {
-  forEachRoom((s, room) => {
-    const b = s.base.el.badge;
-    const warning = s.base.tokens['--aic-warning'];
-    for (const side of ['borderTop', 'borderRight', 'borderBottom', 'borderLeft']) {
-      assert.equal(b[side], warning, `${room}: badge ${side} is not full-strength --aic-warning`);
-    }
-    assert.equal(b.bg, s.base.mixes.badgeFill, `${room}: badge fill is not the 22% warning/input mix`);
-    assert.equal(b.fg, s.base.tokens['--aic-paper'], `${room}: badge label is not --aic-paper`);
-    assert.ok(b.font.includes(s.base.fonts.mono.split(',')[0].replace(/['"]/g, '')),
-      `${room}: badge count left the mono voice (got ${b.font})`);
-    // The badge is a <button> that opens the popover, so its boundary is a
-    // component boundary: SC 1.4.11, 3:1, measured against the composer card.
-    assert.ok(b.borderOnGround >= 3.0,
-      `${room}: badge boundary measures ${b.borderOnGround}:1 against the card, SC 1.4.11 needs 3:1`);
-  });
-});
-
-test('the decision code chip keeps its amber boundary and mono voice', () => {
-  forEachRoom((s, room) => {
-    const c = s.base.el.codeChip;
-    assert.equal(c.borderTop, s.base.tokens['--aic-warning'], `${room}: code-chip border`);
-    assert.equal(c.fg, s.base.tokens['--aic-paper'], `${room}: code-chip text`);
-    assert.ok(c.font.includes(s.base.fonts.mono.split(',')[0].replace(/['"]/g, '')), `${room}: code-chip voice`);
-    assert.ok(c.borderOnGround >= 3.0, `${room}: code-chip boundary ${c.borderOnGround}:1 (button, SC 1.4.11)`);
   });
 });
 
@@ -1674,15 +1522,6 @@ test('the composer border is the card, never a second ring on the textarea', () 
 
 /* ------------------------------------ the stock fallbacks, measured on white */
 
-test('the insight line clears the AA text floor in every room', () => {
-  forEachRoom((s, room) => {
-    const i = s.base.el.insight;
-    assert.ok(i.fgOnGround >= 4.5,
-      `${room}: the hand voice measures ${i.fgOnGround}:1 on ${i.ground}; ` +
-      `20px/500 takes the 4.5:1 tier and a fallback below AA is a broken fallback`);
-  });
-});
-
 test('every amber device clears the 3:1 non-text tier in every room', () => {
   forEachRoom((s, room) => {
     assert.ok(s.base.el.warnDot.bgOnGround >= 3.0,
@@ -1697,19 +1536,15 @@ test('every amber device clears the 3:1 non-text tier in every room', () => {
       `${room}: the statusline warning arc measures ${s.base.el.statusWarnArc.strokeOnGround}:1`);
     assert.ok(s.base.el.dangerArc.strokeOnGround >= 3.0,
       `${room}: the CRIT arc measures ${s.base.el.dangerArc.strokeOnGround}:1`);
-    assert.ok(s.base.el.decision.borderLeftOnGround >= 3.0,
-      `${room}: the decision rail measures ${s.base.el.decision.borderLeftOnGround}:1`);
   });
 });
 
-test('the success dot and the red rail clear the same non-text tier', () => {
+test('the success dot and the red dot clear the same non-text tier', () => {
   forEachRoom((s, room) => {
     assert.ok(s.base.el.successDot.bgOnGround >= 3.0,
       `${room}: success dot ${s.base.el.successDot.bgOnGround}:1 - the floor is not a target`);
     assert.ok(s.base.el.destructiveDot.bgOnGround >= 3.0,
       `${room}: destructive dot ${s.base.el.destructiveDot.bgOnGround}:1`);
-    assert.ok(s.base.el.rail.borderLeftOnGround >= 3.0,
-      `${room}: the unowned rail measures ${s.base.el.rail.borderLeftOnGround}:1`);
   });
 });
 
@@ -1751,7 +1586,7 @@ test('the fixture actually builds the states the sweep claims to cover', () => {
   // exists to prevent.
   forEachRoom((s, room) => {
     for (const name of ['segPlan', 'segAsk', 'segAuto', 'segBypass', 'sendStop', 'sendQueue', 'userQueued', 'toolRunningName',
-                        'toolFailedName', 'toolFailedGlyph', 'decisionBlocked', 'decisionCleared',
+                        'toolFailedName', 'toolFailedGlyph',
                         'dangerFact', 'dangerDir', 'settingsIndex', 'toolChevron', 'toolRowExpandable', 'thumb', 'thumbX',
                         /* The ring, in both escalated bands, plus its track. These replaced
                            the statusline's warning DOT, and the dot's selector is exactly the
@@ -1969,20 +1804,16 @@ test('a REAL turn puts digits on the screen', () => {
   });
 });
 
-test('the empty strip explains itself in settings, not in the strip', () => {
+test('the empty strip says nothing, and the settings note is legible body text', () => {
   forEachRoom((s, room) => {
     const n = s.base.measuredNote;
-    assert.ok(n, `${room}: the settings note is not mounted, so the one answer to "why is my strip empty" is unmeasured`);
-    assert.equal(n.text, 'Each readout appears once it has been measured. Nothing here is estimated.',
-      `${room}: the note text drifted`);
+    assert.ok(n, `${room}: the settings note is not mounted, so its legibility is unmeasured`);
     /* Body face, not the mono kicker's. It is a sentence to read, not a label
-       to scan, and 11px uppercase mono would make documentation look like
-       chrome. */
+       to scan. */
     assert.equal(n.transform, 'none', `${room}: the note is uppercased like a kicker`);
     assert.ok(parseFloat(n.size) >= 12, `${room}: the note is ${n.size}`);
-    /* And the other half of the ruling: the explanation is HERE and nowhere
-       else. A line in the strip saying facts appear later is the placeholder
-       defect wearing words. */
+    /* A line in the strip saying facts appear later is the placeholder defect
+       wearing words: an unmeasured readout is simply absent. */
     for (const strip of ['absent', 'liveEmpty']) {
       assert.equal(s.base.strip[strip].text, '',
         `${room}: the ${strip} strip carries prose - chrome apologising for itself`);
@@ -2389,12 +2220,6 @@ test('every readout names itself twice: a short name and a reachable long form',
   });
 });
 
-test('the decision body is clamped to three lines', () => {
-  forEachRoom((s, room) => {
-    assert.equal(s.base.el.decisionBody.lineClamp, '3', `${room}: 11.8 caps the body at 3 lines`);
-  });
-});
-
 /* --------------------------------------- source-level companions to the sweep */
 
 test('no !important and no all-property reset anywhere in the stylesheet', () => {
@@ -2491,33 +2316,6 @@ test('the status and hand tokens carry a room split, not one room twice', () => 
   });
 });
 
-/* ------------------------------------------- the two bands the eye looks for */
-
-test('ASKED and ANSWER are banners, and ANSWER carries the hue', () => {
-  forEachRoom((s, room) => {
-    /* They were three kickers over three runs of text, so the two blocks that
-       answer "does this need me at all" read at the same speed as every other
-       label on the card. They are the first thing on it and often the only two
-       the user reads. */
-    for (const name of ['bandAsked', 'bandAnswer']) {
-      assert.notEqual(s.base.el[name].bg, 'transparent',
-        `${room}: ${name} has no ground, so it is a label and not a banner`);
-      assert.equal(s.base.el[name].borderLeftWidth, '2px', `${room}: ${name} lost its rail`);
-    }
-    // ANSWER is the payload, so it is the one that takes the accent. ASKED
-    // restates what the user already knows and stays neutral.
-    assert.equal(s.base.el.bandAnswer.borderLeft, s.base.tokens['--aic-marker'],
-      `${room}: the ANSWER rail is not the marker, so nothing distinguishes it from ASKED`);
-    assert.equal(s.base.el.bandAsked.borderLeft, s.base.tokens['--aic-hairline'],
-      `${room}: ASKED took an accent it has no claim to`);
-    /* THE HOUSE RULE, one block up from the mode chips: a status ink never
-       rides its own hue's tint. The rail is the colour and the ground stays
-       neutral, so the text keeps every point of its contrast. */
-    assert.equal(s.base.el.bandAnswer.bg, s.base.el.bandAsked.bg,
-      `${room}: the ANSWER banner tinted its own ground, which is where contrast goes to die`);
-  });
-});
-
 test('an opened tool row turns its dot into a rail that brackets the block', () => {
   forEachRoom((s, room) => {
     const t = s.base.toolRail;
@@ -2551,99 +2349,6 @@ test('the working indicator speaks in the accent, and its hover stays in it', ()
        pointer - de-emphasis at the exact moment of interest. */
     assert.equal(s.hover.el.thinkingHead.fg, s.base.tokens['--aic-marker-up'],
       `${room}: the head's hover left the accent family`);
-  });
-});
-
-test('no text on a card is clipped to a line count', () => {
-  forEachRoom((s, room) => {
-    /* `-webkit-line-clamp: 2` on ASKED was the terminal format's "at most two
-       lines" rule pressed into CSS - and in a terminal that rule was about what
-       the model WRITES. Here it cut the question in half after the model had
-       already written it, with no affordance to see the rest: text that exists,
-       is on the page, and cannot be read. */
-    assert.equal(s.base.el.askedText.lineClamp, 'none',
-      `${room}: the ASKED text is clamped to ${s.base.el.askedText.lineClamp} lines and the ` +
-      `remainder is unreachable - the panel scrolls, there is nothing to save space for`);
-  });
-});
-
-/* ------------------------------------------------- R1: card rows that open */
-
-test('a card row never loses its label, and a fitting row is not a control', () => {
-  forEachRoom((s, room) => {
-    const rows = s.base.srows;
-    assert.ok(rows.length >= 5, `${room}: only ${rows.length} card rows - the fixture shrank`);
-    for (const r of rows) {
-      assert.ok(r.labelWidth > 0, `${room}: the "${r.label}" row's label was crushed to ${r.labelWidth}px`);
-      assert.ok(!r.labelCut, `${room}: the "${r.label}" row's LABEL is cut - the value took its track`);
-    }
-    const fits = rows.filter((r) => !r.expandable);
-    const cut = rows.filter((r) => r.expandable);
-    assert.ok(fits.length >= 1, `${room}: every row is cut, so "a fitting row is inert" is untested`);
-    assert.ok(cut.length >= 1, `${room}: no row is cut, so the door is guarding nothing`);
-    for (const r of fits) {
-      assert.equal(r.valueCut, false, `${room}: the "${r.label}" row is cut and not expandable - silent loss`);
-      assert.equal(r.role, null, `${room}: a row that fits took a role`);
-      assert.equal(r.tabindex, null, `${room}: a row that fits took a tab stop`);
-      assert.equal(r.chevrons, 0, `${room}: a row that fits grew a chevron - an empty promise`);
-      assert.equal(r.cursor, 'auto', `${room}: a row that fits looks clickable`);
-      assert.equal(r.columns, 2, `${room}: a row that fits pays for the door's track (${r.columns} columns)`);
-    }
-    for (const r of cut) {
-      assert.equal(r.role, 'button', `${room}: the cut "${r.label}" row is not a control`);
-      assert.equal(r.tabindex, '0', `${room}: the cut "${r.label}" row has no tab stop`);
-      assert.equal(r.expanded, 'false', `${room}: the cut "${r.label}" row does not report its state`);
-      assert.equal(r.name2, 'Show the full row', `${room}: the cut row's name is "${r.name2}"`);
-      assert.equal(r.cursor, 'pointer', `${room}: the cut "${r.label}" row does not look clickable`);
-      assert.equal(r.chevrons, 1, `${room}: the cut row shows ${r.chevrons} chevrons; an ellipsis alone is not a signal`);
-      assert.equal(r.columns, 3, `${room}: the cut row has no track for its door (${r.columns} columns)`);
-    }
-  });
-});
-
-test('an opened card row hides nothing, and closes again', () => {
-  forEachRoom((s, room) => {
-    const e = s.base.srowExpanded;
-    assert.ok(e, `${room}: the long row is not in the fixture`);
-    assert.equal(e.expanded, 'true', `${room}: the click did not open the row`);
-    assert.equal(e.name2, 'Collapse the row', `${room}: the open row's name is "${e.name2}"`);
-    assert.notEqual(e.wrap, 'nowrap', `${room}: the opened value still refuses to wrap`);
-    assert.equal(e.valueCut, false, `${room}: the opened value is still cut`);
-    assert.equal(e.labelCut, false, `${room}: the opened label is still cut`);
-    assert.equal(e.qualCut, false, `${room}: the opened qualifier is still cut`);
-    assert.equal(e.qualText, '(only while streaming)', `${room}: the qualifier went missing when the row opened`);
-    assert.ok(e.expandedHeight > e.collapsedHeight,
-      `${room}: the opened row is still ${e.expandedHeight}px tall, the same as closed`);
-    assert.ok(e.valueBelowLabel, `${room}: the opened value did not move under the label`);
-    assert.ok(e.rightRight <= e.rowRight + 1, `${room}: the opened value runs ${e.rightRight - e.rowRight}px past the row`);
-    assert.notEqual(e.chevronRotation, 'none', `${room}: the open row's chevron did not turn`);
-    assert.equal(s.base.srowReCollapsed, 'false', `${room}: a second click did not close the row`);
-  });
-});
-
-test('a cut FINDINGS claim is a control with a door, and a short one is not', () => {
-  forEachRoom((s, room) => {
-    const rows = s.base.findings;
-    assert.ok(rows.length >= 2, `${room}: only ${rows.length} findings - the fixture shrank`);
-    const cut = rows.filter((r) => r.expandable);
-    const fits = rows.filter((r) => !r.expandable);
-    assert.ok(cut.length >= 1, `${room}: no finding is cut, so the door is guarding nothing`);
-    assert.ok(fits.length >= 1, `${room}: every finding is cut, so "a claim that fits is inert" is untested`);
-    for (const r of fits) {
-      assert.equal(r.claimCut, false, `${room}: the "${r.claim}" finding is cut and not expandable - silent loss`);
-      assert.equal(r.role, null, `${room}: a finding that fits took a role`);
-      assert.equal(r.tabindex, null, `${room}: a finding that fits took a tab stop`);
-      assert.equal(r.chevrons, 0, `${room}: a finding that fits grew a chevron - an empty promise`);
-      assert.equal(r.columns, 2, `${room}: a finding that fits pays for the door's track (${r.columns} columns)`);
-    }
-    for (const r of cut) {
-      assert.equal(r.role, 'button', `${room}: the cut "${r.claim}" finding is not a control`);
-      assert.equal(r.tabindex, '0', `${room}: the cut "${r.claim}" finding has no tab stop`);
-      assert.equal(r.expanded, 'false', `${room}: the cut finding does not report its state`);
-      assert.equal(r.cursor, 'pointer', `${room}: the cut finding does not look clickable`);
-      assert.equal(r.chevrons, 1, `${room}: the cut finding shows ${r.chevrons} chevrons; an ellipsis alone is not a signal`);
-      assert.equal(r.columns, 3, `${room}: the cut finding has no track for its door (${r.columns} columns)`);
-    }
   });
 });
 
@@ -2725,21 +2430,6 @@ test('taking a choice marks it, releases the other, and opens Send', () => {
     const cl = s.base.questionCleared;
     assert.equal(cl.pressed, 0, `${room}: a choice could not be released`);
     assert.equal(cl.submitDisabled, true, `${room}: Send stayed live with the answer taken back`);
-  });
-});
-
-test('an opened FINDINGS claim hides nothing, and closes again', () => {
-  forEachRoom((s, room) => {
-    const e = s.base.findingExpanded;
-    assert.ok(e, `${room}: the long finding is not in the fixture`);
-    assert.equal(e.expanded, 'true', `${room}: the click did not open the finding`);
-    assert.equal(e.name2, 'Collapse the row', `${room}: the open finding's name is "${e.name2}"`);
-    assert.notEqual(e.wrap, 'nowrap', `${room}: the opened claim still refuses to wrap`);
-    assert.equal(e.claimCut, false, `${room}: the opened claim is still cut`);
-    assert.ok(e.expandedHeight > e.collapsedHeight,
-      `${room}: the opened finding is still ${e.expandedHeight}px tall, the same as closed`);
-    assert.ok(e.claimRight <= e.rowRight + 1, `${room}: the opened claim runs ${e.claimRight - e.rowRight}px past the card`);
-    assert.equal(s.base.findingReCollapsed, 'false', `${room}: a second click did not close the finding`);
   });
 });
 

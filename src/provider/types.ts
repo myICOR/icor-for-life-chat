@@ -174,8 +174,9 @@ export interface SessionConfig {
   model: string;
   effort: EffortName;
   permissionMode: PermissionModeName;
-  structuredReplies: boolean;
   resumeSessionId: string | null;
+  /** The vault's config folder (Vault#configDir), which no assistant reads without asking. */
+  configDir?: string;
   /** The plugin's own version, for a runtime that identifies its client on a handshake. */
   pluginVersion?: string;
   /**

@@ -1,7 +1,7 @@
 /* THE CROSS-PANE GUARD FOR REMOTE CONTROL'S OWN HAND-OFF (Vex H1, 2026-09-07).
  *
  * `view/handoff.ts`'s `terminalHoldsSession` was built for one hand-off
- * target - an Obsidian leaf of the ICOR for Life - Terminal plugin's own
+ * target - an Obsidian leaf of the ICOR Terminal plugin's own
  * view type - and it cannot see Remote Control's target at all: Remote
  * Control hands a session to an OS-LEVEL terminal window (`osascript` /
  * `cmd` / a resolved `x-terminal-emulator`), which is not an Obsidian leaf

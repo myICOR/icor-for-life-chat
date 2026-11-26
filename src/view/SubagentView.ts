@@ -114,9 +114,7 @@ export class SubagentView extends ItemView {
 
     this.stream = new StreamRenderer(this.app, this, column, '', {
       onApproval: () => undefined,
-      structured: () => this.plugin.settings.structuredReplies,
-      renderHost: this.plugin.renderHostFor(this),
-      onDecisions: () => undefined,
+      renderHost: this.plugin.renderHostFor(),
     });
 
     if (!transcript) {
@@ -130,8 +128,7 @@ export class SubagentView extends ItemView {
 
     for (const event of transcript.events) this.stream.apply(event);
     /* A stored log has no turn-end, so a finished run must be settled by the
-       replayer or held structured text stays held forever - the blank pane
-       Tom reported. A RUNNING one is left live: its settle arrives with its
+       replayer. A RUNNING one is left live: its settle arrives with its
        close signal below. */
     if (transcript.status !== 'running') this.stream.settleReplay();
     if (this.stream.isEmpty && !transcript.task) {

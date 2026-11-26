@@ -213,14 +213,7 @@
   background-image: none;
   font-family: inherit;
 }
-/* .aic-badge and .aic-code-chip are deliberately NOT in that list: they carry
-   the mono voice, and `font-family: inherit` above would defeat their own
-   declaration at equal weight and later source order. */
-.aic-root.aic-root.aic-root .aic-badge,
-.aic-root.aic-root.aic-root .aic-code-chip {
-  box-shadow: none;
-  background-image: none;
-}
+
 /* The :hover twins are deliberately ABSENT from this list, and their absence is
    a measurement rather than a tidy-up. With them present the reset stood at
    (0,5,0) and outranked the leaf that paints the hover wash at (0,4,0): the
@@ -331,6 +324,16 @@
   transform: rotate(-2deg);
   transform-origin: left center;
   padding-inline-end: var(--ink-hand-overhang, 0.25em);
+}
+/* What the chat found in this vault to work from (AGENTS.md, skills, schema):
+   one quiet mono line under the hand note, in the dim ink so it clears the
+   text floor on every ground. */
+.aic-empty-vault {
+  margin-top: 16px;
+  font-family: var(--aic-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--aic-dim);
 }
 
 /* ------------------------------------------------------------- 2 stream */
@@ -863,10 +866,9 @@
  * 3.42. Shipped before this: 1.80 / 1.87 / 1.24 in ink dark. */
 .aic-composer.is-input-focused { border-color: var(--aic-marker); }
 
-.aic-badge-slot:empty,
 .aic-tray.is-empty,
 .aic-thumbs.is-empty { display: none; }
-.aic-badge-slot { margin-bottom: 8px; }
+
 .aic-tray { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 
 /* THE ATTACHMENT STRIP, inside the card and above the prompt line.
@@ -1459,165 +1461,12 @@
 .aic-fact.is-warning .aic-ring-arc { stroke: var(--aic-warning); }
 .aic-fact.is-danger .aic-ring-arc { stroke: var(--aic-destructive); }
 
-/* ------------------------------------ 11 structured replies (the ICOR card) */
-
-.aic-structured { margin-top: 12px; }
 /* (0,2,0), because the only rule it has to beat is `.aic-dot-marker`'s own
    pulse at (0,1,0) and every static dot carries both classes. The reduced-motion
    block at the foot of this file wins by tripled specificity instead of the
    `!important` it used to carry - the file is clean of the flag entirely. */
 .aic-dot.aic-dot-static { animation: none; }
 
-.aic-card {
-  border-top: 1px solid var(--aic-hairline-emphasis);
-  border-bottom: 1px solid var(--aic-hairline-emphasis);
-  padding-top: 12px;
-  padding-bottom: 16px;
-  margin-top: 24px;
-}
-.aic-card:first-child { margin-top: 0; }
-
-.aic-card-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.aic-card-name {
-  font-family: var(--aic-mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--aic-paper);
-}
-.aic-card-scope {
-  font-size: 12.5px;
-  color: var(--aic-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-/* 6px, off the 4/8 rung set on purpose and labelled: this gap sits between a
-   6px status DOT and its status word, and a 4px gap crowds the dot while an 8px
-   gap reads as a separator between two facts. It is the dot's own diameter,
-   which is the one measurement the pairing has. Same value, same reason, on
-   .aic-sub-status below. */
-.aic-card-status { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
-
-/* THE THREE BANDS ARE BANNERS, and each one owns a ground and a glyph.
- *
- * They were three kickers over three runs of text, so the two blocks that
- * answer "does this need me at all" were read at the same speed as every other
- * label on the card. They are the first thing on the card and often the only
- * two the user reads; the banner is what lets the eye find them without
- * reading them.
- *
- * The left rail carries the hue and the ground stays neutral. That is the
- * house rule stated over the mode chips - a status ink never rides its own
- * hue's tint - applied one block up: the rail is the colour, the text sits on
- * a neutral surface where it keeps every point of its contrast. */
-.aic-band {
-  margin-top: 16px;
-  padding: 8px 12px;
-  border-radius: var(--aic-r-subtle);
-  border-left: 2px solid var(--aic-hairline);
-  background: var(--aic-surface);
-}
-.aic-band:first-of-type { margin-top: 12px; }
-.aic-band-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-.aic-band .aic-kicker { margin-bottom: 0; }
-.aic-band-icon { display: inline-flex; color: var(--aic-faint); }
-.aic-band-icon .svg-icon { width: 13px; height: 13px; }
-
-/* ASKED is the quiet one: it restates something the user already knows, so it
-   keeps the neutral rail and the faint glyph. */
-.aic-band-answer { border-left-color: var(--aic-marker); }
-.aic-band-answer .aic-band-icon { color: var(--aic-marker); }
-.aic-band-why { border-left-color: var(--aic-warning); }
-.aic-band-why .aic-band-icon { color: var(--aic-warning); }
-
-/* NO CLAMP. This was `-webkit-line-clamp: 2`, which is the terminal format's
-   "at most two lines" rule pressed into CSS - and in a terminal that rule was
-   about what the model WRITES. Here it silently cut the question in half after
-   the model had already written it, with no affordance to see the rest: text
-   that exists, is on the page, and cannot be read. The panel scrolls; there is
-   nothing to save space for. */
-.aic-asked-text {
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--aic-dim);
-}
-.aic-answer-text { font-size: 15px; font-weight: 560; line-height: 1.5; color: var(--aic-paper); }
-.aic-why-text { font-size: 13px; line-height: 1.5; color: var(--aic-dim); }
-
-/* The voice change IS the marker: no icon, no kicker, at most one per card. */
-.aic-insight {
-  font-family: var(--aic-hand);
-  font-size: var(--ink-text-hand-xs, 20px);
-  font-weight: 500;
-  color: var(--aic-hand-ink);
-  line-height: 1.35;
-  margin: 16px 0;
-  padding-inline-end: var(--ink-hand-overhang, 0.25em);
-}
-
-.aic-srow {
-  display: grid;
-  /* THE LABEL IS NEVER CRUSHED. This was `16px 1fr auto`: an auto value track
-     sizes to its content first and the fr label takes what is left, so a long
-     value pushed the label to ZERO width and the reader saw an orphan value
-     with no signal that a label had ever been there (member report,
-     2026-09-06). Label and value now share one flex cell (.aic-srow-text):
-     the label keeps its content width up to half the row, the value takes the
-     rest; both ellipsise at rest, and a cut row opens (R1). Not
-     `fit-content()` on a grid track, which lint reads as off-baseline. */
-  grid-template-columns: 16px minmax(0, 1fr);
-  gap: 8px;
-  align-items: baseline;
-  min-height: 24px;
-  /* 3px, deliberately off-rung: the row's height is set by min-height 24px
-     (rung) and this padding only has to keep a 13px/1.5 line from touching its
-     neighbours inside that box. A 4px rung would make the row 26px and break
-     the 24px ladder the gutter dots are centred on. */
-  padding: 3px 0;
-}
-.aic-srow-gutter { display: inline-flex; align-items: center; justify-content: flex-start; }
-.aic-srow-text { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.aic-srow-label {
-  flex: 0 1 auto;
-  max-width: 50%;
-  font-size: 13px;
-  color: var(--aic-dim);
-  /* Truncation is ellipsis, never wrap-to-crush. Stock Obsidian's
-     wider metrics wrapped these labels onto a second line and broke the row
-     grid; measured in both stock rooms. */
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.aic-srow-right {
-  display: inline-flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: 8px;
-  flex: 1 1 0;
-  min-width: 0;
-  overflow: hidden;
-}
-.aic-srow-value, .aic-srow-qual { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.aic-srow-value {
-  font-family: var(--aic-mono);
-  font-size: 13px;
-  font-weight: 560;
-  color: var(--aic-paper);
-  font-variant-numeric: tabular-nums;
-}
-.aic-srow-qual {
-  font-family: var(--aic-mono);
-  font-size: 11px;
-  color: var(--aic-faint);
-  font-variant-numeric: tabular-nums;
-}
-.aic-gutter-tick { display: inline-flex; color: var(--aic-faint); }
-.aic-gutter-tick .svg-icon { width: 12px; height: 12px; }
 .aic-ring {
   width: 6px;
   height: 6px;
@@ -1627,333 +1476,13 @@
   display: inline-block;
 }
 
-/* Rank by rail WEIGHT, never by hue: both rails stay full strength. */
-.aic-rail { border-left: 1px solid var(--aic-destructive); padding-left: 8px; margin-left: -16px; }
-/* -17px is an OPTICAL correction, not a rung, and 5.7 fence 3 exempts one only
-   when it is labelled: the 2px rail is stated one device pixel further left so
-   its INNER edge lands on the same line as the 1px rail beside it. */
-.aic-rail.is-first { border-left-width: 2px; margin-left: -17px; }
-
-/* `minmax(0, 1fr)`, not `1fr`: a bare `1fr` floors at the track's min-content,
-   which for a nowrap claim is the whole sentence, so the grid grew past the
-   card and the claim's own ellipsis never engaged. The finding's door (R1.4)
-   needs a track that can actually cut. */
-.aic-finding { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; align-items: baseline; margin-top: 8px; }
-.aic-finding-claim {
-  font-size: 14px;
-  font-weight: 560;
-  color: var(--aic-paper);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.aic-finding-own { font-size: 12.5px; color: var(--aic-dim); margin-top: 4px; }
-.aic-finding-ev {
-  font-family: var(--aic-mono);
-  font-size: 11px;
-  color: var(--aic-faint);
-  font-variant-numeric: tabular-nums;
-  margin-top: 4px;
-}
-
-.aic-next-row { display: grid; grid-template-columns: 20px 1fr; gap: 8px; align-items: baseline; padding: 4px 0 0; }
-.aic-next-num {
-  font-family: var(--aic-mono);
-  font-size: 11px;
-  color: var(--aic-faint);
-  font-variant-numeric: tabular-nums;
-}
-.aic-next-text { font-size: 13px; color: var(--aic-paper); }
-
-.aic-file, .aic-link {
-  display: grid;
-  grid-template-columns: 16px 1fr auto;
-  gap: 8px;
-  align-items: center;
-  min-height: 28px;
-  cursor: pointer;
-  border-radius: var(--aic-r-control);
-  padding: 0 4px;
-  margin-left: -4px;
-  text-decoration: none;
-}
-/* The link row is an <a>, so both hosts hand it their link colour and every
-   child without a colour of its own inherits it - including the row's icons.
-   The row's parts state their own voices; the row itself states none. */
-.aic-root.aic-root .aic-link { color: inherit; }
-.aic-link { grid-template-columns: 1fr auto; }
-.aic-file:hover, .aic-link:hover { background: var(--aic-wash); }
-.aic-file-icon { display: inline-flex; color: var(--aic-faint); }
-.aic-file-icon .svg-icon { width: 14px; height: 14px; }
-.aic-file-path {
-  font-family: var(--aic-mono);
-  font-size: 11px;
-  display: flex;
-  min-width: 0;
-  white-space: nowrap;
-}
-.aic-file-parent { color: var(--aic-faint); overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; min-width: 0; }
-.aic-file-base { color: var(--aic-dim); font-weight: 600; flex-shrink: 0; }
-.aic-link-host {
-  font-family: var(--aic-mono);
-  font-size: 11.5px;
-  font-weight: 560;
-  color: var(--aic-dim);
-}
-.aic-link:hover .aic-link-host { color: var(--aic-paper); }
-.aic-link-rest {
-  font-family: var(--aic-mono);
-  font-size: 11px;
-  color: var(--aic-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.aic-file-actions { display: inline-flex; gap: 4px; opacity: 0; transition: opacity 120ms var(--aic-ease); }
-.aic-file:hover .aic-file-actions, .aic-link:hover .aic-file-actions,
-.aic-file:focus-within .aic-file-actions, .aic-link:focus-within .aic-file-actions { opacity: 1; }
-.aic-root.aic-root .aic-icon-btn.aic-mini { width: 20px; height: 20px; }
-.aic-root.aic-root .aic-icon-btn.aic-mini .svg-icon { width: 12px; height: 12px; }
-
-/* 11.8 the decision block: the highlighter stroke, never a box */
-.aic-decision {
-  background: color-mix(in srgb, var(--aic-warning) 10%, transparent);
-  border-left: 2px solid var(--aic-warning);
-  border-radius: 0;
-  padding: 12px 16px;
-  margin-inline: -16px;
-  margin-top: 8px;
-  transition: background 240ms var(--aic-ease), border-color 240ms var(--aic-ease);
-}
-.aic-decision:first-child { margin-top: 24px; }
-.aic-decision.is-blocked {
-  background: color-mix(in srgb, var(--aic-destructive) 10%, transparent);
-  border-left-color: var(--aic-destructive);
-}
-.aic-decision.is-resolved,
-.aic-decision.is-cleared {
-  background: transparent;
-  border-left-color: transparent;
-  border-left-width: 0;
-  padding-left: 0;
-  margin-inline: 0;
-}
-.aic-decision-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.aic-decision-dot { display: inline-flex; }
-.aic-decision-title { font-size: 14px; font-weight: 600; color: var(--aic-paper); }
-.aic-decision.is-resolved .aic-decision-title { color: var(--aic-dim); }
-/* A resolved block folds its body away entirely; the head line is the record.
-   Driven by the same class that quiets the title, never by an inline style. */
-.aic-decision.is-resolved .aic-decision-body { display: none; }
-.aic-decision-body {
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--aic-dim);
-  margin-top: 8px;
-  max-width: 60ch;
-  /* Three lines AT REST - the format's editorial bound - and no longer a
-     wall: the parser keeps the whole body now, and when the clamp actually
-     cuts it (measured, `is-expandable`) this element becomes the control that
-     opens it. ASKED lost its clamp outright because a question restates known
-     context; a decision is the block that asks the user to ACT, so it keeps a
-     compact rest state and earns a door instead. */
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  border-radius: 2px;
-}
-.aic-decision-body.is-expandable { cursor: pointer; }
-.aic-decision-body.is-expandable:hover { color: var(--aic-paper); }
-.aic-decision-body.is-expandable:focus-visible {
-  outline: 2px solid var(--aic-marker);
-  outline-offset: 2px;
-}
-.aic-decision-body.is-expanded {
-  display: block;
-  -webkit-line-clamp: unset;
-  overflow: visible;
-}
-/* THE DOOR IS VISIBLE. Two members reported the clipped body with "no option
-   to expand" (2026-09-03, 2026-09-04): the pointer and a hover colour were
-   the only affordance, and neither is on screen. This is a real button under
-   the body, present only while the body is measured as cut, reading
-   `Show more` and `Show less`. */
-.aic-root.aic-root .aic-decision-more {
-  appearance: none;
-  display: none;
-  align-items: center;
-  gap: 4px;
-  /* The host's bare-button height, answered - see the annotated copy at `.aic-user-image`. */
-  height: 24px;
-  min-height: 0;
-  margin: 4px 0 0;
-  padding: 0 6px 0 0;
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  font-family: var(--aic-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--aic-marker-text);
-  cursor: pointer;
-}
-.aic-root.aic-root .aic-decision-more.is-shown { display: inline-flex; }
-.aic-root.aic-root .aic-decision-more .svg-icon { width: 12px; height: 12px; }
-.aic-decision-more .svg-icon { transition: transform 140ms var(--aic-ease); }
-.aic-root.aic-root .aic-decision-more.is-open .svg-icon { transform: rotate(180deg); }
-.aic-root.aic-root .aic-decision-more:hover { color: var(--aic-marker); }
-
-.aic-root.aic-root .aic-code-chip {
-  /* The explicit control reset - see the annotated copy at its first use. */
-  appearance: none;
-  box-shadow: none;
-  outline: none;
-  margin: 0;
-  opacity: 1;
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  text-align: inherit;
-  cursor: pointer;
-  font-family: var(--aic-mono);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--aic-paper);
-  /* The host's bare-button height, answered - see the annotated copy at `.aic-user-image`. */
-  /* 22, not 24: the chip is a piece of inline type in a sentence, not a control
-     in a row of controls, so it sits one rung under the pills it stands beside. */
-  display: inline-flex;
-  align-items: center;
-  height: 22px;
-  min-height: 0;
-  padding: 0 7px;
-  border: 1px solid var(--aic-warning);
-  border-radius: var(--aic-r-control);
-  background: var(--ink, var(--background-primary));
-}
-.aic-root.aic-root .aic-code-chip:hover:not(:disabled) { background: var(--aic-wash); }
-.aic-root.aic-root .aic-code-chip:disabled { cursor: default; border-color: var(--aic-success-dot); }
-.aic-decision.is-blocked .aic-code-chip { border-color: var(--aic-destructive); }
-.aic-decision.is-cleared .aic-code-chip { border-color: var(--aic-hairline); }
-/* 0 5px: the mini chip is the 12px chip's 10px twin, and its padding is scaled
-   with its type rather than snapped to a rung - 4px lets the two-to-five
-   character code touch the border, 8px makes a 10px chip wider than the 12px
-   one it is a quieter copy of. Optical, labelled (5.7 fence 3). */
-.aic-code-mini { font-size: 10px; padding: 0 5px; cursor: inherit; }
-
-.aic-flag {
-  background: color-mix(in srgb, var(--aic-destructive) 8%, transparent);
-  border-left: 2px solid var(--aic-destructive);
-  padding: 12px 16px;
-  margin-inline: -16px;
-}
-.aic-flag-body { font-size: 13px; color: var(--aic-paper); margin-top: 4px; }
-
 .is-flash { animation: aic-flash 600ms var(--aic-ease) 1; }
 @keyframes aic-flash {
   0%, 100% { background-color: transparent; }
   30% { background-color: var(--aic-wash); }
 }
 
-/* ----------------------------------------- 11.11 badge, list, mention bar */
-
-/* Hidden at zero decisions by CLASS, not by an inline style: absence is the
-   done signal, and visibility has one driver. Doubled to match the geometry
-   rule's own weight so ordering cannot flip it. */
-.aic-root.aic-root .aic-badge.is-hidden { display: none; }
-.aic-root.aic-root .aic-badge {
-  /* The explicit control reset - see the annotated copy at its first use. */
-  appearance: none;
-  box-shadow: none;
-  outline: none;
-  margin: 0;
-  opacity: 1;
-  font: inherit;
-  text-align: inherit;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  height: 22px;
-  padding: 0 10px;
-  border-radius: var(--aic-r-pill);
-  border: 1px solid var(--aic-warning);
-  background: color-mix(in srgb, var(--aic-warning) 22%, var(--aic-input));
-  font-family: var(--aic-mono);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--aic-paper);
-  font-variant-numeric: tabular-nums;
-}
-.aic-root.aic-root .aic-badge:hover { background: color-mix(in srgb, var(--aic-warning) 28%, var(--aic-input)); }
-
-.aic-popover {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 0;
-  z-index: 20;
-  min-width: 260px;
-  max-width: 420px;
-  max-height: 280px;
-  overflow-y: auto;
-  background: var(--aic-overlay);
-  border: 1px solid var(--aic-hairline-emphasis);
-  border-radius: var(--aic-r-subtle);
-  box-shadow: var(--aic-float-shadow);
-  padding: 4px;
-}
-.aic-badge-slot { position: relative; }
-.aic-popover-row {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 8px;
-  align-items: center;
-  height: 28px;
-  padding: 0 8px;
-  border-radius: var(--aic-r-control);
-  cursor: pointer;
-}
-.aic-popover-row:hover { background: var(--aic-wash); }
-.aic-popover-title {
-  font-size: 12.5px;
-  color: var(--aic-paper);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.aic-popover-age {
-  font-family: var(--aic-mono);
-  font-size: 10px;
-  color: var(--aic-faint);
-  font-variant-numeric: tabular-nums;
-}
-
 .aic-dock { position: relative; }
-.aic-mention-bar {
-  position: absolute;
-  bottom: calc(100% + 12px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 28px;
-  padding: 0 4px 0 10px;
-  border-radius: var(--aic-r-pill);
-  background: var(--aic-overlay);
-  border: 1px solid var(--aic-hairline-emphasis);
-  box-shadow: var(--aic-float-shadow);
-}
-.aic-mention-code, .aic-mention-count {
-  font-family: var(--aic-mono);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-}
-.aic-mention-code { font-weight: 600; color: var(--aic-dim); }
-.aic-mention-count { color: var(--aic-faint); }
 
 /* ------------------------------------------------ replay note and seam */
 
@@ -2172,10 +1701,6 @@
     transition: none;
   }
 }
-
-/* ==== REGION A: tool rows v2 (purpose-first rows) ==== */
-
-/* ==== END REGION A ==== */
 
 /* ==== REGION B: vault context (wikilink picker, + menu, group chips, modal) ==== */
 
@@ -2532,334 +2057,6 @@
 
 /* ==== END REGION B ==== */
 
-/* ==== REGION C: AI team (usage strip, setup, insights view) ==== */
-
-/* The team strip: a bare sibling between rung 2 and rung 3, zero height until
-   a turn has ended in a vault with a team. Same geometry as the chip tray so
-   the two read as one band when both are up. */
-.aic-team {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  max-width: 70ch;
-  margin: 0 auto 8px;
-}
-.aic-team.is-empty { display: none; }
-
-.aic-root.aic-root .aic-team-entry,
-.aic-root.aic-root .aic-setup-btn,
-.aic-root.aic-root .aic-filter-chip,
-.aic-root.aic-root .aic-hbar-row,
-.aic-root.aic-root .aic-ins-session {
-  /* The explicit control reset - see the annotated copy at its first use. */
-  appearance: none;
-  box-shadow: none;
-  outline: none;
-  margin: 0;
-  opacity: 1;
-  color: inherit;
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  text-align: inherit;
-  cursor: pointer;
-  background: transparent;
-  /* Stated here so a row that only draws a bottom hairline does not inherit
-     the host's three other edges. Every control below that wants a border
-     restates it, later in source at the same weight. */
-  border: none;
-}
-/* The (0,4,0) raise that beats the host's own button skin; see 0.2. */
-.aic-root.aic-root.aic-root .aic-team-entry,
-.aic-root.aic-root.aic-root .aic-setup-btn,
-.aic-root.aic-root.aic-root .aic-filter-chip,
-.aic-root.aic-root.aic-root .aic-hbar-row,
-.aic-root.aic-root.aic-root .aic-ins-session {
-  box-shadow: none;
-  background-image: none;
-  font-family: inherit;
-}
-
-.aic-root.aic-root .aic-team-entry {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 28px;
-  padding: 0 10px 0 3px;
-  border: 1px solid var(--aic-hairline);
-  border-radius: var(--aic-r-pill);
-}
-.aic-root.aic-root .aic-team-entry:hover { border-color: var(--aic-hairline-emphasis); }
-.aic-team-name {
-  font-family: var(--aic-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--aic-dim);
-}
-.aic-root.aic-root .aic-team-entry:hover .aic-team-name { color: var(--aic-paper); }
-.aic-team-pct {
-  font-family: var(--aic-mono);
-  font-size: 10px;
-  color: var(--aic-paper);
-  font-variant-numeric: tabular-nums;
-}
-
-/* A face: a 22px disc, portrait or initial. The initial rides the display
-   face on a hairline ring, the dashboard's own treatment for a portrait-less
-   agent. */
-.aic-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: var(--aic-r-pill);
-  border: 1px solid var(--aic-hairline-emphasis);
-  overflow: hidden;
-  flex: 0 0 auto;
-  background: var(--aic-surface);
-}
-.aic-avatar.has-image { border-color: var(--aic-hairline); }
-.aic-avatar-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.aic-avatar-initial {
-  font-family: var(--aic-display);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-  color: var(--aic-marker-text);
-}
-.aic-face-tiny { width: 18px; height: 18px; }
-.aic-face-tiny .aic-avatar-initial { font-size: 9px; }
-
-/* The empty state's team block. */
-.aic-empty-team {
-  margin-top: 24px;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-.aic-empty-team.is-setup {
-  display: block;
-  padding: 16px;
-  border: 1px solid var(--aic-hairline);
-  border-radius: var(--aic-r-standard);
-  max-width: 44ch;
-}
-.aic-empty-team.is-setup .aic-kicker { margin-bottom: 8px; }
-.aic-empty-team-line {
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--aic-dim);
-}
-.aic-empty-team.is-setup .aic-empty-team-line { margin-bottom: 12px; display: block; }
-.aic-root.aic-root .aic-setup-btn {
-  display: inline-flex;
-  align-items: center;
-  height: 32px;
-  padding: 0 16px;
-  border: 1px solid var(--aic-marker);
-  border-radius: var(--aic-r-pill);
-  font-family: var(--aic-mono);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--aic-marker-text);
-}
-.aic-root.aic-root .aic-setup-btn:hover { background: var(--aic-wash); }
-.aic-root.aic-root .aic-setup-btn:disabled { cursor: default; color: var(--aic-dim); border-color: var(--aic-hairline); }
-.aic-root.aic-root .aic-insights-btn { border: 1px solid var(--aic-hairline); }
-
-/* The insights page. */
-.aic-ins-column { padding-top: 24px; padding-bottom: 48px; }
-.aic-ins-head { margin-bottom: 24px; }
-.aic-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
-}
-.aic-stat {
-  padding: 12px 0;
-  border-top: 1px solid var(--aic-hairline);
-}
-.aic-stat-value {
-  font-family: var(--aic-display);
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-  color: var(--aic-paper);
-  font-variant-numeric: tabular-nums;
-}
-.aic-stat:first-child .aic-stat-value { color: var(--aic-marker-text); }
-.aic-stat-label {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--aic-dim);
-}
-.aic-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-.aic-root.aic-root .aic-filter-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 24px;
-  padding: 0 10px;
-  border: 1px solid var(--aic-hairline);
-  border-radius: var(--aic-r-pill);
-  font-family: var(--aic-mono);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--aic-dim);
-}
-.aic-root.aic-root .aic-filter-chip:hover { color: var(--aic-paper); border-color: var(--aic-hairline-emphasis); }
-.aic-root.aic-root .aic-filter-chip.is-active { color: var(--aic-paper); border-color: var(--aic-marker); }
-.aic-filter-x { display: inline-flex; color: var(--aic-faint); }
-.aic-filter-x .svg-icon { width: 10px; height: 10px; }
-
-.aic-ins-section { margin-top: 32px; }
-.aic-ins-section .aic-kicker { margin-bottom: 12px; }
-.aic-ins-empty {
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--aic-dim);
-}
-.aic-ins-empty-page { margin-top: 32px; font-size: 15px; color: var(--aic-paper); }
-.aic-ins-note { margin-top: 8px; font-size: 12px; line-height: 1.5; color: var(--aic-faint); max-width: 60ch; }
-
-/* Column charts: the bars in SVG, every word in HTML around them. */
-.aic-chart {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-rows: 140px auto auto;
-  column-gap: 8px;
-}
-.aic-chart-y {
-  grid-row: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: flex-end;
-}
-.aic-chart-plot { grid-row: 1; grid-column: 2; min-width: 0; }
-.aic-chart-svg { display: block; width: 100%; height: 100%; }
-.aic-chart-bar { fill: var(--aic-marker); }
-.aic-chart-bar:hover { fill: var(--aic-marker-up); }
-.aic-chart-grid { stroke: var(--aic-hairline-subtle); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.aic-chart-base { stroke: var(--aic-hairline); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.aic-chart-x {
-  grid-row: 2;
-  grid-column: 2;
-  display: flex;
-  justify-content: space-between;
-  margin-top: 4px;
-}
-.aic-chart-readout {
-  grid-row: 3;
-  grid-column: 2;
-  min-height: 16px;
-  margin-top: 4px;
-  font-family: var(--aic-mono);
-  font-size: 10px;
-  color: var(--aic-dim);
-  font-variant-numeric: tabular-nums;
-}
-.aic-chart-tick {
-  font-family: var(--aic-mono);
-  font-size: 10px;
-  color: var(--aic-dim);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Horizontal bars: one row per agent or tool. */
-.aic-hbars { display: flex; flex-direction: column; gap: 4px; }
-.aic-root.aic-root .aic-hbar-row {
-  display: grid;
-  grid-template-columns: auto minmax(80px, 16ch) 1fr auto;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 4px 8px;
-  border: 1px solid transparent;
-  border-radius: var(--aic-r-subtle);
-  /* The host's bare-button height, answered - see the annotated copy at `.aic-user-image`. */
-  /* A ROW. `.aic-hbar-name` re-states its own nowrap and ellipsis, so letting
-     the row wrap here costs the name nothing and lets the row hold its bar. */
-  height: auto;
-  min-height: 0;
-  white-space: normal;
-}
-.aic-root.aic-root .aic-hbar-row.is-static { cursor: default; grid-template-columns: minmax(80px, 16ch) 1fr auto; }
-.aic-root.aic-root .aic-hbar-row:not(.is-static):hover { background: var(--aic-wash); }
-.aic-root.aic-root .aic-hbar-row.is-active { border-color: var(--aic-marker); }
-.aic-hbar-name {
-  font-size: 13px;
-  color: var(--aic-paper);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.aic-hbar-track {
-  display: block;
-  height: 8px;
-  border-radius: var(--aic-r-pill);
-  background: var(--aic-track);
-  overflow: hidden;
-}
-.aic-hbar-fill { display: block; height: 100%; background: var(--aic-marker); border-radius: var(--aic-r-pill); }
-.aic-hbar-count {
-  font-family: var(--aic-mono);
-  font-size: 11px;
-  color: var(--aic-dim);
-  font-variant-numeric: tabular-nums;
-  min-width: 4ch;
-  text-align: right;
-}
-
-/* The sessions list. */
-.aic-ins-sessions { display: flex; flex-direction: column; }
-.aic-root.aic-root .aic-ins-session {
-  display: grid;
-  grid-template-columns: auto 1fr auto auto;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 10px 4px;
-  border-bottom: 1px solid var(--aic-hairline-subtle);
-  /* The host's bare-button height, answered - see the annotated copy at `.aic-user-image`. */
-  /* A ROW. `.aic-ins-session-title` re-states nowrap and its ellipsis, so the
-     title still truncates; what stops is the ROW being cut to 30. */
-  height: auto;
-  min-height: 0;
-  white-space: normal;
-}
-.aic-root.aic-root .aic-ins-session:hover { background: var(--aic-wash); }
-.aic-ins-session-date {
-  font-family: var(--aic-mono);
-  font-size: 10px;
-  color: var(--aic-faint);
-  font-variant-numeric: tabular-nums;
-}
-.aic-ins-session-title {
-  font-size: 14px;
-  font-weight: 560;
-  color: var(--aic-paper);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-.aic-ins-session-faces { display: inline-flex; gap: 4px; }
-.aic-ins-session-tokens {
-  font-family: var(--aic-mono);
-  font-size: 10px;
-  color: var(--aic-dim);
-  font-variant-numeric: tabular-nums;
-}
-/* ==== END REGION C ==== */
-
 /* ==== REGION D: pinned prompts ==== */
 
 /* D.1 the tray, rung 0. A quiet band above the stream with a hairline
@@ -3051,7 +2248,7 @@
 
 /* ==== END REGION E ==== */
 
-/* ==== REGION G1: vault sources (WiP, tasks, linked notes) ==== */
+/* ==== REGION G1: vault sources (linked notes) ==== */
 
 /* G1.1 a disabled menu row: a measured zero, shown and not offered. The row
    keeps its count so the user learns the fact; it loses the pointer and the
@@ -3063,42 +2260,6 @@
 .aic-root.aic-root .aic-ctx-row.is-disabled.is-active { background: transparent; color: var(--aic-faint); }
 .aic-root.aic-root .aic-ctx-row.is-disabled .aic-ctx-row-icon { color: var(--aic-faint); }
 
-/* G1.2 the deliverables a session touched, one button per WiP folder, under
-   the session row in the Insights list. Quiet by design: the folder name in
-   the kicker voice, the briefcase in the faint ink, the marker only on hover. */
-.aic-root.aic-root .aic-ins-session-wip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  padding: 0 12px 8px 12px;
-}
-.aic-root.aic-root .aic-ins-wip {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin: 0;
-  /* The host's bare-button height, answered - see the annotated copy at `.aic-user-image`. */
-  height: 24px;
-  min-height: 0;
-  padding: 0 8px;
-  border: 1px solid var(--aic-hairline-subtle);
-  border-radius: var(--aic-r-pill);
-  background: transparent;
-  box-shadow: none;
-  color: var(--aic-dim);
-  font-family: var(--aic-mono);
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: none;
-  cursor: pointer;
-  transition: border-color 140ms var(--aic-ease), color 140ms var(--aic-ease);
-}
-.aic-root.aic-root .aic-ins-wip:hover { border-color: var(--aic-marker); color: var(--aic-paper); }
-.aic-root.aic-root .aic-ins-wip-icon { display: inline-flex; color: var(--aic-faint); }
-.aic-root.aic-root .aic-ins-wip-icon .svg-icon { width: 12px; height: 12px; }
-.aic-root.aic-root .aic-ins-wip:hover .aic-ins-wip-icon { color: var(--aic-marker); }
-
 /* ==== END REGION G1 ==== */
 
 /* ==== REGION G2: reply surface (activity sentence, message actions, finish signals) ==== */
@@ -3108,7 +2269,7 @@
    reset that is already stated at (0,3,0); this region only sizes and places
    them. A block is `position: relative` so the bar can sit in its corner
    without pushing the words. */
-.aic-assistant, .aic-structured { position: relative; }
+.aic-assistant { position: relative; }
 .aic-actions {
   display: flex;
   justify-content: flex-end;
@@ -3119,7 +2280,6 @@
   transition: opacity 140ms var(--aic-ease);
 }
 .aic-assistant:hover .aic-actions,
-.aic-structured:hover .aic-actions,
 .aic-user:hover .aic-actions,
 .aic-actions:focus-within { opacity: 1; }
 /* `.aic-reply-btn`, never `.aic-action`: that name is the COMPOSER's action
@@ -3178,115 +2338,6 @@
 .theme-dark .workspace-tab-header.aic-tab-done .workspace-tab-header-inner-title::after { background: var(--ink-marker, #ff5a2d); }
 
 /* ==== END REGION G2 ==== */
-
-/* ==== REGION G3: memory (recent logs, remember, journals) ==== */
-
-/* G3.1 the LAST SESSIONS block under the resume rows. The same rhythm as the
-   resume rows (hairline between rows, the wash on hover, the marker underline
-   on the title), one rung quieter: the date in mono, the insight in the quiet
-   ink. Rows are real buttons because they open a note. */
-.aic-memory { margin-top: 32px; }
-.aic-memory .aic-kicker { margin-bottom: 8px; }
-.aic-root.aic-root .aic-memory-row {
-  appearance: none;
-  display: block;
-  width: 100%;
-  /* The host gives every button a fixed height and line-height; a two-line
-     row inherited both and its insight line spilled under the next row. */
-  height: auto;
-  min-height: 0;
-  line-height: 1.4;
-  white-space: normal;
-  margin: 0;
-  padding: 12px 4px;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid var(--aic-hairline-subtle);
-  border-radius: 0;
-  box-shadow: none;
-  text-align: left;
-  font: inherit;
-  color: var(--aic-paper);
-  cursor: pointer;
-  position: relative;
-}
-.aic-root.aic-root .aic-memory-row:last-of-type { border-bottom: none; }
-.aic-root.aic-root .aic-memory-row:hover { background: var(--aic-wash); }
-.aic-memory-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-}
-.aic-memory-date {
-  font-family: var(--aic-mono);
-  font-size: 11px;
-  color: var(--aic-dim);
-  flex: 0 0 auto;
-}
-.aic-memory-title {
-  font-size: 14px;
-  font-weight: 560;
-  color: var(--aic-paper);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  position: relative;
-  min-width: 0;
-}
-.aic-memory-title::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  bottom: -3px;
-  width: 26px;
-  height: 2px;
-  background: var(--aic-marker);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 240ms var(--aic-ease);
-}
-.aic-root.aic-root .aic-memory-row:hover .aic-memory-title::after { transform: scaleX(1); }
-.aic-memory-insight {
-  margin-top: 4px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--aic-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* G3.2 the task line: one quiet sentence, a button because it opens a task. */
-.aic-root.aic-root .aic-memory-tasks {
-  appearance: none;
-  display: block;
-  height: auto;
-  min-height: 0;
-  white-space: normal;
-  margin: 12px 0 0;
-  padding: 0 4px;
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  text-align: left;
-  font-family: var(--aic-body);
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--aic-dim);
-  cursor: pointer;
-}
-.aic-root.aic-root .aic-memory-tasks:hover { color: var(--aic-paper); }
-/* G3.3 the journal line on an insights agent row, in the quiet ink. */
-.aic-hbar-journal {
-  flex: 0 0 auto;
-  margin-left: 8px;
-  font-family: var(--aic-mono);
-  font-size: 11px;
-  color: var(--aic-dim);
-  white-space: nowrap;
-}
-
-/* ==== END REGION G3 ==== */
 
 /* ==== REGION F2: providers (picker, settings rows) ==== */
 
@@ -3420,93 +2471,6 @@
 .aic-root.aic-root .aic-pane-header .aic-icon-btn.aic-rc-hidden { display: none; }
 
 /* ==== END REGION V1 ==== */
-
-/* ==== REGION R1: card rows that open (labels never crushed, values unfold) ==== */
-
-/* R1.1 the door. A chevron in the row's fourth column, and the column is
-   empty on a row that fits: an affordance on a row that is not cut is a
-   promise the click cannot keep. Faint at rest so it never competes with the
-   value, marker on hover so it reads as the control it is. */
-.aic-srow-chevron { display: none; color: var(--aic-faint); line-height: 0; }
-.aic-srow-chevron .svg-icon { width: 12px; height: 12px; transition: transform 140ms var(--aic-ease); }
-.aic-srow.is-expandable .aic-srow-chevron { display: inline-flex; }
-/* The fourth track exists only on a cut row: a zero-width track still costs
-   its gap, and every row that fits would have paid 8px for a door it has not
-   got. */
-.aic-srow.is-expandable { cursor: pointer; border-radius: 2px; grid-template-columns: 16px minmax(0, 1fr) 12px; }
-.aic-srow.is-expandable:hover .aic-srow-chevron,
-.aic-srow.is-expandable:focus-visible .aic-srow-chevron { color: var(--aic-marker); }
-.aic-srow.is-expandable:focus-visible { outline: 2px solid var(--aic-marker); outline-offset: 2px; }
-.aic-srow.is-expanded .aic-srow-chevron .svg-icon { transform: rotate(180deg); }
-
-/* R1.2 the open row: the text cell wraps into two lines. The label wraps on
-   the first at full width, the value and its qualifier take the second,
-   left-aligned, and NOTHING is hidden - the ellipsis, the nowrap and the
-   overflow all come off, and a long token breaks rather than runs past the
-   card. */
-.aic-srow.is-expanded { align-items: start; }
-.aic-srow.is-expanded .aic-srow-text { flex-wrap: wrap; }
-.aic-srow.is-expanded .aic-srow-label {
-  flex: 1 1 100%;
-  max-width: none;
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-  overflow-wrap: anywhere;
-}
-.aic-srow.is-expanded .aic-srow-right {
-  flex: 1 1 100%;
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  overflow: visible;
-  text-align: left;
-}
-.aic-srow.is-expanded .aic-srow-value,
-.aic-srow.is-expanded .aic-srow-qual {
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-  overflow-wrap: anywhere;
-  line-height: 1.5;
-}
-
-/* R1.4 THE FINDING'S CLAIM TAKES THE SAME DOOR (Daniel Piatk, 2026-09-15).
-   The claim line is nowrap plus an ellipsis, so it was cut exactly the way a
-   card value was, and had none of the three things R1 gives a cut row: a
-   measurer that reads it, a chevron, and an open state. The vocabulary is
-   NOT new - the chevron is `.aic-srow-chevron` and the state classes are the
-   same `is-expandable` / `is-expanded` - only the carrier changed. */
-/* The grid ITEM's own floor, the twin of the track above: a grid item's
-   automatic minimum size is its min-content, so the track's minmax(0,...) buys
-   nothing until the item says it may shrink. `.aic-srow-text` carries the same
-   declaration for the same reason. */
-.aic-finding-main { min-width: 0; }
-.aic-finding.is-expandable .aic-srow-chevron { display: inline-flex; }
-/* The third track exists only on a cut finding, for the reason stated in R1.1:
-   a zero-width track still costs its gap. */
-.aic-finding.is-expandable { cursor: pointer; border-radius: 2px; grid-template-columns: 16px minmax(0, 1fr) 12px; }
-.aic-finding.is-expandable:hover .aic-srow-chevron,
-.aic-finding.is-expandable:focus-visible .aic-srow-chevron { color: var(--aic-marker); }
-.aic-finding.is-expandable:focus-visible { outline: 2px solid var(--aic-marker); outline-offset: 2px; }
-.aic-finding.is-expanded .aic-srow-chevron .svg-icon { transform: rotate(180deg); }
-/* Open: the claim wraps and NOTHING is hidden. The nowrap, the ellipsis and
-   the overflow all come off together, and a long token breaks rather than
-   running past the card. */
-.aic-finding.is-expanded { align-items: start; }
-.aic-finding.is-expanded .aic-finding-claim {
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-  overflow-wrap: anywhere;
-}
-
-/* R1.3 a sub-head over prose inside a card: the kicker keeps the band's own
-   kicker rule and the prose under it drops the reply-level top margin, which
-   was written for a paragraph that stands alone in the column. */
-.aic-band > .aic-assistant { margin-top: 0; }
-.aic-band > .aic-kicker + .aic-assistant { margin-top: 4px; }
-
-/* ==== END REGION R1 ==== */
 
 /* ==== REGION S1: background tasks, usage windows, alpha runtimes ==== */
 

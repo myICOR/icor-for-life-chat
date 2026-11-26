@@ -17,145 +17,16 @@ import { StreamRenderer } from '../src/view/stream/StreamRenderer';
 import { Statusline } from '../src/view/composer/Statusline';
 import { buildPane } from '../src/view/pane';
 import { renderChipTray } from '../src/view/SubagentView';
-import { renderTeamStrip } from '../src/view/TeamStrip';
-import { renderInsights } from '../src/view/InsightsRender';
 import { ContextModal } from '../src/view/ContextModal';
-import { aggregate } from '../src/team/insights';
-import type { SessionRecord } from '../src/team/insights';
-import { agentShares } from '../src/team/usage';
 import { renderPinTray } from '../src/view/PinTray';
 import type { SubagentTranscript } from '../src/state/subagents';
-import { renderStructured } from '../src/structured/render';
-import { dot } from '../src/view/dom';
-import type { StructuredDoc } from '../src/structured/model';
-import type { TrackedDecision } from '../src/structured/decisions';
+import { dot, iconButton } from '../src/view/dom';
 import type { ChatState } from '../src/model/types';
 import { emptyState } from '../src/model/types';
 import { Normalizer } from '../src/provider/claude/normalize';
-import { DEFAULT_SETTINGS, MEASURED_NOTE, factVisibility } from '../src/model/settings';
+import { FACT_VISIBILITY } from '../src/model/settings';
 
 import { reduce } from '../src/state/store';
-
-const DOC: StructuredDoc = {
-  structured: true,
-  segments: [
-    {
-      kind: 'card',
-      header: { name: 'FELIX', scope: 'the specificity sweep', status: 'COMPLETE' },
-      blocks: [
-        { kind: 'asked', text: 'Does the theme outrank the plugin on any control?' },
-        { kind: 'answer', text: 'It did, on six properties and nine selectors.' },
-        {
-          kind: 'group',
-          title: 'CONTROLS',
-          rows: [
-            { disposition: 'handled', label: 'send pill', value: '1', qualifier: null },
-            { disposition: 'owned', label: 'badge', value: '2', qualifier: 'amber' },
-            { disposition: 'unowned', label: 'code chip', value: '3', qualifier: null },
-            { disposition: 'noted', label: 'agent chip', value: '4', qualifier: null },
-            /* THE ROW THE DOOR EXISTS FOR (2026-09-06): a value long enough
-               to be cut at any sane pane width, with the qualifying clause the
-               format puts at the end. The gate asserts the label survives, the
-               row becomes a control, and opened it hides nothing. */
-            {
-              disposition: 'unowned',
-              label: 'a row with a long value',
-              value: 'this sentence is long enough that the panel will cut it, and the qualification that changes its meaning lives right here at the end of the line where the ellipsis used to swallow it whole',
-              qualifier: 'only while streaming',
-            },
-          ],
-        },
-        /* A FINDINGS block, and the first finding is the one the door exists
-           for (Daniel Piatk, 2026-09-15): a claim long enough to be cut at any
-           sane pane width. The second fits, so "a finding that fits is inert"
-           is tested too. */
-        {
-          kind: 'findings',
-          findings: [
-            {
-              disposition: 'unowned',
-              claim: 'the FINDINGS claim line is cut at the pane width and the clause that changes what the finding actually means lives right at the end of it, where the ellipsis used to swallow it whole',
-              ownership: 'Felix',
-              evidence: 'render.ts:278',
-            },
-            {
-              disposition: 'handled',
-              claim: 'a short claim fits',
-              ownership: 'Felix',
-              evidence: 'styles.css',
-            },
-          ],
-        },
-        { kind: 'insight', text: 'A specificity fix not counted against the competing selector is a guess.' },
-        /* A FILES block, and it is here to keep a probe honest rather than to
-           decorate the fixture. `.aic-icon-btn` used to reach the DOM through
-           the composer's attach button, which was removed because it could not
-           attach anything - and the hover sweep then had no node to measure,
-           even though the class still ships on the file row's copy and open
-           controls and on the mention toolbar. The probe now points at markup
-           the product actually renders. */
-        { kind: 'files', paths: ['/Users/t/vault/04 Inner World/INDEX.md'] },
-      ],
-    },
-    {
-      kind: 'decision',
-      decision: {
-        code: 'a1b2c',
-        title: 'Raise every control rule',
-        body: 'The two local !important patches were the same defect met twice, and they only ever covered borders.',
-        variant: 'decision',
-      },
-    },
-    /* The other two variants. Appended AFTER the plain one so every existing
-       first-match selector still reads the block it was written for. */
-    {
-      kind: 'decision',
-      decision: {
-        code: 'b2c3d',
-        title: 'The focus ring is dead in every room',
-        body: 'all: unset resets outline-style, and the control layer now outranks the pen.',
-        variant: 'blocked',
-      },
-    },
-    {
-      kind: 'decision',
-      decision: {
-        code: 'c3d4e',
-        title: 'The composer border was a tie, not a loss',
-        body: 'Four class repetitions clear the host input rule outright.',
-        variant: 'cleared',
-      },
-    },
-  ],
-};
-
-/* THE DECISION WHOSE BODY DOES NOT FIT.
- *
- * `is-shown` is not a class a fixture may write: `measureDecisionBody` compares
- * scrollHeight against clientHeight on a frame and the renderer decides. So the
- * door is earned here the way the product earns it, with a body no three-line
- * clamp can hold at any pane width this gate uses. Without it `.aic-decision-more`
- * sits at `display: none` in every room, and a control that is never displayed is
- * a control whose height nothing measures. */
-const DOOR_DOC: StructuredDoc = {
-  structured: true,
-  segments: [
-    {
-      kind: 'decision',
-      decision: {
-        code: 'e5f6a',
-        title: 'The host owns fourteen control heights',
-        body: 'Obsidian\'s app.css states a bare `button { height: 30px }` at (0,0,1), which is the lowest weight in the room and still wins every control rule that forgets to state a height of its own. Fourteen selectors in this stylesheet compute to 30px in all four rooms because of it, and not one of them says 30 anywhere. A host dimension on a bare element is never a design value: it is the value you get when nobody decided, and it reaches the screen looking exactly like a decision. The pills are the loudest case because a 2px-padded pill drawn 30px tall stops being a pill and becomes a band, but the rows are the worse one, because a row clamped to 30px draws its second line outside its own box and over the hairline below it.',
-        variant: 'decision',
-      },
-    },
-  ],
-};
-
-const TRACKED: TrackedDecision[] = [
-  { code: 'a1b2c', title: 'Raise every control rule', variant: 'decision', index: 0, at: 0, resolved: false, mentions: [0] },
-  { code: 'd3e4f', title: 'Room-split the status fallbacks', variant: 'decision', index: 1, at: 0, resolved: false, mentions: [1] },
-];
 
 const STATE = {
   sessionId: 'a-session-that-started',
@@ -224,23 +95,8 @@ async function mount(): Promise<void> {
       onSubmit: () => {}, onStop: () => {}, onModeChange: () => {},
       onModelChange: () => {}, onEffortChange: () => {},
     },
-    badge: { navigate: () => {} },
   });
   const column = pane.column;
-  renderStructured(
-    column,
-    DOC,
-    {
-      home: '/',
-      insertCode: () => {},
-      openFile: () => {},
-      revealFile: () => {},
-      openUrl: () => {},
-      copy: () => {},
-      decisionState: (code) => TRACKED.find((d) => d.code === code) ?? null,
-    },
-    (el, text) => { el.setText(text); },
-  );
 
   /* THE TOOL-ROW STATES, driven through the SHIPPED StreamRenderer.
    *
@@ -268,12 +124,7 @@ async function mount(): Promise<void> {
     '',
     {
       onApproval: () => {},
-      structured: () => true,
-      renderHost: {
-        home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
-        openUrl: () => {}, copy: () => {}, decisionState: () => null,
-      },
-      onDecisions: () => {},
+      renderHost: { openFile: () => {} },
     },
   );
   thinkingStream.apply({ kind: 'thinking-open', blockId: 'tp0', stream: null });
@@ -287,12 +138,7 @@ async function mount(): Promise<void> {
     {
       onApproval: () => {},
       onQuestion: () => {},
-      structured: () => false,
-      renderHost: {
-        home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
-        openUrl: () => {}, copy: () => {}, decisionState: () => null,
-      },
-      onDecisions: () => {},
+      renderHost: { openFile: () => {} },
       /* THE ACTION BAR, drawn by the shipped renderer from a bound list the
          way the view hands it one: two primary buttons and one behind the
          dots, on replies and on the user's own well alike. */
@@ -413,27 +259,7 @@ async function mount(): Promise<void> {
     events: [], openedAt: null, sessionId: null, tokens: 0, toolCalls: 0,
   } as SubagentTranscript], () => {});
 
-  /* THE TEAM STRIP, painted by the shipped `renderTeamStrip` from shares the
-     shipped `agentShares` computed: one face from a portrait, one from an
-     initial, so both treatments of an avatar are measured. The image is the
-     1x1 probe PNG as a data URL; the gate measures the disc, never the pixels
-     inside it. */
-  const roster = [
-    { name: 'Larry', slug: 'larry', folder: '06 AI Team/Agents/Larry', role: 'Orchestrator', bioPath: '06 AI Team/Agents/Larry/Larry.md', avatarPath: '06 AI Team/Agents/Larry/avatar.png' },
-    { name: 'Pax', slug: 'pax', folder: '06 AI Team/Agents/Pax', role: 'Researcher', bioPath: null, avatarPath: null },
-  ];
-  const shares = agentShares({
-    main: { toolCalls: 5, textBlocks: 2 },
-    subagents: [
-      { agentType: 'pax', toolCalls: 2, textBlocks: 1, durationMs: 42_000, status: 'done' },
-      { agentType: 'general-purpose', toolCalls: 1, textBlocks: 0, durationMs: 3_000, status: 'done' },
-    ],
-    roster,
-  });
-  renderTeamStrip(pane.teamStrip, shares, roster, () => PROBE_PNG_URL, () => {});
-
   const composer = pane.composer;
-  pane.badge.render(TRACKED);
   /* Rung 4, mounted by `buildPane`: the pane's last child, outside the composer
      card and outside its :focus-within scope. */
   pane.statusline.render(STATE, Date.UTC(2026, 7, 30, 0, 6));
@@ -453,16 +279,13 @@ async function mount(): Promise<void> {
     folders: () => [{ path: '04 Inner World', count: 3 }],
     tags: () => [{ tag: '#gamedev', count: 14 }],
     properties: () => [{ key: 'age', values: [{ value: '4', count: 2 }] }],
-    /* THE VAULT'S OTHER ROOMS (G1): a WiP folder, an open task, and the open
-       note's links with one measured zero, so the root carries its three new
-       rows and the sweep meets a disabled row. */
-    wip: () => [{ path: '03 WiP/2026-09-04-a-brief', name: '2026-09-04-a-brief', notes: 2 }],
-    tasks: () => [{ path: '06 AI Team/AI Team Knowledge/Tasks/open/tsk-2026-09-04-001-x.md', title: 'A task', owner: 'larry', status: 'open' }],
+    /* THE OPEN NOTE'S LINKS (G1), with one measured zero, so the root carries
+       the Linked notes row and the sweep meets a disabled row. */
     linked: () => ({ path: '04 Inner World/a.md', basename: 'a', from: 3, to: 0 }),
   });
   (composer.el.querySelector('.aic-add') as HTMLButtonElement).click();
   const rootLabels = Array.from(composer.el.querySelectorAll('.aic-ctx-row')).map((r) => r.textContent ?? '');
-  for (const want of ['WiP folder', 'Open tasks', 'Linked notes']) {
+  for (const want of ['Linked notes']) {
     if (!rootLabels.some((l) => l.includes(want))) throw new Error(`the + menu root lost its ${want} row`);
   }
   /* Into the linked view and back, so a disabled row (Links to a, 0) is
@@ -491,97 +314,26 @@ async function mount(): Promise<void> {
   await composer.attachFiles([probeImage()]);
 
   await mountStates(root);
-  mountTeamStates();
-  mountMemoryState();
+  mountEmptyState();
   mountSettings();
 }
 
-/* THE EMPTY STATE'S TEAM BLOCK in both of its states, and the insights page
- * with recorded data, each under its own `.aic-root` so the text, cascade and
- * focus sweeps walk them. The setup button and the filter chips are controls
- * the host theme's button skin competes for, and a control the fixture never
- * mounts is a control the sweep never sees. */
-/* THE MEMORY BLOCK of the empty state: two log rows (one with an insight, one
- * without) and the task line, under its own root so the sweeps measure the
- * quiet ink at 12px and the buttons against the host skin. */
-function mountMemoryState(): void {
-  const noHost = {
-    onApproval: () => {}, structured: () => false,
-    renderHost: { home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {}, openUrl: () => {}, copy: () => {}, decisionState: () => null },
-    onDecisions: () => {},
-  };
-  const root = document.body.createDiv({ cls: 'aic-root aic-memory-probe' });
-  const renderer = new StreamRenderer({} as App, new Component() as never, root.createDiv({ cls: 'aic-column' }), '', noHost);
-  renderer.renderEmptyState({ detected: { count: 8, onInsights: () => {} }, onSetup: () => Promise.resolve() });
-  renderer.renderEmptyMemory({
-    logs: [
-      { path: 'a.md', title: 'AI Chat 0.6.1: six improvements shipped', date: '2026-09-04', agent: 'larry',
-        insight: 'A guard that closes a popover must decide before the handler it guards can mutate the DOM.' },
-      { path: 'b.md', title: 'myICOR default Open Graph card', date: '2026-09-04', agent: 'pixel', insight: null },
-    ],
-    tasks: { open: 163, inProgress: 10 },
-    onOpenLog: () => {},
-    onOpenTasks: () => {},
+/* THE EMPTY STATE with the vault line under the hand note, under its own root
+ * so the text sweep measures the dim mono ink on every ground. */
+function mountEmptyState(): void {
+  const root = document.body.createDiv({ cls: 'aic-root aic-empty-probe' });
+  const renderer = new StreamRenderer({} as App, new Component() as never, root.createDiv({ cls: 'aic-column' }), '', {
+    onApproval: () => {},
+    renderHost: { openFile: () => {} },
   });
-}
-
-function mountTeamStates(): void {
-  const noHost = {
-    onApproval: () => {}, structured: () => false,
-    renderHost: { home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {}, openUrl: () => {}, copy: () => {}, decisionState: () => null },
-    onDecisions: () => {},
-  };
-  const bare = document.body.createDiv({ cls: 'aic-root aic-team-setup-probe' });
-  new StreamRenderer({} as App, new Component() as never, bare.createDiv({ cls: 'aic-column' }), '', noHost)
-    .renderEmptyState({ detected: null, onSetup: () => Promise.resolve() });
-  const found = document.body.createDiv({ cls: 'aic-root aic-team-found-probe' });
-  new StreamRenderer({} as App, new Component() as never, found.createDiv({ cls: 'aic-column' }), '', noHost)
-    .renderEmptyState({ detected: { count: 8, onInsights: () => {} }, onSetup: () => Promise.resolve() });
-
-  const now = new Date(2026, 8, 4, 12).getTime();
-  const at = (daysAgo: number): number => new Date(2026, 8, 4 - daysAgo, 10).getTime();
-  const sessions: SessionRecord[] = [
-    /* The `wip` array is not decoration: it is the only thing that mounts
-       `.aic-ins-wip`, one of the four controls no fixture built, and an
-       unmounted control is a control the census cannot fail. */
-    { folder: 'a', title: 'The specificity sweep', startedAt: at(0), endedAt: at(0) + 60_000, tokens: 875_753, model: 'claude-opus-5',
-      agents: [{ agentType: 'pax', toolCalls: 4, textBlocks: 1, durationMs: 40_000, status: 'done' }], tools: { Read: 3, Bash: 5 }, mainToolCalls: 8, mainTextBlocks: 2,
-      wip: ['03 WiP/2026-09-16-follow-discussion'] },
-    { folder: 'b', title: 'A quiet one', startedAt: at(3), endedAt: at(3) + 9_000, tokens: null, model: 'claude-opus-5',
-      agents: [], tools: { Read: 1 }, mainToolCalls: 1, mainTextBlocks: 1 },
-    /* A runtime that forwards no subagent: the row must carry the honest line
-       and the ranking must carry the exclusion, both in real pixels. */
-    { folder: 'd', title: 'A Codex turn', startedAt: at(1), endedAt: at(1) + 30_000, tokens: 12_000, model: 'gpt-5-codex', provider: 'codex',
-      agents: [], tools: { shell: 2 }, mainToolCalls: 2, mainTextBlocks: 1 },
-    { folder: 'c', title: 'Hire a specialist', startedAt: at(6), endedAt: at(6) + 120_000, tokens: 1_200_000, model: 'claude-sonnet-5',
-      agents: [{ agentType: 'general-purpose', toolCalls: 2, textBlocks: 0, durationMs: 9_000, status: 'done' }], tools: { Grep: 4 }, mainToolCalls: 4, mainTextBlocks: 3 },
-  ];
-  const rosterRefs = [{ name: 'Larry', slug: 'larry' }, { name: 'Pax', slug: 'pax' }];
-  const state = { range: '7d' as const, filters: { agent: 'pax', model: null } };
-  const insights = document.body.createDiv({ cls: 'aic-root aic-insights aic-insights-probe' });
-  renderInsights(
-    insights.createDiv({ cls: 'aic-column aic-ins-column' }),
-    {
-      agg: aggregate(sessions, state.range, { agent: null, model: null }, rosterRefs, now),
-      vault: { agents: 8, sessionLogs: 1855, tasksOpen: 551, tasksInProgress: 10, tasksDone: 125 },
-      totalSessions: sessions.length,
-      archiveRoot: '06 AI Team/AI Sessions',
-    },
-    state,
-    {
-      resolveAvatar: () => PROBE_PNG_URL,
-      avatarFor: (key) => (key === 'larry' ? 'x.png' : null),
-      openSession: () => {}, onRange: () => {}, onAgent: () => {}, onModel: () => {},
-    },
-  );
-  /* The two honest empties, so their strings are measured too. */
-  const empty = document.body.createDiv({ cls: 'aic-root aic-insights aic-insights-empty-probe' });
-  renderInsights(
-    empty.createDiv({ cls: 'aic-column aic-ins-column' }),
-    { agg: aggregate([], '7d', { agent: null, model: null }, rosterRefs, now), vault: { agents: null, sessionLogs: null, tasksOpen: null, tasksInProgress: null, tasksDone: null }, totalSessions: 0, archiveRoot: 'AI Sessions' },
-    { range: '7d', filters: { agent: null, model: null } },
-    { resolveAvatar: () => '', avatarFor: () => null, openSession: () => {}, onRange: () => {}, onAgent: () => {}, onModel: () => {} },
-  );
+  renderer.renderEmptyState();
+  renderer.renderEmptyVault(['AGENTS.md', '9 skills', 'schema, 18 types']);
+  /* THE PANE HEADER'S PLAIN ICON BUTTONS, the shape `ChatView` builds when the
+     host header is out of reach, under their own root so the map's iconBtn
+     reads a plain icon button and not a reply-bar one. */
+  const header = document.body.createDiv({ cls: 'aic-root aic-header-probe' }).createDiv({ cls: 'aic-pane-header' });
+  iconButton(header, 'terminal', 'Continue in the terminal', () => {});
+  iconButton(header, 'smartphone', 'Continue on your phone', () => {});
 }
 
 /* A 1x1 PNG, which is the smallest thing the attach path accepts as real. The
@@ -615,7 +367,7 @@ function probeImage(): File {
 
 /* Mounted LAST, and that position is load-bearing: every `document.querySelector`
  * in the probe reads a first match, so the primary composer, the primary facts
- * strip and the plain decision block must all stay earlier in the document than
+ * strip and the primary stream must all stay earlier in the document than
  * their state twins. A state probe placed higher would silently retarget half
  * the gate. */
 async function mountStates(root: HTMLElement): Promise<void> {
@@ -692,12 +444,7 @@ async function mountStates(root: HTMLElement): Promise<void> {
   const queuedColumn = stopHost.createDiv({ cls: 'aic-column' });
   const queuedStream = new StreamRenderer({} as App, new Component() as never, queuedColumn, '', {
     onApproval: () => {},
-    structured: () => false,
-    renderHost: {
-      home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
-      openUrl: () => {}, copy: () => {}, decisionState: () => null,
-    },
-    onDecisions: () => {},
+    renderHost: { openFile: () => {} },
   });
   queuedStream.apply({ kind: 'user-turn', text: 'and after that say PINEAPPLE', contextNote: null, contextPath: null, images: [], queued: true, stream: null });
 
@@ -743,10 +490,9 @@ async function mountStates(root: HTMLElement): Promise<void> {
     ]) {
       for (const event of n.normalize(raw)) st = reduce(st, event);
     }
-    /* The DEFAULT switches, not every readout on. This probe is meant to be
-       what a user sees out of the box after one turn, so the combination is the
-       shipped one. */
-    new Statusline(liveTurn, () => factVisibility(DEFAULT_SETTINGS)).render(st, Date.UTC(2026, 7, 30, 0, 6));
+    /* The SHIPPED readouts, not every readout on. This probe is meant to be
+       what a user sees after one turn, so the combination is the shipped one. */
+    new Statusline(liveTurn, () => FACT_VISIBILITY).render(st, Date.UTC(2026, 7, 30, 0, 6));
   }
 
   /* A LIVE SESSION WITH NOTHING MEASURED YET, which is every first-run
@@ -858,25 +604,19 @@ async function mountStates(root: HTMLElement): Promise<void> {
   /* THE CONTROLS NO FIXTURE EVER BUILT.
    *
    * The census asserts that no control under a plugin root computes to the
-   * host's 30px, and a census can only count what is mounted. Four controls sat
-   * outside every reading this gate has ever taken: the pasted-image cell, the
-   * WiP chip on a session row, the decision door, and the group modal's rows.
-   * All four took the host's height, in all four rooms, with every assertion in
-   * this file green - the same shape of miss as the bare-button rule itself. The
-   * WiP chip comes from the `wip` array on a session record above; the other
-   * three are mounted here, through shipped code, never as re-typed markup. */
+   * host's 30px, and a census can only count what is mounted. Two controls sat
+   * outside every reading this gate had taken: the pasted-image cell and the
+   * group modal's rows. Both took the host's height, in all four rooms, with
+   * every assertion in this file green - the same shape of miss as the
+   * bare-button rule itself. Both are mounted here, through shipped code, never
+   * as re-typed markup. */
   const geometry = probe.createDiv({ cls: 'aic-geometry-probe' });
 
   /* THE PASTED SCREENSHOT'S CELL, through the shipped user-turn renderer. */
   const imageColumn = geometry.createDiv({ cls: 'aic-column aic-user-image-probe' });
   const imageStream = new StreamRenderer({} as App, new Component() as never, imageColumn, '', {
     onApproval: () => {},
-    structured: () => false,
-    renderHost: {
-      home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
-      openUrl: () => {}, copy: () => {}, decisionState: () => null,
-    },
-    onDecisions: () => {},
+    renderHost: { openFile: () => {} },
   });
   imageStream.apply({
     kind: 'user-turn', text: 'the card, as it draws today', contextNote: null, contextPath: null,
@@ -894,19 +634,6 @@ async function mountStates(root: HTMLElement): Promise<void> {
       cellImg.addEventListener('error', () => resolve(), { once: true });
     });
   }
-
-  /* THE DECISION DOOR, EARNED. renderStructured measures the body on a frame and
-     shows the door itself; nothing here writes `is-shown`. */
-  const doorColumn = geometry.createDiv({ cls: 'aic-column aic-decision-door-probe' });
-  renderStructured(
-    doorColumn,
-    DOOR_DOC,
-    {
-      home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
-      openUrl: () => {}, copy: () => {}, decisionState: () => null,
-    },
-    (el, text) => { el.setText(text); },
-  );
 
   /* THE GROUP MODAL'S ROWS, through the shipped modal. It paints into
      document.body, outside `.aic-root`, exactly as the real one does - which is
@@ -943,14 +670,11 @@ function mountSettings(): void {
   const head = settings.createDiv({ cls: 'aic-settings-section' });
   head.createSpan({ cls: 'aic-settings-index', text: '01' });
   head.createSpan({ cls: 'aic-settings-name', text: 'PROVIDER' });
-  /* The one prose line the STATUSLINE section carries. It is the whole answer
-     to "why is my strip empty", so it is swept for legibility like every other
-     string: documentation nobody can read is the same as no documentation. The
-     text comes from the shipped constant rather than being re-typed here. */
+  /* A settings note line, swept for legibility like every other string. */
   const kicker = settings.createDiv({ cls: 'aic-settings-section' });
   kicker.createSpan({ cls: 'aic-settings-index', text: '03' });
-  kicker.createSpan({ cls: 'aic-settings-name', text: 'STATUSLINE' });
-  settings.createDiv({ cls: 'aic-settings-note', text: MEASURED_NOTE });
+  kicker.createSpan({ cls: 'aic-settings-name', text: 'SESSION ARCHIVE' });
+  settings.createDiv({ cls: 'aic-settings-note', text: 'Number of days. Zero keeps everything.' });
 }
 
 void mount();

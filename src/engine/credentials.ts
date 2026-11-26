@@ -22,7 +22,7 @@
 import { PLUGIN_ID } from '../constants';
 import type { ModelProviderId } from './types';
 import { isModelProviderId } from './registry';
-import { DEFAULT_ENV_FILE_PATH, cleanVaultPath } from './envFile';
+import { DEFAULT_ENV_FILE_PATH, LEGACY_ENV_FILE_PATH, cleanVaultPath } from './envFile';
 import { isSecretsBackend } from './secrets';
 import type { SecretsBackend } from './secrets';
 
@@ -76,7 +76,10 @@ export function loadOwnKeySettings(app: LocalStorageHost): OwnKeySettings {
   const raw = app.loadLocalStorage(OWN_KEY_STORAGE_KEY);
   const partial = isRecord(raw) ? raw : {};
   const provider = isModelProviderId(partial.provider) ? partial.provider : DEFAULT_OWN_KEY_SETTINGS.provider;
-  const envFilePath = typeof partial.envFilePath === 'string' ? cleanVaultPath(partial.envFilePath) : '';
+  /* A record written by 0.16 or older carries the old default path; it reads
+     as today's default, which still looks in the old file second. */
+  const stored = typeof partial.envFilePath === 'string' ? cleanVaultPath(partial.envFilePath) : '';
+  const envFilePath = stored === LEGACY_ENV_FILE_PATH ? DEFAULT_ENV_FILE_PATH : stored;
   return {
     engine: partial.engine === 'own-key' ? 'own-key' : DEFAULT_OWN_KEY_SETTINGS.engine,
     provider,

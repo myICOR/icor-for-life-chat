@@ -64,6 +64,7 @@ import type {
 import type { EffortName, ModelChoice, PermissionModeName, RateLimitFacts } from '../../model/types';
 import { usageEvents } from './usage';
 import { authSourceFromApiKeySource } from './authSource';
+import { secretReadDeny } from '../../safety/secrets';
 
 export type { SessionConfig, SessionHooks, SessionImage } from '../types';
 
@@ -77,7 +78,6 @@ function userContent(text: string, images: SessionImage[]): unknown {
   if (text) blocks.push({ type: 'text', text });
   return blocks;
 }
-import { STRUCTURED_REPLY_PROMPT } from '../../constants';
 
 /**
  * What the Claude session launches with: the executable the provider found
@@ -385,11 +385,10 @@ export class ChatSession implements ProviderSession {
       includePartialMessages: true,
       forwardSubagentText: true,
       // No system prompt of our own. The CLI preset plus the vault's own
-      // CLAUDE.md (loaded because settingSources is left at its default, which
-      // includes 'project') is the entire instruction surface.
-      systemPrompt: config.structuredReplies
-        ? { type: 'preset', preset: 'claude_code', append: STRUCTURED_REPLY_PROMPT }
-        : { type: 'preset', preset: 'claude_code' },
+      // CLAUDE.md / AGENTS.md and .claude/skills (loaded because settingSources
+      // is left at its default, which includes 'project') is the entire
+      // instruction surface.
+      systemPrompt: { type: 'preset', preset: 'claude_code' },
       canUseTool: async (toolName, input, ctx) => {
         const toolUseId = ctx.toolUseID ?? `${toolName}:${ctx.requestId}`;
         /* A QUESTION COMES DOWN THIS SAME WIRE. AskUserQuestion is a tool
@@ -406,7 +405,7 @@ export class ChatSession implements ProviderSession {
               toolName,
               target: toolTarget(toolName, input),
               purpose: toolPurpose(toolName, input, config.cwd),
-              title: ctx.title ?? 'The team is asking you a question',
+              title: ctx.title ?? 'A question for you',
               questions,
             },
             ctx.signal,
@@ -432,6 +431,10 @@ export class ChatSession implements ProviderSession {
         return toPermissionAnswer(choice, input, ctx.suggestions);
       },
     };
+    /* Keys files, other plugins' settings and Obsidian's config are never read
+       without asking: Claude Code's Read, Grep and Glob run unprompted in Ask
+       mode, and the working folder is the vault (src/safety/secrets.ts). */
+    options.disallowedTools = secretReadDeny(config.configDir);
     if (config.model) options.model = config.model;
     if (config.effort) options.effort = config.effort;
     if (config.resumeSessionId) options.resume = config.resumeSessionId;

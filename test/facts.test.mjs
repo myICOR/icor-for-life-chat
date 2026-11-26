@@ -7,7 +7,7 @@ import {
   escalatedCount, stateWord, factAriaLabel, reduce,
   RENDER_ORDER, DROP_GROUPS, RING_MIN_CONSUMED, RING_CIRCUMFERENCE,
   ringCount, ringDashOffset, fitFacts, visibleFacts,
-  FACT_TOOLTIPS, FACT_NAMES, FACT_SETTING_KEYS, DEFAULT_SETTINGS, factVisibility,
+  FACT_TOOLTIPS, FACT_NAMES, FACT_VISIBILITY,
   Normalizer, usageEvents,
 } from './build/pure.mjs';
 
@@ -514,8 +514,8 @@ test('the plan tooltip names the reset only at CRIT, and only when the provider 
 
 /* ------------------------------------------------ the switches and the copy */
 
-test('the default combination is five on and three off', () => {
-  const v = factVisibility(DEFAULT_SETTINGS);
+test('the shipped combination is five on and three off', () => {
+  const v = FACT_VISIBILITY;
   assert.deepEqual(
     RENDER_ORDER.filter((id) => v[id]),
     ['context', 'plan', 'tokensIn', 'tokensOut', 'elapsed'],
@@ -523,19 +523,15 @@ test('the default combination is five on and three off', () => {
   assert.deepEqual(RENDER_ORDER.filter((id) => !v[id]), ['agents', 'sessionStart', 'sessionUpdated']);
 });
 
-test('every readout has one settings key, one name and one long form', () => {
-  const keys = RENDER_ORDER.map((id) => FACT_SETTING_KEYS[id]);
-  assert.equal(new Set(keys).size, 8, 'two readouts share a settings key');
+test('every readout has a visibility, one name and one long form', () => {
+  assert.deepEqual(Object.keys(FACT_VISIBILITY).sort(), [...RENDER_ORDER].sort(), 'a readout has no fixed visibility');
   for (const id of RENDER_ORDER) {
     assert.equal(typeof FACT_NAMES[id], 'string');
     assert.ok(FACT_NAMES[id].length > 0);
     // What it counts / what it excludes / where it comes from. Three lines, and
     // the third is the one that says where the number is allowed to come from.
     assert.equal(FACT_TOOLTIPS[id].length, 3, id);
-    assert.ok(Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, FACT_SETTING_KEYS[id]));
   }
-  // The tooltip and the settings description are ONE string, so nothing here
-  // may be a second copy of prose that lives elsewhere.
   assert.match(FACT_TOOLTIPS.context.join(' '), /Subagents run in their own context windows/);
   assert.match(FACT_TOOLTIPS.tokensOut.join(' '), /Includes every subagent session/);
 });
@@ -626,13 +622,13 @@ test('END TO END: a real turn populates the strip', () => {
      default, so the visible strip is empty. This assertion is the one that
      says the empty row is CORRECT rather than broken. */
   assert.deepEqual(
-    visibleFacts(buildFacts(before, NOW), factVisibility(DEFAULT_SETTINGS)),
+    visibleFacts(buildFacts(before, NOW), FACT_VISIBILITY),
     [],
     'a session with no completed turn should render nothing under the default switches',
   );
 
   const after = liveSession([INIT, RESULT]);
-  const facts = visibleFacts(buildFacts(after, NOW), factVisibility(DEFAULT_SETTINGS));
+  const facts = visibleFacts(buildFacts(after, NOW), FACT_VISIBILITY);
   const ids = facts.map((f) => f.id);
   /* And the moment the data exists it is on screen. Four of the five default
      readouts; ELAPSED is absent because the turn has ENDED, which is its whole

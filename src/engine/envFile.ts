@@ -17,10 +17,28 @@
 
 import type { ModelProviderId } from './types';
 
-/** Where the contract puts the file, vault-relative. Keep this string: the
- * whole suite defaults to the same file, and a member who moved it once
- * changes the setting, not this default. */
-export const DEFAULT_ENV_FILE_PATH = '06 AI Team/AI Team Knowledge/.env';
+/** Where the contract puts the file, vault-relative: the ICOR for Life
+ * vault's own hidden folder (2026-11-20, the vault no longer has a
+ * `06 AI Team` room). The whole suite defaults to the same file, and a member
+ * who moved it once changes the setting, not this default. */
+export const DEFAULT_ENV_FILE_PATH = '.icor-for-life/.env';
+
+/** Where 0.16 and older (and the rest of the suite) put it, in the ICOR for
+ * Life 2.x layout. Read only, never offered as a default: a vault that still
+ * has a key there keeps working (see `envFileCandidates`). `06 AI Team` is a
+ * 2.x folder and matched by its full name; 3.0's `06 Planner` shares only
+ * the number. */
+export const LEGACY_ENV_FILE_PATH = '06 AI Team/AI Team Knowledge/.env';
+
+/**
+ * The files a key is looked for in, in order. The default path stands for
+ * both places, the new one first; a path the member set themselves is the
+ * only place looked.
+ */
+export function envFileCandidates(path: string): string[] {
+  if (path === DEFAULT_ENV_FILE_PATH || path === LEGACY_ENV_FILE_PATH) return [DEFAULT_ENV_FILE_PATH, LEGACY_ENV_FILE_PATH];
+  return path ? [path] : [];
+}
 
 /** The variable each provider's key is read under. Named in the README's
  * "Where your keys live" section; renaming one is a documented change. */
@@ -36,6 +54,8 @@ export interface EnvFileHost {
   exists(path: string): Promise<boolean>;
   read(path: string): Promise<string>;
   write(path: string, data: string): Promise<void>;
+  /** Creates a folder; used for a missing parent before the first write. */
+  mkdir?(path: string): Promise<void>;
 }
 
 const KEY_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -133,18 +153,36 @@ export function upsertEnvLine(text: string, key: string, value: string): string 
   return `${text}${glue}${key}=${clean}${eol}`;
 }
 
-/** The value under `key`, or '' when the file or the line is absent. */
+/** The value under `key` from the first candidate file that has it
+ * (`envFileCandidates`), or '' when none does. */
 export async function readEnvKey(host: EnvFileHost, path: string, key: string): Promise<string> {
-  if (!path || !(await host.exists(path))) return '';
-  return parseEnvFile(await host.read(path)).get(key) ?? '';
+  for (const candidate of envFileCandidates(path)) {
+    if (!(await host.exists(candidate))) continue;
+    const value = parseEnvFile(await host.read(candidate)).get(key) ?? '';
+    if (value) return value;
+  }
+  return '';
 }
 
-/** Writes `key=value` into the file at `path` (created when missing),
- * touching only that one line. A write that would change nothing is skipped
- * so the file's mtime stays honest for whatever else watches it. */
+/** The file a write goes to: the first candidate that exists, else the first. */
+export async function envFileForWrite(host: EnvFileHost, path: string): Promise<string> {
+  const candidates = envFileCandidates(path);
+  for (const candidate of candidates) if (await host.exists(candidate)) return candidate;
+  return candidates[0] ?? '';
+}
+
+/** Writes `key=value` into the env file (`envFileForWrite`; created when
+ * missing, its folder too), touching only that one line. A write that would
+ * change nothing is skipped so the file's mtime stays honest for whatever
+ * else watches it. */
 export async function writeEnvKey(host: EnvFileHost, path: string, key: string, value: string): Promise<void> {
-  if (!path) throw new Error('No env file path is set');
-  const before = (await host.exists(path)) ? await host.read(path) : '';
+  const target = await envFileForWrite(host, path);
+  if (!target) throw new Error('No env file path is set');
+  const exists = await host.exists(target);
+  const before = exists ? await host.read(target) : '';
   const after = upsertEnvLine(before, key, value);
-  if (after !== before) await host.write(path, after);
+  if (after === before) return;
+  const folder = target.includes('/') ? target.slice(0, target.lastIndexOf('/')) : '';
+  if (!exists && folder && host.mkdir && !(await host.exists(folder))) await host.mkdir(folder);
+  await host.write(target, after);
 }

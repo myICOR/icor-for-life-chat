@@ -3,6 +3,124 @@
 Notable changes per release. Older releases are described in their commit
 messages (`git log --grep='^0\.'`) and on the GitHub releases page.
 
+## 0.17.4
+
+- The display name is now ICOR AI Chat (it was ICOR for Life - AI Chat). The plugin id stays `icor-for-life-chat`, so installed vaults, settings and hotkeys carry on unchanged.
+
+## 0.17.3
+
+The robot lives in the ribbon on the left (Tom, 2026-11-23: every plugin's
+launcher moves to Obsidian's own ribbon).
+
+- **No more robot under the logo.** The icon in the file explorer's row of
+  icons is gone. The robot in the ribbon opens the same menu: start a
+  conversation, or pick up a recent one. Like any ribbon icon, you can move
+  or hide it in Settings, Appearance, Ribbon menu, and **New conversation**
+  in the command palette still opens one.
+
+## 0.17.2
+
+Ready for the Obsidian community directory's review.
+
+- **Replies can no longer reach the network on their own, and keys stay out
+  of reach** (the security fixes of 0.17.0's `fix/untrusted-output`, now in
+  this line): an image, frame, video or sound in a reply loads only from the
+  vault or after a click; the agent cannot read keys files (`**/.env`,
+  `**/.env.*`) or Obsidian's settings folder; secrets are masked in every
+  archived file.
+- The composer resets its height by clearing it rather than by setting a
+  fixed value (the directory's review refuses fixed inline styles).
+
+## 0.17.1
+
+ICOR for Life 3.0's folders (Tom, 2026-11-23: the stages contract). The top
+folders are grouped by stage: Input (`00 Daily Notes`, `01 Inbox`), Control
+(`02 Inner World`, `03 Outer World`, `04 Assets`, `05 Databases`) and Output
+(`06 Planner`); Refine has no folder.
+
+- **"Save as note" goes to your Daily notes folder.** The folder Obsidian's
+  Daily notes setting names, else `00 Daily Notes/` when the vault has it,
+  else the vault root, as `YYYY/MM/YYYYMMDDHHmm.md` as before. A 2.x vault's
+  `00 Daily Scratchpad/` keeps working while it exists, and a Daily notes
+  setting that still names it moves to `00 Daily Notes/` once only that
+  folder is there. Folders are matched by their full name, never by the
+  number in front.
+- **The vault's structure is read from `folders`, grouped by stage.**
+  `_System/schema.json` now calls its folder list `folders` and adds
+  `stages`; with your own API key the model is told the folders under their
+  stage. A schema that still says `rooms` reads the same way.
+- **Folders, not rooms.** Nothing the chat shows or tells the model says
+  "room" any more, and the example path the model is given is
+  `02 Inner World/...`.
+- Unchanged: the 2.x places a vault may still use keep working, read only:
+  your keys in `06 AI Team/AI Team Knowledge/.env` and conversations in
+  `06 AI Team/AI Sessions/`.
+
+## 0.17.0
+
+A general-purpose chat that works from what is in your vault (Tom,
+2026-11-20: "a chat bot experience right into Obsidian for anyone who wants
+to have it all in one place"). The ICOR for Life vault no longer has a
+`06 AI Team` room, and the plugin no longer looks for one.
+
+- **Its instructions come from your vault, and only from there.** The chat
+  reads `AGENTS.md` at the vault root (or `CLAUDE.md`), the skills in
+  `_System/Skills/<name>/SKILL.md`, and the structure in
+  `_System/schema.json`. A vault set up before `_System/` existed is read
+  from `.agents/skills/` (and `.claude/skills/`) and
+  `.icor-for-life/schema.json`, through Obsidian's file adapter because
+  Obsidian does not index dot folders. Claude Code and Codex read the same
+  files themselves; with your own API key the plugin now sends them as the
+  instructions, and `read_note` can open a skill, the schema or a template.
+  The empty chat lists what it found, for example
+  `AGENTS.md · 9 skills · schema, 19 types`.
+- **The AI team is gone.** No more `06 AI Team/Agents` roster, team strip,
+  Team Insights tab, one-click team setup, last-sessions and open-tasks
+  block, "remember this", WiP deliverable and capture-as-task actions, the
+  WiP and Open tasks pickers in the `+` menu, the `/close-session` command,
+  or the life snapshot line.
+- **No more ICOR card format.** Replies come back as plain Markdown,
+  rendered as they stream. The plugin no longer adds an instruction of its
+  own to Claude Code's system prompt, and the open-decisions badge went with
+  the cards.
+- **Your keys in an env file live in `.icor-for-life/.env`.** A vault that
+  keeps them in `06 AI Team/AI Team Knowledge/.env` keeps working: the
+  plugin reads that file when the new one has no key and writes to
+  whichever of the two exists. A stored setting naming the old default reads
+  as the new one.
+- **Conversations are archived in `AI Sessions/`**, unless the settings name
+  another folder; a vault that already has `06 AI Team/AI Sessions/` keeps
+  using it. The archive no longer writes a session line into a WiP folder's
+  README.
+- **Fifteen settings instead of twenty-five.** Gone: Structured replies, Team
+  strip, Vault layout and the eight statusline switches (the statusline shows
+  the same five readouts it showed by default). A `data.json` that still
+  carries them reads without them.
+- **Smaller.** `main.js` 1,962,063 to 1,283,559 bytes (852 KB to 374 KB
+  gzipped), `styles.css` 151,272 to 114,950 bytes. The embedded starter team
+  (`src/team/bundle.ts`, 610 KB) and `npm run embed:team` are gone.
+- Unchanged: Claude Code, Codex and your own key (Anthropic, OpenRouter) with
+  the same models, permission modes, approvals and questions, subagents,
+  pinned prompts, context from the open note and the notes you mention,
+  continue in the terminal, Remote Control, save as note, resume from the
+  archive.
+
+### Security
+- **A reply can no longer send your notes anywhere by itself.** A prompt
+  injection hidden in a note or a web page could make the model write an
+  image whose address carried vault text; rendered, the image was fetched
+  the moment the reply appeared. Remote images in a reply now show as a link
+  you can click, raw HTML shows as text (bare `<kbd>`, `<br>` and similar
+  still format), and code is left exactly as it was. Copy still gives you the
+  reply as it was written.
+- **The assistant no longer reads keys without asking.** Keys files
+  (`.env`, wherever they are) and the vault's config folder (other plugins'
+  settings hold tokens there) are off limits to Claude Code's Read, Grep and
+  Glob unless you allow it.
+- **Archived conversations mask secrets.** Strings shaped like keys and
+  tokens (`sk-…`, `ghp_…`, `Bearer …`, `API_KEY=…`) are masked before
+  `conversation.md`, `transcript.json` and subagent files are written.
+
 ## 0.16.3
 
 - **"Save as note" is unchanged for you; its fields are now tested.** A saved

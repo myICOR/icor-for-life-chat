@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  DEFAULT_ENV_FILE_PATH, ENV_KEY_FOR, cleanVaultPath, isOutsideVault, parseEnvFile, upsertEnvLine, readEnvKey, vaultPathRefusal, writeEnvKey,
+  DEFAULT_ENV_FILE_PATH, LEGACY_ENV_FILE_PATH, envFileCandidates, ENV_KEY_FOR, cleanVaultPath, isOutsideVault, parseEnvFile, upsertEnvLine, readEnvKey, vaultPathRefusal, writeEnvKey,
 } from './build/pure.mjs';
 
 const SAMPLE = [
@@ -139,9 +139,45 @@ test('writeEnvKey creates the file, updates in place, and skips a write that cha
 
 /* ------------------------------------------------------------ constants */
 
-test('the default path is the suite-wide one, and the variable names are documented ones', () => {
-  assert.equal(DEFAULT_ENV_FILE_PATH, '06 AI Team/AI Team Knowledge/.env');
+test('the default path is the vault\'s own hidden folder, and the variable names are documented ones', () => {
+  assert.equal(DEFAULT_ENV_FILE_PATH, '.icor-for-life/.env');
+  assert.equal(LEGACY_ENV_FILE_PATH, '06 AI Team/AI Team Knowledge/.env');
   assert.deepEqual(ENV_KEY_FOR, { anthropic: 'ANTHROPIC_API_KEY', openrouter: 'OPENROUTER_API_KEY' });
+});
+
+/* ------------------------------------------- the move out of 06 AI Team */
+
+test('the default path looks in .icor-for-life first, then in the old AI Team file', () => {
+  assert.deepEqual(envFileCandidates(DEFAULT_ENV_FILE_PATH), [DEFAULT_ENV_FILE_PATH, LEGACY_ENV_FILE_PATH]);
+  assert.deepEqual(envFileCandidates(LEGACY_ENV_FILE_PATH), [DEFAULT_ENV_FILE_PATH, LEGACY_ENV_FILE_PATH]);
+  assert.deepEqual(envFileCandidates('Secrets/my.env'), ['Secrets/my.env'], 'a path the member chose is the only place looked');
+  assert.deepEqual(envFileCandidates(''), []);
+});
+
+test('an existing vault keeps its key in the old file: read from there, written there', async () => {
+  const host = fakeAdapter({ [LEGACY_ENV_FILE_PATH]: 'ANTHROPIC_API_KEY=sk-old\n' });
+  assert.equal(await readEnvKey(host, DEFAULT_ENV_FILE_PATH, 'ANTHROPIC_API_KEY'), 'sk-old');
+  await writeEnvKey(host, DEFAULT_ENV_FILE_PATH, 'OPENROUTER_API_KEY', 'sk-or');
+  assert.deepEqual(host.writes, [LEGACY_ENV_FILE_PATH], 'the write left the file the vault already uses');
+  assert.equal(host.files[LEGACY_ENV_FILE_PATH], 'ANTHROPIC_API_KEY=sk-old\nOPENROUTER_API_KEY=sk-or\n');
+});
+
+test('the new file wins when both hold the key, and a blank new line falls through to the old one', async () => {
+  const host = fakeAdapter({
+    [DEFAULT_ENV_FILE_PATH]: 'ANTHROPIC_API_KEY=sk-new\nOPENROUTER_API_KEY=\n',
+    [LEGACY_ENV_FILE_PATH]: 'ANTHROPIC_API_KEY=sk-old\nOPENROUTER_API_KEY=sk-or-old\n',
+  });
+  assert.equal(await readEnvKey(host, DEFAULT_ENV_FILE_PATH, 'ANTHROPIC_API_KEY'), 'sk-new');
+  assert.equal(await readEnvKey(host, DEFAULT_ENV_FILE_PATH, 'OPENROUTER_API_KEY'), 'sk-or-old');
+});
+
+test('a fresh vault writes the new file, making its folder when the host can', async () => {
+  const host = fakeAdapter({});
+  const made = [];
+  host.mkdir = async (p) => { made.push(p); host.files[p] = null; };
+  await writeEnvKey(host, DEFAULT_ENV_FILE_PATH, 'ANTHROPIC_API_KEY', 'sk-1');
+  assert.deepEqual(made, ['.icor-for-life']);
+  assert.equal(host.files[DEFAULT_ENV_FILE_PATH], 'ANTHROPIC_API_KEY=sk-1\n');
 });
 
 test('cleanVaultPath trims, strips a leading ./, and turns backslashes around', () => {

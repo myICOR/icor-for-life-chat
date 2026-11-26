@@ -93,17 +93,11 @@ export interface ContextSources {
   folders: () => ReadonlyArray<{ path: string; count: number }>;
   tags: () => ReadonlyArray<{ tag: string; count: number }>;
   properties: () => ReadonlyArray<{ key: string; values: ReadonlyArray<{ value: string; count: number }> }>;
-  /* THE VAULT'S OTHER ROOMS (R1, R5, R9). Each is optional because a bare
-     vault has none of them, and a row that opens onto "Nothing here yet" is a
-     promise the menu should not make: the root shows a room only when its
-     source is present and answers. */
-  wip?: () => ReadonlyArray<{ path: string; name: string; notes: number }>;
-  tasks?: () => ReadonlyArray<{ path: string; title: string; owner: string; status: string }>;
   /** The open note and its link counts, or null when no note is open. */
   linked?: () => { path: string; basename: string; from: number; to: number } | null;
 }
 
-type MenuView = 'root' | 'notes' | 'folders' | 'tags' | 'properties' | 'values' | 'wip' | 'tasks' | 'linked';
+type MenuView = 'root' | 'notes' | 'folders' | 'tags' | 'properties' | 'values' | 'linked';
 
 /** A source's function type with the optional-ness removed, so its return type can be named. */
 type SourceFn<K extends keyof ContextSources> = NonNullable<ContextSources[K]>;
@@ -189,7 +183,6 @@ export interface ComposerState {
 
 export class Composer {
   readonly el: HTMLElement;
-  private readonly badgeSlot: HTMLElement;
   private readonly thumbsEl: HTMLElement;
   private readonly trayEl: HTMLElement;
   private readonly textarea: HTMLTextAreaElement;
@@ -272,18 +265,17 @@ export class Composer {
   constructor(parent: HTMLElement, initial: ComposerState, private readonly cb: ComposerCallbacks) {
     this.state = { ...initial };
     this.el = parent.createDiv({ cls: 'aic-composer' });
-    this.badgeSlot = this.el.createDiv({ cls: 'aic-badge-slot' });
     this.thumbsEl = this.el.createDiv({ cls: 'aic-thumbs is-empty' });
     this.trayEl = this.el.createDiv({ cls: 'aic-tray' });
     this.textarea = this.el.createEl('textarea', { cls: 'aic-input' });
     this.textarea.rows = 1;
-    this.textarea.placeholder = 'Ask the team. [[ or @ mentions notes, / runs commands';
-    this.textarea.setAttr('aria-label', 'Message the AI team');
+    this.textarea.placeholder = 'Ask anything. [[ or @ mentions notes, / runs commands and skills';
+    this.textarea.setAttr('aria-label', 'Message the AI chat');
 
     const action = this.el.createDiv({ cls: 'aic-action' });
     /* THE `+` BUTTON, first in the row, because it is the one control here
        that is about the MESSAGE rather than about the session: what the
-       team gets to read alongside the words. It opens a menu of the vault's
+       model gets to read alongside the words. It opens a menu of the vault's
        own shapes - the open note, any note, a folder, a tag, a property - and
        the view turns a pick into the notes it stands for. */
     this.addBtn = action.createEl('button', { cls: 'aic-add', type: 'button' });
@@ -498,10 +490,6 @@ export class Composer {
     });
 
     this.paint();
-  }
-
-  get badgeContainer(): HTMLElement {
-    return this.badgeSlot;
   }
 
   get trayContainer(): HTMLElement {
@@ -1026,10 +1014,11 @@ export class Composer {
 
   private autoGrow(): void {
     /* A computed value, so it rides the sanctioned dynamic channel rather than
-       a class: there is no finite set of heights to enumerate. The auto pass
-       first, because scrollHeight read under the previous fixed height reports
-       that height back and the field never shrinks. */
-    this.textarea.setCssStyles({ height: 'auto' });
+       a class: there is no finite set of heights to enumerate. Clearing the
+       inline height first (the stylesheet sets none, so the field is back to
+       its natural height), because scrollHeight read under the previous fixed
+       height reports that height back and the field never shrinks. */
+    this.textarea.setCssStyles({ height: '' });
     this.textarea.setCssStyles({ height: `${Math.min(this.textarea.scrollHeight, 260)}px` });
   }
 
@@ -1267,12 +1256,6 @@ export class Composer {
       case 'root': {
         if (q) return this.noteRows(q);
         const rows: MenuRow[] = [];
-        /* The WiP room first, when the vault has one: the deliverable being
-           worked on is the context a message most often wants, and the newest
-           folder is almost always the one. */
-        if (this.sources?.wip && this.source('wip').length > 0) {
-          rows.push({ icon: 'briefcase', label: 'WiP folder', detail: '', count: null, opens: 'wip', pick: null, key: null });
-        }
         rows.push(
           { icon: 'eye', label: 'Active note', detail: '', count: null, opens: null, pick: { kind: 'active' }, key: null },
           { icon: 'file-text', label: 'Notes', detail: '', count: null, opens: 'notes', pick: null, key: null },
@@ -1280,38 +1263,8 @@ export class Composer {
           { icon: 'tag', label: 'Tags', detail: '', count: null, opens: 'tags', pick: null, key: null },
           { icon: 'sliders-horizontal', label: 'Properties', detail: '', count: null, opens: 'properties', pick: null, key: null },
         );
-        if (this.sources?.tasks) {
-          rows.push({ icon: 'list-checks', label: 'Open tasks', detail: '', count: null, opens: 'tasks', pick: null, key: null });
-        }
         if (this.sources?.linked && this.linkedNote() !== null) {
           rows.push({ icon: 'link', label: 'Linked notes', detail: '', count: null, opens: 'linked', pick: null, key: null });
-        }
-        return rows;
-      }
-      case 'wip':
-        return this.source('wip')
-          .filter((f) => has(f.name))
-          .slice(0, MENU_LIMIT)
-          .map((f) => ({
-            icon: 'briefcase', label: f.name, detail: '', count: f.notes,
-            opens: null, pick: { kind: 'wip', path: f.path }, key: null,
-          }));
-      case 'tasks': {
-        const tasks = this.source('tasks');
-        const rows: MenuRow[] = [];
-        if (!q) {
-          rows.push({
-            icon: 'list-checks', label: `All open tasks`, detail: '', count: tasks.length,
-            opens: null, pick: { kind: 'tasks' }, key: null, disabled: tasks.length === 0,
-          });
-        }
-        for (const t of tasks) {
-          if (!has(t.title) && !has(t.owner)) continue;
-          if (rows.length >= MENU_LIMIT) break;
-          rows.push({
-            icon: t.status === 'in-progress' ? 'loader' : 'circle', label: t.title, detail: t.owner,
-            count: null, opens: null, pick: { kind: 'note', path: t.path }, key: null,
-          });
         }
         return rows;
       }
@@ -1379,8 +1332,6 @@ export class Composer {
       case 'tags': return 'Tags';
       case 'properties': return 'Properties';
       case 'values': return this.menuKey ?? 'Values';
-      case 'wip': return 'WiP folder';
-      case 'tasks': return 'Open tasks';
       case 'linked': return 'Linked notes';
     }
   }

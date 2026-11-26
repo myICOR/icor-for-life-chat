@@ -1,8 +1,7 @@
 /* ONE ASSISTANT TURN IS ONE RENDERED MESSAGE NODE.
  *
- * The defect this closes shipped in 0.1.0 and was visible in every structured
- * reply: the answer appeared TWICE in the same conversation, once as raw
- * unstyled markdown and again below it as a rendered card.
+ * The defect this closes shipped in 0.1.0: the answer appeared TWICE in the
+ * same conversation, once as raw unstyled text and again below it rendered.
  *
  * The producer is a disagreement about what a block id means. `Normalizer.
  * partial()` keys a block by the API's message-wide `content_block` index, and
@@ -95,47 +94,26 @@ test('one assistant turn renders exactly one message node', async () => {
     assert.equal(
       census.messageNodes,
       1,
-      `one assistant turn produced ${census.messageNodes} message nodes ` +
-      `(${census.rawNodes} raw, ${census.structuredNodes} structured). ` +
+      `one assistant turn produced ${census.messageNodes} message nodes. ` +
       `Texts: ${JSON.stringify(census.texts)}`,
     );
-    // And the one node is the CARD, not the raw block: a census of one that
-    // kept the unstyled copy and dropped the card would be the same defect
-    // wearing the other shoe.
-    assert.equal(census.structuredNodes, 1, 'the surviving node must be the rendered card');
-    assert.equal(census.rawNodes, 0, 'no raw unstyled assistant block may remain');
+    assert.equal(census.renderedNodes, 1, 'the one node must be the rendered reply, not the raw stream');
   } finally {
     await chrome.close();
   }
 });
 
-/* ---------------------------------------- the reply is held until it is whole */
+/* ------------------------------------------- the reply streams where it ends */
 
-/* THE DEFECT: a structured reply streamed as its SOURCE. The card format's raw
- * markup - kickers, rule lines, row markers - appeared in the column section by
- * section as the model wrote it, and was replaced by the rendered card only
- * once the block finalised. The reader watched scaffolding get built and then
- * swapped for the building.
- *
- * The census is taken at the LAST moment before the final event, because that
- * is the only moment held and unheld look different: afterwards both have
- * rendered the card and any assertion would pass either way. */
-
-test('a structured reply shows nothing until it is finished', async () => {
+test('a reply streams into the one node it ends in', async () => {
   const chrome = await Chrome.launch();
   try {
     await chrome.open(pathToFileURL(resolve(here, 'dom/turn-fixture.html')).href);
     const census = await waitForCensus(chrome);
     const mid = census.mid;
-    assert.equal(mid.rawNodes, 0,
-      `the raw source of the card was on screen mid-stream: ${JSON.stringify(mid.columnText.slice(0, 160))}`);
-    assert.equal(mid.structuredNodes, 0,
-      'a card was rendered before the reply was whole, so it will be re-rendered');
-    // And the turn does not look dead while it is held. This is the trade the
-    // hold makes: it takes the streaming text away, so it has to put something
-    // in its place or a long reply reads as a stalled session.
-    assert.equal(mid.working, true,
-      'the reply was held back with NOTHING on screen saying the turn is alive');
+    assert.equal(mid.assistantNodes, 1,
+      `mid-stream the column held ${mid.assistantNodes} reply nodes`);
+    assert.ok(mid.columnText.length > 0, 'nothing was on screen while the reply streamed');
   } finally {
     await chrome.close();
   }
@@ -242,21 +220,17 @@ test('the conversation is selectable text; its controls are not', async () => {
   }
 });
 
-test('with the reasoning encrypted, the indicator opens onto the live draft', async () => {
+test('with the reasoning encrypted, the indicator offers nothing to open', async () => {
   const chrome = await Chrome.launch();
   try {
     await chrome.open(pathToFileURL(resolve(here, 'dom/turn-fixture.html')).href);
     const c = await waitForCensus(chrome);
-    /* The default model does not send the words. Driven against the real CLI:
-     * a thinking block arrives as {thinking: "", signature: "CAISqAIK..."}.
-     * A disclosure wired only to that opens onto nothing, forever, which is an
-     * affordance over an empty promise - the exact thing the tool rows already
-     * refuse by measurement. The fallback gives back what the hold took away. */
-    assert.equal(c.redacted.readable, true,
-      'the indicator refused to open when the provider encrypted its reasoning, which is ' +
-      'every turn on the default model');
-    assert.ok(c.redacted.body.includes('the draft so far'),
-      `the box opened onto something other than the held draft (got ${JSON.stringify(c.redacted.body)})`);
+    /* The default model does not send the words: a thinking block arrives as
+     * {thinking: "", signature: "..."}. A disclosure that opened onto that
+     * would be an affordance over an empty promise. */
+    assert.equal(c.redacted.readable, false,
+      'the indicator offered to open with no reasoning to show');
+    assert.equal(c.redacted.body, '', `the box carried text it had no reasoning for: ${JSON.stringify(c.redacted.body)}`);
   } finally {
     await chrome.close();
   }
@@ -300,42 +274,6 @@ function CSS_TEXT() {
 }
 
 
-/* --------------------------------------------- the decision body's door */
-
-test('a decision cut by the clamp opens to its full text', async () => {
-  const chrome = await Chrome.launch();
-  try {
-    await chrome.open(pathToFileURL(resolve(here, 'dom/turn-fixture.html')).href);
-    const c = await waitForCensus(chrome);
-    /* The user's report, verbatim shape: "more text explaining what the
-       decision is all about, but no way to unfold". Two cuts stacked - the
-       parser discarded past three lines, the clamp hid the rest. The parser
-       keeps everything now (gated headless); this is the door. */
-    assert.equal(c.decisions.longExpandable, true,
-      'a clamped decision body offers no way in');
-    assert.equal(c.decisions.longOpenAfterClick, true, 'clicking did not open it');
-    assert.equal(c.decisions.longFullHeight, true,
-      'it "opened" without getting taller, so the text is still unreachable');
-  } finally {
-    await chrome.close();
-  }
-});
-
-test('a decision that fits carries no affordance', async () => {
-  const chrome = await Chrome.launch();
-  try {
-    await chrome.open(pathToFileURL(resolve(here, 'dom/turn-fixture.html')).href);
-    const c = await waitForCensus(chrome);
-    // The tool rows' rule, applied here: an expand affordance on an element
-    // with nothing to reveal is an empty promise.
-    assert.equal(c.decisions.shortExpandable, false, 'a body that fits pretends to open');
-    assert.equal(c.decisions.shortRole, '', 'a non-control kept a button role');
-  } finally {
-    await chrome.close();
-  }
-});
-
-
 /* ------------------------------------- the subagent transcript, replayed */
 
 test('a replayed log with no ending still renders once settled', async () => {
@@ -343,13 +281,10 @@ test('a replayed log with no ending still renders once settled', async () => {
   try {
     await chrome.open(pathToFileURL(resolve(here, 'dom/turn-fixture.html')).href);
     const c = await waitForCensus(chrome);
-    /* Tom opened a finished subagent onto a blank pane. The stored log ends
-       with nothing - the lifecycle close is a bus signal, not an event - so
-       under held-back replies the deltas waited forever. The hold is correct
-       WHILE something can still arrive; a replayer that knows the run is over
-       settles it, and the words appear. */
-    assert.equal(c.subagentReplay.beforeSettle, 0,
-      'the hold leaked: text rendered before anything said the run was over');
+    /* Tom once opened a finished subagent onto a blank pane. The stored log
+       ends with nothing - the lifecycle close is a bus signal, not an event -
+       and the words must be there all the same. */
+    assert.equal(c.subagentReplay.beforeSettle, 1, 'the streamed words were not on screen');
     assert.equal(c.subagentReplay.afterSettle, 1,
       `settling rendered ${c.subagentReplay.afterSettle} blocks, so the replay is still blank`);
     assert.ok(c.subagentReplay.text.includes('four carry the stale tag'),
@@ -374,7 +309,7 @@ test('the turn is never silently busy: every stage names itself', async () => {
     assert.equal(c.busy.duringTool, '', 'two pulses at once: the running tool row already says busy');
     assert.equal(c.busy.afterResult, 'working', 'the result-to-next-move gap is silent again');
     assert.equal(c.busy.whileThinking, 'thinking');
-    assert.equal(c.busy.whileHeld, 'writing');
+    assert.equal(c.busy.whileWriting, '', 'visibly streaming text is its own signal');
     assert.equal(c.busy.afterEnd, '', 'the indicator outlived its turn');
     assert.equal(c.busy.plainStreamShows, '',
       'the indicator sat under visibly streaming text, repeating what the caret says');

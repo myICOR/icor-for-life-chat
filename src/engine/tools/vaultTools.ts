@@ -47,6 +47,13 @@ export interface VaultToolsContext {
   activeNote: () => NoteLike | null;
   /** The member's current text selection, or '' when nothing is selected. */
   selection: () => string;
+  /**
+   * A file in a hidden folder the Vault API cannot see (`.agents/skills/…`,
+   * `.icor-for-life/schema.json`), read through the adapter, or null when it
+   * is not there or not one `isReadableVaultFile` allows. Absent in tests
+   * that do not need it.
+   */
+  readHidden?: (path: string) => Promise<string | null>;
 }
 
 export interface ToolOutcome {
@@ -80,7 +87,11 @@ export async function runReadNote(ctx: VaultToolsContext, input: Record<string, 
   const path = normalizePath(input.path);
   if (!path) return fail('No path given.');
   const file = ctx.vault.getFileByPath(path);
-  if (!file) return fail(`No note at ${path}.`);
+  if (!file) {
+    const hidden = path.startsWith('.') && ctx.readHidden ? await ctx.readHidden(path) : null;
+    if (hidden === null) return fail(`No note at ${path}.`);
+    return { ok: true, detail: `Read ${path} (${hidden.length} characters)`, output: cap(hidden) };
+  }
   try {
     const text = await ctx.vault.read(file);
     return { ok: true, detail: `Read ${path} (${text.length} characters)`, output: cap(text) };

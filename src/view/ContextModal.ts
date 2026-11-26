@@ -14,8 +14,6 @@ const ICONS: Record<ContextRef['kind'], string> = {
   folder: 'folder',
   tag: 'tag',
   property: 'sliders-horizontal',
-  wip: 'briefcase',
-  tasks: 'list-checks',
   linked: 'link',
 };
 

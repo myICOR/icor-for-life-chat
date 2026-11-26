@@ -30,7 +30,7 @@ export {
   keyPresence, presentIn, otherBackend, keyStatusLine, missingKeyMessage, migratePlaintextKeys,
 } from './secrets';
 export type { SecretsBackend, SecretStore, KeyHosts, KeyPresence, PlaintextMigration } from './secrets';
-export { DEFAULT_ENV_FILE_PATH, ENV_KEY_FOR, cleanVaultPath, isOutsideVault, parseEnvFile, upsertEnvLine, readEnvKey, vaultPathRefusal, writeEnvKey } from './envFile';
+export { DEFAULT_ENV_FILE_PATH, LEGACY_ENV_FILE_PATH, ENV_KEY_FOR, envFileCandidates, envFileForWrite, cleanVaultPath, isOutsideVault, parseEnvFile, upsertEnvLine, readEnvKey, vaultPathRefusal, writeEnvKey } from './envFile';
 export type { EnvFileHost } from './envFile';
 
 export { testProviderKey } from './testKey';

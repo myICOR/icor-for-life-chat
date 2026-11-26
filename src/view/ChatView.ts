@@ -22,19 +22,14 @@ import { ChatStore } from '../state/store';
 import { StreamRenderer } from './stream/StreamRenderer';
 import type { Composer } from './composer/Composer';
 import type { Statusline } from './composer/Statusline';
-import type { DecisionBadge } from './composer/DecisionBadge';
 import { buildPane } from './pane';
-import { trackDecisions, openDecisions, mentionsCode } from '../structured/decisions';
-import type { SurfacedDecision, TranscriptEntry, TrackedDecision } from '../structured/decisions';
-import { repaintDecisions } from '../structured/render';
 import { renderChipTray } from './SubagentView';
 import { ArchiveWriter } from '../archive/writer';
-import { archiveRoot, factVisibility } from '../model/settings';
-import { SDK_VERSION, STRUCTURED_REPLY_PROMPT } from '../constants';
+import { FACT_VISIBILITY, archiveRoot } from '../model/settings';
+import { SDK_VERSION } from '../constants';
 import {
   listFolders, listProperties, listTags, readContext, resolveFolder, resolveProperty, resolveTag,
-  resolveWikilink, selectionRangeLabel, withContext,
-  hasTasksRoom, hasWipRoom, linkedFromNote, linksToNote, listOpenTasks, listWipFolders, resolveTasks, resolveWip, TASKS_OPEN,
+  resolveWikilink, selectionRangeLabel, withContext, linkedFromNote, linksToNote,
 } from './context';
 import type { NoteContext } from './context';
 import { baseOf, contextPickId, folderOf, previewText } from '../model/context';
@@ -48,22 +43,22 @@ import type { PinnedPrompt } from '../model/pins';
 import type { TrayChip } from './composer/Composer';
 import { cliModule, missingProviderMessage, providerFor } from '../provider/registry';
 import { launchModelFor } from '../model/catalogCache';
-import { SCRATCHPAD_FOLDER, captureFolders, captureFrontmatter, capturePath, uniquePath } from '../model/scratchpad';
-import { localDate } from '../wip/naming';
+import { captureFolders, captureFrontmatter, capturePath, dailyNotesFolderOf, scratchFolder, uniquePath } from '../model/scratchpad';
+import { localDate } from '../model/format';
 import { approvalEvent } from '../provider/questions';
 import { isProviderId } from '../provider/types';
 import type { Provider, ProviderId, ProviderSession, SessionHooks, SessionStore } from '../provider/types';
 import { authTruthLine, describeAuthTruth } from '../provider/types';
 import { splitExtraPath } from '../provider/extraPath';
 import {
-  BACKEND_LABEL, DEFAULT_MODEL_FOR, MODEL_PROVIDER_NAMES, WriteApprovalGate,
+  BACKEND_LABEL, DEFAULT_MODEL_FOR, MOBILE_TOOLS, MODEL_PROVIDER_NAMES, WriteApprovalGate,
   anthropicModelDisplayName, createModelProvider, effectiveBackend, loadOwnKeySettings, missingKeyMessage,
   readProviderKey, resolveTransports, runOwnKeyTurn, secretStorageOf,
 } from '../engine';
 import type { EngineChoice, EngineMessage, OwnKeyHooks, OwnKeySettings } from '../engine';
 import { renderEngineStatus } from './EngineStatus';
-import { readLifeSnapshot, snapshotContextBlock, snapshotStatusLine } from '../team/snapshot';
-import type { SnapshotRead } from '../team/snapshot';
+import { EMPTY_VAULT_CONTEXT, readVaultContext, vaultContextParts, vaultSystemPrompt } from '../vault/vaultContext';
+import type { VaultContext } from '../vault/vaultContext';
 import { vaultToolsContextFor } from './ownKeyVault';
 import type { ChatEvent, EffortName, PermissionModeName, TurnContext, TurnImage } from '../model/types';
 import { NO_FOLLOW_UPS, followUpSent, selfStartedTurn, turnAborted, turnEnded } from '../model/followups';
@@ -71,23 +66,24 @@ import type { FollowUpState } from '../model/followups';
 import { applyStatusBarClearance } from './statusbar';
 import type { Attachment } from './composer/Composer';
 import type IcorChatPlugin from '../main';
-import { avatarUrl, detectTeam, isTeamPath } from '../team/detect';
-import type { TeamRoster } from '../team/detect';
-import { agentShares } from '../team/usage';
-import type { AgentShare } from '../team/usage';
-import { renderTeamStrip } from './TeamStrip';
-import { setupSummary, setupTeam } from '../team/setup';
-import type { ActionTarget, EmptyTeamBlock } from './stream/StreamRenderer';
+import type { ActionTarget } from './stream/StreamRenderer';
 import { bindActions } from './actions';
 import type { ReplyAction, ReplyActionContext } from './actions';
-import { REMEMBER_PREFIX, newestOpenTask, recentSessionLogs } from '../team/memory';
-import { openTaskCount } from '../team/load';
 
 /** The newest slice of a stored conversation painted on resume. */
 const REPLAY_CAP = 400;
 /** How much of the session file the archive reads back. */
 const ARCHIVE_READ_CAP = 5000;
 /** The plain state a session shows while handed off to a terminal running Remote Control. */
+/** One line of the conversation as this tab heard it, in order. */
+interface TranscriptEntry {
+  role: 'user' | 'assistant';
+  text: string;
+  /** Monotonic position in the conversation. */
+  index: number;
+  at: number;
+}
+
 const REMOTE_CONTROL_BANNER_TEXT =
   'This chat is open in a terminal with Remote Control. Continue it in the Claude app on your phone, or bring it back here.';
 
@@ -117,11 +113,8 @@ export class ChatView extends ItemView {
   private lastMarkdownView: MarkdownView | null = null;
   private resumeSessionId: string | null = null;
   private tick: number | null = null;
-  private badge: DecisionBadge | null = null;
-  /* The decision lifecycle is DERIVED from these two lists on every render and
-   * stored nowhere: the transcript is the record, so there is no flag to drift. */
+  /** The conversation as this tab heard it: the archive and the pins read it. */
   private readonly transcript: TranscriptEntry[] = [];
-  private readonly surfaced: SurfacedDecision[] = [];
   /* THE PINS. The first prompt is pinned by the plugin, the rest by the user,
    * and the list lives on the leaf state so a reopened tab keeps it. `pinsEl`
    * is rung 0; `openPins` is which rows are unfolded, owned here so a repaint
@@ -198,20 +191,8 @@ export class ChatView extends ItemView {
   /* FOLLOW-UPS the CLI is holding. Pure bookkeeping in model/followups.ts,
      measured behaviour at the top of provider/claude/session.ts. */
   private followUps: FollowUpState = NO_FOLLOW_UPS;
-  /** WiP folders attached as context this conversation; the archive links back to them. */
-  private readonly wipTouched = new Set<string>();
   /** Repaints the status-bar clearance when the window or the bar changes size. */
   private clearanceObserver: ResizeObserver | null = null;
-  /* THE TEAM, as this vault has it. Null in a bare vault. Re-detected when
-   * anything under `06 AI Team/` changes, so a one-click setup or a hire shows
-   * up in the strip and the empty state without reopening the tab. */
-  private roster: TeamRoster | null = null;
-  private teamStripEl: HTMLElement | null = null;
-  /** The main thread's own activity, counted from this tab's event stream. */
-  private mainToolCalls = 0;
-  private mainTextBlocks = 0;
-  /** True once a turn has ended: the strip has nothing honest to say before. */
-  private turnEnded = false;
   /* THE FINISH BADGE on this leaf's tab header, set when a turn ends out of
    * sight and cleared when the leaf is looked at again. Held as the element
    * the class went on, so the clear never has to find it. */
@@ -240,26 +221,9 @@ export class ChatView extends ItemView {
   private ownKeyChain: Promise<void> = Promise.resolve();
   /** Rung above the pins; painted by `renderEngineStatus`. Null until `onOpen`. */
   private engineStatusEl: HTMLElement | null = null;
-  /** The life snapshot as this pane last read it (`src/team/snapshot.ts`).
-   * Starts as "missing" rather than null: an unread file and an absent one
-   * say the same true thing until the adapter has answered. */
-  private snapshot: SnapshotRead = { kind: 'missing' };
-  /** The snapshot block travels with the FIRST message of a CONVERSATION and
-   * no other. Sending it again every turn would bill the member for the same
-   * twenty lines on every send and tell the model nothing it had not read.
-   *
-   * Per conversation, not per pane: `resetConversation()` clears this flag
-   * along with everything else the tab remembers, so a pane that has already
-   * sent once and is then started over (a new conversation, or the `'fresh'`
-   * outcome of `rewindBefore`) arms the block again.
-   *
-   * DECIDED, for `resume()` of an archived thread: it does NOT suppress the
-   * block. A thread reopened days later carries the snapshot it was given on
-   * the day it started, and that snapshot has since gone stale; the current
-   * one is worth its twenty lines once. Resume does not set this flag, so the
-   * next send from the resuming pane prepends the fresh block, exactly as a
-   * new conversation would. */
-  private snapshotSent = false;
+  /** What the vault says about itself (AGENTS.md, skills, schema), read on
+   * open and again before the first own-key message of a conversation. */
+  private vaultContext: VaultContext = EMPTY_VAULT_CONTEXT;
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: IcorChatPlugin) {
     super(leaf);
@@ -313,14 +277,7 @@ export class ChatView extends ItemView {
    */
   private refreshEngineStatus(): void {
     if (!this.engineStatusEl) return;
-    /* The snapshot's state rides the SAME line rather than opening a second
-       one. It is the same kind of statement: a standing fact about what this
-       conversation is running on, not a measured number for the readout
-       strip. One line stays one line. */
-    renderEngineStatus(
-      this.engineStatusEl,
-      `${this.engineLine()} ${snapshotStatusLine(this.snapshot)}`,
-    );
+    renderEngineStatus(this.engineStatusEl, this.engineLine());
   }
 
   /** Which engine this conversation runs on, and for Claude Code the desktop auth truth. */
@@ -337,27 +294,13 @@ export class ChatView extends ItemView {
   }
 
   /**
-   * The life snapshot, re-read from the machine layer. Cheap (one small JSON
-   * file) and never cached across a send, because the session-start hook or
-   * the skill prerun may have refreshed the file since this tab opened.
+   * What the vault says about itself, re-read through the adapter (a hidden
+   * folder fires no vault event, so this is a read, never a subscription).
+   * The empty state shows what was found.
    */
-  private async refreshSnapshot(): Promise<void> {
-    this.snapshot = await readLifeSnapshot(this.app);
-    this.refreshEngineStatus();
-  }
-
-  /**
-   * The snapshot block ahead of the first message of the conversation, so the
-   * six everyday questions are answered from the file rather than from a
-   * folder walk or from memory. Prepended to the context preamble and
-   * therefore visible in the transcript, which is the rule the preamble
-   * already follows: what the model saw stays recoverable from the record.
-   */
-  private withSnapshot(prompt: string): string {
-    if (this.snapshotSent) return prompt;
-    this.snapshotSent = true;
-    const block = snapshotContextBlock(this.snapshot);
-    return block ? `${block}\n\n${prompt}` : prompt;
+  private async refreshVaultContext(): Promise<void> {
+    this.vaultContext = await readVaultContext(this.app.vault.adapter);
+    if (this.stream?.isEmpty) this.stream.renderEmptyVault(vaultContextParts(this.vaultContext));
   }
 
   override getViewType(): string {
@@ -365,7 +308,7 @@ export class ChatView extends ItemView {
   }
 
   override getDisplayText(): string {
-    return 'AI team';
+    return 'AI chat';
   }
 
   override getIcon(): string {
@@ -428,27 +371,16 @@ export class ChatView extends ItemView {
         onAddContext: (pick) => this.addPick(pick),
         onProviderChange: (provider) => this.changeProvider(provider),
       },
-      badge: {
-        navigate: (code, mention) => this.navigateToMention(code, mention),
-      },
-      /* Read on every render rather than captured once: a toggle flipped in
-         settings must reach the strip without reopening the tab. */
-      facts: () => factVisibility(this.plugin.settings),
+      facts: () => FACT_VISIBILITY,
     });
     this.scroller = pane.scroller;
     this.column = pane.column;
     this.pinsEl = pane.pins;
     this.chipTray = pane.chipTray;
-    this.teamStripEl = pane.teamStrip;
     this.composer = pane.composer;
-    this.badge = pane.badge;
     this.statusline = pane.statusline;
     this.engineStatusEl = pane.engineStatus;
     this.refreshEngineStatus();
-    /* Not awaited: the pane opens on the vault's own timing, and the status
-       line repaints itself when the adapter answers. A hidden folder fires no
-       vault event, so this is a read, never a subscription (GL-1008). */
-    void this.refreshSnapshot();
 
     this.stream = new StreamRenderer(this.app, this, this.column, '', {
       onApproval: (toolUseId, choice) => {
@@ -470,7 +402,6 @@ export class ChatView extends ItemView {
         }
         this.session?.answerQuestion?.(toolUseId, answer);
       },
-      structured: () => this.plugin.settings.structuredReplies,
       onOpenContextGroup: (label) => {
         const ref = this.sentGroups.get(label);
         if (ref) new ContextModal(this.app, ref).open();
@@ -478,24 +409,19 @@ export class ChatView extends ItemView {
       onTogglePin: (key, text) => this.togglePinFor(key, text),
       actionsFor: (target) => this.actionsFor(target),
       renderHost: {
-        home: this.plugin.homeDir,
-        insertCode: (code) => this.composer?.insert(`${code} `),
         openFile: (path) => void this.openPath(path),
-        revealFile: (path) => this.revealPath(path),
-        openUrl: (url) => window.open(url, '_blank'),
-        copy: (text) => void navigator.clipboard.writeText(text),
-        decisionState: (code) => this.decisionState(code),
       },
-      onDecisions: (decisions, blockId) => this.recordDecisions(decisions, blockId),
     });
     this.registerBuiltInActions();
     this.composer?.setProviders(this.plugin.detectedProviders());
     this.composer?.setModeDetail(this.runtime?.modeLabel?.(this.permissionMode) ?? null);
     if (!this.runtime) this.requireRuntime();
-    this.roster = detectTeam(this.app);
-    this.stream.renderEmptyState(this.emptyTeamBlock());
+    this.stream.renderEmptyState();
     this.renderPins();
-    void this.fillResumeRows().then(() => this.fillMemory());
+    /* Not awaited: the pane opens on the vault's own timing, and the empty
+       state names what the vault holds when the adapter answers. */
+    void this.refreshVaultContext();
+    void this.fillResumeRows();
     /* THE IN-PANE ROW FIRST, so it is the first child of `.aic-root` and the
        host actions' click handlers exist by the time either surface can
        reach them. `pane.root` (== `this.contentEl`) is emptied and rebuilt
@@ -503,8 +429,6 @@ export class ChatView extends ItemView {
        prepending here is stable for the pane's whole lifetime. */
     this.paneHeaderEl = pane.root.createDiv({ cls: 'aic-pane-header' });
     pane.root.prepend(this.paneHeaderEl);
-    iconButton(this.paneHeaderEl, 'bar-chart-3', 'Open AI team insights', () => void this.plugin.openInsights());
-    this.addAction('bar-chart-3', 'Open AI team insights', () => void this.plugin.openInsights());
     this.handoffAction = this.addAction('terminal', 'Continue in the terminal', () => void this.continueInTerminal());
     this.handoffActionInPane = iconButton(
       this.paneHeaderEl, 'terminal', 'Continue in the terminal', () => void this.continueInTerminal(),
@@ -569,9 +493,6 @@ export class ChatView extends ItemView {
       folders: () => listFolders(this.app),
       tags: () => listTags(this.app),
       properties: () => listProperties(this.app),
-      // The vault's other rooms, present only where the vault has them.
-      ...(hasWipRoom(this.app) ? { wip: () => listWipFolders(this.app) } : {}),
-      ...(hasTasksRoom(this.app) ? { tasks: () => listOpenTasks(this.app) } : {}),
       linked: () => this.linkedNoteFacts(),
     });
     /* The vault changes under an open chat: a note created while the pane is
@@ -581,9 +502,6 @@ export class ChatView extends ItemView {
     this.registerEvent(this.app.vault.on('create', () => this.loadMentionFiles()));
     this.registerEvent(this.app.vault.on('delete', () => this.loadMentionFiles()));
     this.registerEvent(this.app.vault.on('rename', () => this.loadMentionFiles()));
-    this.registerEvent(this.app.vault.on('create', (f) => this.onTeamChange(f.path)));
-    this.registerEvent(this.app.vault.on('delete', (f) => this.onTeamChange(f.path)));
-    this.registerEvent(this.app.vault.on('rename', (f, old) => { this.onTeamChange(f.path); this.onTeamChange(old); }));
     this.focusComposer();
   }
 
@@ -658,26 +576,38 @@ export class ChatView extends ItemView {
   }
 
   /**
-   * The reply as its own note. A quick capture in the Daily Scratchpad room
-   * when the vault has one: `YYYY/MM/YYYYMMDDHHmm.md` (` 2` on a same-minute
-   * collision), named and dated by the moment in the machine's own day, the
-   * capture shape the room takes (issue #1). Else the vault root, named by
-   * the reply's first words.
+   * The reply as its own note. A quick capture in the vault's Daily notes
+   * folder (Obsidian's Daily notes setting, else `00 Daily Notes` when the
+   * vault has it; see `scratchFolder`): `YYYY/MM/YYYYMMDDHHmm.md` (` 2` on a
+   * same-minute collision), named and dated by the moment in the machine's
+   * own day (issue #1). Else the vault root, named by the reply's first words.
    * Stamped with the session so the note can find its conversation.
    */
   async saveAsNote(text: string): Promise<void> {
     const now = Date.now();
     const exists = (path: string): boolean => this.app.vault.getAbstractFileByPath(path) !== null;
-    const room = this.app.vault.getAbstractFileByPath(SCRATCHPAD_FOLDER);
-    const inRoom = room !== null && !(room instanceof TFile);
-    // The year and the month folder may not exist yet; createFolder throws on one that does.
-    if (inRoom) for (const folder of captureFolders(now)) if (!exists(folder)) await this.app.vault.createFolder(folder);
-    const path = normalizePath(inRoom ? capturePath(now, exists) : uniquePath(slugOf(text) || 'reply', exists));
+    const isFolder = (path: string): boolean => {
+      const found = this.app.vault.getAbstractFileByPath(path);
+      return found !== null && !(found instanceof TFile);
+    };
+    const target = scratchFolder(await this.dailyNotesSetting(), isFolder);
+    // The folder, its year and its month may not exist yet; createFolder throws on one that does.
+    if (target) for (const folder of captureFolders(now, target)) if (!exists(folder)) await this.app.vault.createFolder(folder);
+    const path = normalizePath(target ? capturePath(now, exists, target) : uniquePath(slugOf(text) || 'reply', exists));
     const sessionId = this.store.state.sessionId ?? this.resumeSessionId ?? '';
     const frontmatter = captureFrontmatter(localDate(now), sessionId);
     const file = await this.app.vault.create(path, `${frontmatter}${text.trim()}\n`);
     await this.app.workspace.getLeaf(true).openFile(file);
     new Notice(`Saved as ${file.basename}.`);
+  }
+
+  /** Obsidian's Daily notes folder, read from its settings file; '' when there is none. */
+  private async dailyNotesSetting(): Promise<string> {
+    try {
+      return dailyNotesFolderOf(await this.app.vault.adapter.read(normalizePath(`${this.app.vault.configDir}/daily-notes.json`)));
+    } catch {
+      return '';
+    }
   }
 
   /* EDIT AND RESEND, which is a REWIND when the runtime can do one.
@@ -752,7 +682,8 @@ export class ChatView extends ItemView {
       return 'rewound';
     }
     this.resumeSessionId = null;
-    this.stream?.renderEmptyState(this.emptyTeamBlock());
+    this.stream?.renderEmptyState();
+    this.stream?.renderEmptyVault(vaultContextParts(this.vaultContext));
     return 'fresh';
   }
 
@@ -760,7 +691,6 @@ export class ChatView extends ItemView {
   private resetConversation(): void {
     this.stopTicking();
     this.transcript.length = 0;
-    this.surfaced.length = 0;
     this.blockIndex.clear();
     this.turnCounter = 0;
     this.events.length = 0;
@@ -771,22 +701,13 @@ export class ChatView extends ItemView {
     this.pins = [];
     this.openPins.clear();
     this.followUps = NO_FOLLOW_UPS;
-    this.mainToolCalls = 0;
-    this.mainTextBlocks = 0;
-    this.turnEnded = false;
     this.startedAt = Date.now();
     this.resumeSessionId = null;
-    /* The snapshot block is owed to the first message of a conversation, and
-       this is a new conversation. Left set, a reused pane and the `'fresh'`
-       outcome of `rewindBefore` would both start without it. */
-    this.snapshotSent = false;
     this.store.state = { ...this.store.state, sessionId: null, status: 'idle', usage: null, contextTokens: null, subagents: {}, turnStartedAt: null, resumed: false, sessionStartedAt: null };
     this.plugin.subagents.retireFinished();
     this.stream?.reset();
     this.renderPins();
-    this.refreshDecisions();
     this.renderChips();
-    this.paintTeamStrip();
     this.composer?.setStreaming(false);
   }
 
@@ -881,8 +802,8 @@ export class ChatView extends ItemView {
   async continueInTerminal(): Promise<void> {
     const reason = this.handoffReason();
     if (reason) {
-      new Notice(reason === 'Install ICOR for Life - Terminal'
-        ? 'Install and enable ICOR for Life - Terminal to continue a conversation in a terminal pane.'
+      new Notice(reason === 'Install ICOR Terminal'
+        ? 'Install and enable ICOR Terminal to continue a conversation in a terminal pane.'
         : reason);
       return;
     }
@@ -1126,111 +1047,6 @@ export class ChatView extends ItemView {
     await this.resume(sessionId);
   }
 
-  /* ----------------------------------------------------------- the memory */
-
-  /**
-   * The last sessions and the task count, under the resume rows. Read only
-   * when a team is detected: the logs live in its knowledge folder, and a
-   * bare vault has nothing to read back. Awaited after the resume rows so the
-   * block lands below them whichever read is slower.
-   */
-  private async fillMemory(): Promise<void> {
-    if (!this.roster || !this.stream || !this.stream.isEmpty) return;
-    const [logs, tasks] = await Promise.all([recentSessionLogs(this.app, 3), openTaskCount(this.app)]);
-    if (!this.stream || !this.stream.isEmpty) return;
-    this.stream.renderEmptyMemory({
-      logs,
-      tasks,
-      onOpenLog: (path) => void this.openPath(path),
-      onOpenTasks: () => {
-        const task = newestOpenTask(this.app);
-        if (task) void this.openPath(task.path);
-      },
-    });
-  }
-
-  /**
-   * Send the vault's own capture phrase as a turn in this conversation. The
-   * team files it (AGENTS.md's ambient-capture contract) and answers with the
-   * receipt; the plugin writes nothing itself. Public because the reply
-   * action and the command reach it from outside the view.
-   */
-  remember(text: string): void {
-    const body = text.trim();
-    if (!body) return;
-    void this.submit(`${REMEMBER_PREFIX}${body}`);
-  }
-
-  /* ------------------------------------------------------------- the team */
-
-  private onTeamChange(path: string): void {
-    if (!isTeamPath(path)) return;
-    this.roster = detectTeam(this.app);
-    this.stream?.renderEmptyTeam(this.emptyTeamBlock());
-    this.paintTeamStrip();
-  }
-
-  private emptyTeamBlock(): EmptyTeamBlock {
-    return {
-      detected: this.roster
-        ? { count: this.roster.agents.length, onInsights: () => void this.plugin.openInsights() }
-        : null,
-      onSetup: () => this.runSetup(),
-    };
-  }
-
-  private async runSetup(): Promise<void> {
-    try {
-      const report = await setupTeam(this.app);
-      new Notice(setupSummary(report));
-    } catch (error) {
-      new Notice(`Could not set up the team: ${error instanceof Error ? error.message : String(error)}`);
-    }
-    // Whatever happened, the block is redrawn from the vault as it is now.
-    this.roster = detectTeam(this.app);
-    this.stream?.renderEmptyTeam(this.emptyTeamBlock());
-  }
-
-  /** The strip, from what this tab has measured. Absent until a turn has ended. */
-  private paintTeamStrip(): void {
-    const el = this.teamStripEl;
-    if (!el) return;
-    const roster = this.roster;
-    if (!roster || !this.turnEnded || !this.plugin.settings.factTeamStrip) {
-      renderTeamStrip(el, [], null, () => '', () => undefined);
-      return;
-    }
-    const now = Date.now();
-    const shares = agentShares({
-      main: { toolCalls: this.mainToolCalls, textBlocks: this.mainTextBlocks },
-      subagents: this.plugin.subagents.all()
-        .filter((t) => t.sessionId === null || t.sessionId === this.store.state.sessionId)
-        .map((t) => ({
-          agentType: t.agentType,
-          toolCalls: t.toolCalls,
-          textBlocks: t.textBlocks,
-          durationMs: (t.endedAt ?? now) - t.startedAt,
-          status: t.status,
-        })),
-      roster: roster.agents.map((a) => ({ name: a.name, slug: a.slug })),
-    });
-    renderTeamStrip(el, shares, roster.agents, (path) => avatarUrl(this.app, path), (share) => this.openParticipant(share));
-  }
-
-  /** A roster agent opens its bio; anyone else opens their newest transcript. */
-  private openParticipant(share: AgentShare): void {
-    const agent = this.roster?.agents.find((a) => a.slug === share.slug);
-    if (agent?.bioPath) {
-      void this.openPath(agent.bioPath);
-      return;
-    }
-    const newest = this.plugin.subagents.all()
-      .filter((t) => t.agentType.toLowerCase() === share.slug)
-      .sort((a, b) => b.startedAt - a.startedAt)[0];
-    if (newest) void this.plugin.openSubagent(newest.agentId);
-    else if (agent) void this.openPath(agent.folder);
-  }
-
   /* OBSIDIAN'S STATUS BAR IS MEASURED, never assumed away.
    *
    * It is painted over the bottom-right of the window, so in a right sidebar it
@@ -1448,7 +1264,6 @@ export class ChatView extends ItemView {
     this.composer?.dispose();
     this.pinsEl?.empty();
     this.pinsEl = null;
-    this.badge?.destroy();
     this.session?.dispose();
     this.session = null;
     this.stream?.destroy();
@@ -1505,10 +1320,6 @@ export class ChatView extends ItemView {
     return [...this.sessionIds];
   }
 
-  /** The WiP folders the user attached this conversation, for the archive's link back. */
-  private wipAttached(): string[] {
-    return Array.from(this.wipTouched);
-  }
 
   /** A `+` menu pick, resolved into the notes it stands for. Public: a reply action pins a folder through it. */
   addPick(pick: ContextPick): void {
@@ -1540,7 +1351,6 @@ export class ChatView extends ItemView {
       return;
     }
     this.refs.push(ref);
-    if (ref.kind === 'wip') this.wipTouched.add(ref.id);
     this.refreshContext();
   }
 
@@ -1558,10 +1368,6 @@ export class ChatView extends ItemView {
         return { kind: 'tag', id, label: id, detail: '', paths: resolveTag(this.app, pick.tag) };
       case 'property':
         return { kind: 'property', id, label: id, detail: pick.key, paths: resolveProperty(this.app, pick.key, pick.value) };
-      case 'wip':
-        return { kind: 'wip', id, label: baseOf(pick.path), detail: pick.path, paths: resolveWip(this.app, pick.path) };
-      case 'tasks':
-        return { kind: 'tasks', id, label: 'Open tasks', detail: TASKS_OPEN, paths: resolveTasks(this.app) };
       case 'linked': {
         const name = baseOf(pick.path);
         const from = pick.direction === 'from';
@@ -1588,10 +1394,6 @@ export class ChatView extends ItemView {
         if (colon === -1) return ref;
         return { ...ref, paths: resolveProperty(this.app, ref.id.slice(0, colon), ref.id.slice(colon + 2)) };
       }
-      case 'wip':
-        return { ...ref, paths: resolveWip(this.app, ref.id) };
-      case 'tasks':
-        return { ...ref, paths: resolveTasks(this.app) };
       case 'linked': {
         const parts = linkedIdParts(ref.id);
         if (!parts) return ref;
@@ -1755,7 +1557,6 @@ export class ChatView extends ItemView {
     // transcript was written is not running now.
     this.plugin.subagents.orphanRunning();
     this.renderChips();
-    this.refreshDecisions();
     // The wells exist now, so the stored pins can light their controls.
     this.renderPins();
     this.stream?.sealReplay();
@@ -1832,7 +1633,7 @@ export class ChatView extends ItemView {
     ]);
   }
 
-  /* ---------------------------------------------------- decision lifecycle */
+  /* ------------------------------------------------------- block indexes */
 
   /** One monotonic position per rendered block, assigned once. */
   private indexForBlock(blockId: string): number {
@@ -1842,61 +1643,6 @@ export class ChatView extends ItemView {
     this.turnCounter += 1;
     this.blockIndex.set(blockId, index);
     return index;
-  }
-
-  private recordDecisions(decisions: Array<{ code: string; title: string; body: string; variant: 'decision' | 'blocked' | 'cleared' }>, blockId: string): void {
-    if (decisions.length === 0) return;
-    const index = this.indexForBlock(blockId);
-    const at = Date.now();
-    for (const decision of decisions) {
-      if (this.surfaced.some((s) => s.decision.code === decision.code)) continue;
-      this.surfaced.push({ decision, index, at });
-    }
-    this.refreshDecisions();
-  }
-
-  private tracked(): TrackedDecision[] {
-    return trackDecisions(this.surfaced, this.transcript);
-  }
-
-  private decisionState(code: string): TrackedDecision | null {
-    return this.tracked().find((d) => d.code === code) ?? null;
-  }
-
-  private refreshDecisions(): void {
-    const tracked = this.tracked();
-    this.badge?.render(openDecisions(tracked));
-    if (this.column) repaintDecisions(this.column);
-  }
-
-  /** Every element in the stream that names this code, in document order. */
-  private mentionElements(code: string): HTMLElement[] {
-    if (!this.column) return [];
-    const out: HTMLElement[] = [];
-    for (const el of Array.from(this.column.children)) {
-      // Obsidian's cross-window check: a plain instanceof fails against an
-      // element born in a popout window's realm.
-      if (!el.instanceOf(HTMLElement)) continue;
-      const userText = el.dataset.userText;
-      if (userText && mentionsCode(userText, code)) {
-        out.push(el);
-        continue;
-      }
-      for (const block of Array.from(el.querySelectorAll('.aic-decision'))) {
-        if (block.instanceOf(HTMLElement) && block.dataset.code === code) out.push(block);
-      }
-    }
-    return out;
-  }
-
-  private navigateToMention(code: string, mention: number): void {
-    const elements = this.mentionElements(code);
-    if (elements.length === 0) return;
-    const target = elements[Math.min(mention, elements.length - 1)];
-    if (!target) return;
-    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    target.addClass('is-flash');
-    window.setTimeout(() => target.removeClass('is-flash'), 600);
   }
 
   private async openPath(path: string): Promise<void> {
@@ -1931,6 +1677,7 @@ export class ChatView extends ItemView {
       provider: this.provider,
       cliPath: this.plugin.pathFor(this.provider),
       cwd: this.plugin.vaultPath,
+      configDir: this.app.vault.configDir,
       detect: {
         platform: Platform.isWin ? 'win32' as const : Platform.isMacOS ? 'darwin' as const : 'linux' as const,
         home: this.plugin.homeDir,
@@ -1942,7 +1689,6 @@ export class ChatView extends ItemView {
       effort: settings.effort,
       // This tab's mode, which the composer may already have changed.
       permissionMode: this.permissionMode,
-      structuredReplies: settings.structuredReplies,
       resumeSessionId: this.resumeSessionId,
       pluginVersion: this.plugin.manifest.version,
       // Desktop auth truth (chat-mobile-engine-spec-v1.md section 4). Read
@@ -1991,7 +1737,6 @@ export class ChatView extends ItemView {
     /* Read before any of the turn's bookkeeping, and only while the block is
        still owed: once it has travelled, a send never waits on the adapter
        again. Both engines pass through here, so neither needs its own read. */
-    if (!this.snapshotSent) await this.refreshSnapshot();
     if (this.engine === 'own-key') return this.submitOwnKey(text, attachments);
     const session = this.ensureSession();
     if (!session) {
@@ -2002,8 +1747,7 @@ export class ChatView extends ItemView {
     const index = this.turnCounter;
     this.turnCounter += 1;
     this.transcript.push({ role: 'user', text, index, at: Date.now() });
-    // The toolbar dismisses on the next send, and so do finished chips.
-    this.badge?.dismissToolbar();
+    // Finished subagent chips dismiss on the next send.
     this.plugin.subagents.retireFinished();
     this.renderChips();
     const images: TurnImage[] = attachments.map((a) => ({
@@ -2048,9 +1792,8 @@ export class ChatView extends ItemView {
        tray answers "what did I ask", and the open note was not asked. */
     this.pins = pinFirstPrompt(this.pins, { key: String(index), text, index });
     this.renderPins();
-    this.refreshDecisions();
     this.refreshContext();
-    session.send(this.withSnapshot(withContext(text, ctx, refs)), images);
+    session.send(withContext(text, ctx, refs), images);
     this.scrollToBottom();
   }
 
@@ -2075,7 +1818,6 @@ export class ChatView extends ItemView {
     const index = this.turnCounter;
     this.turnCounter += 1;
     this.transcript.push({ role: 'user', text, index, at: Date.now() });
-    this.badge?.dismissToolbar();
     const refs = [...this.refs.map((r) => this.refreshRef(r)), ...this.linkedRefs(text)];
     this.refs = [];
     const contexts: TurnContext[] = [];
@@ -2107,11 +1849,10 @@ export class ChatView extends ItemView {
     });
     this.pins = pinFirstPrompt(this.pins, { key: String(index), text, index });
     this.renderPins();
-    this.refreshDecisions();
     this.refreshContext();
     this.scrollToBottom();
 
-    const prompt = this.withSnapshot(withContext(text, ctx, refs));
+    const prompt = withContext(text, ctx, refs);
     this.ownKeyChain = this.ownKeyChain.then(() => this.runOwnKeyTurnNow(prompt));
     await this.ownKeyChain;
   }
@@ -2144,24 +1885,13 @@ export class ChatView extends ItemView {
     }
     const provider = createModelProvider(settings.provider, apiKey, resolveTransports());
     const model = settings.model.trim() || DEFAULT_MODEL_FOR[settings.provider];
-    /* The card-format instruction is the plugin's only system prompt on the
-     * Claude Code engine too (`docs/architecture.md`'s "one sentence" - see
-     * `constants.ts`'s STRUCTURED_REPLY_PROMPT); the own-key engine adds one
-     * short paragraph of its own naming the six vault tools and pointing at
-     * CLAUDE.md / AGENTS.md, because nothing else here ever tells this
-     * engine's model it is answering inside a vault at all - the Claude Code
-     * CLI gets that for free from its own cwd + settingSources, and the
-     * own-key engine has no CLI underneath it to get it from. Short on
-     * purpose: a member is billed per token for this line on every turn. */
-    const system = [
-      'You are answering inside an Obsidian vault, through the "own-key" engine of the ' +
-        'ICOR for Life - AI Chat plugin (a direct model API call, not Claude Code). You have six ' +
-        'tools scoped to this vault: read_note, search_notes, list_folder, current_note, ' +
-        'append_to_note, create_note. No shell, no filesystem outside the vault. The vault root ' +
-        'usually carries a CLAUDE.md and/or AGENTS.md describing how this vault is organised and ' +
-        'how its team works; read one with read_note when the question calls for that context.',
-      this.plugin.settings.structuredReplies ? STRUCTURED_REPLY_PROMPT : '',
-    ].filter(Boolean).join('\n\n');
+    /* THE VAULT'S OWN WORDS are this engine's whole system prompt, re-read
+     * before every turn so an edit to AGENTS.md or a skill counts at once.
+     * The Claude Code and Codex engines read the same files themselves from
+     * their working directory; this engine has no runtime underneath it, so
+     * the plugin hands them over (`src/vault/vaultContext.ts`). */
+    await this.refreshVaultContext();
+    const system = vaultSystemPrompt(this.vaultContext, MOBILE_TOOLS.map((tool) => tool.name));
     const controller = new AbortController();
     this.ownKeyAbort = controller;
     this.composer?.setStreaming(true);
@@ -2255,12 +1985,7 @@ export class ChatView extends ItemView {
   private onEvent(event: ChatEvent): void {
     this.events.push(event);
     this.routeSubagent(event);
-    if (event.stream === null && event.kind === 'tool-call') this.mainToolCalls += 1;
-    if (event.stream === null && event.kind === 'text-final' && event.text.trim()) this.mainTextBlocks += 1;
-    if (event.kind === 'turn-end') this.turnEnded = true;
-    if (event.kind === 'turn-end' || event.kind === 'subagent-end' || event.kind === 'aborted') this.paintTeamStrip();
-    // The assistant's own words enter the transcript BEFORE the block renders,
-    // so the decision recorded from that block lands on the same index.
+    // The assistant's own words enter the transcript before the block renders.
     if (event.kind === 'text-final' && event.stream === null && event.text.trim()) {
       this.transcript.push({
         role: 'assistant',
@@ -2437,7 +2162,7 @@ export class ChatView extends ItemView {
     if (this.transcript.length === 0 || this.sessionIds.length === 0) return;
     this.archiving = true;
     try {
-      const root = archiveRoot(this.plugin.settings, this.plugin.scaffoldDetected);
+      const root = archiveRoot(this.plugin.settings, this.plugin.legacyArchiveDetected);
       const writer = new ArchiveWriter(this.app, root);
       // Read the session back rather than archiving this tab's own slice: a
       // second tab on the same conversation sees only its own half, and an
@@ -2459,7 +2184,6 @@ export class ChatView extends ItemView {
         ...(this.continuedFrom ? { continuedFrom: this.continuedFrom } : {}),
         pluginVersion: this.plugin.manifest.version,
         sdkVersion: SDK_VERSION,
-        wipAttached: this.wipAttached(),
       });
       await writer.sweep(this.plugin.settings.archiveRetentionDays);
     } catch (error) {

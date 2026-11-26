@@ -17,11 +17,8 @@ import type { BoundAction } from '../actions';
 import { fallbackPurpose } from '../../provider/tooling';
 import type { ApprovalChoice, QuestionAnswer } from '../../provider/types';
 import { isAnswered, joinChoices } from '../../provider/questions';
-import { parseStructured, decisionsOf } from '../../structured/parser';
-import { remeasureDecisionBodies, remeasureRows, renderStructured } from '../../structured/render';
-import type { RenderHost } from '../../structured/render';
-import type { DecisionBlock } from '../../structured/model';
 import { Lightbox } from './Lightbox';
+import { neutraliseUntrustedMarkdown, stripRemoteMedia } from '../../safety/untrusted';
 
 const COLLAPSE_AFTER = 3;
 
@@ -32,9 +29,10 @@ const CONTEXT_ICON: Record<TurnContext['kind'], string> = {
   folder: 'folder',
   tag: 'tag',
   property: 'sliders-horizontal',
+  linked: 'link',
+  // Only on turns replayed from conversations stored before 0.17.0.
   wip: 'briefcase',
   tasks: 'list-checks',
-  linked: 'link',
 };
 
 interface ToolRow {
@@ -120,35 +118,12 @@ export interface StreamCallbacks {
   onOpenContextGroup?: (label: string) => void;
   /** The pin control on a user well was clicked. `key` is the well's transcript index. */
   onTogglePin?: (key: string, text: string) => void;
-  /** True while the opt-in structured-replies mode is on. */
-  structured: () => boolean;
   renderHost: RenderHost;
-  /** Every decision a finished assistant block surfaced, with its position. */
-  onDecisions: (decisions: DecisionBlock[], blockId: string) => void;
 }
 
-/* THE EMPTY STATE'S TEAM BLOCK, supplied by the view.
- *
- * `detected` carries the roster count and where "insights" goes; null means
- * the vault has no `06 AI Team/Agents` and the block offers to make one. The
- * renderer never decides which case it is in - it draws what it is handed,
- * and the view re-hands it after a setup so the block repaints without the
- * rest of the empty state being rebuilt. */
-export interface EmptyTeamBlock {
-  detected: { count: number; onInsights: () => void } | null;
-  /** Resolves when the team has been written; the view repaints afterwards. */
-  onSetup: () => Promise<void>;
-}
-
-/* THE EMPTY STATE'S MEMORY BLOCK, supplied by the view once it has read the
- * vault. The renderer draws rows it is handed and opens what it is told to;
- * which logs count and what a row says are decided in team/memoryParse.ts. */
-export interface EmptyMemoryBlock {
-  logs: Array<{ path: string; title: string; date: string | null; agent: string | null; insight: string | null }>;
-  /** Null when the vault has no Tasks folder; zero is a real count and is shown. */
-  tasks: { open: number; inProgress: number } | null;
-  onOpenLog: (path: string) => void;
-  onOpenTasks: () => void;
+/** What a rendered block can ask the view to do. */
+export interface RenderHost {
+  openFile: (path: string) => void;
 }
 
 export class StreamRenderer {
@@ -176,8 +151,6 @@ export class StreamRenderer {
   private readonly lightbox: Lightbox;
   /** This turn's reasoning, kept across hide/show so reopening restores it. */
   private thinkingText = '';
-  /** The block currently being withheld, so the box can show the live draft. */
-  private heldBlockId: string | null = null;
   /** Open/closed survives every repaint; a box that shut itself is unreadable. */
   private thinkingOpen = false;
 
@@ -191,115 +164,38 @@ export class StreamRenderer {
     // Any element in the right document will do; the Lightbox mounts on that
     // document's body so a popout window gets its own overlay.
     this.lightbox = new Lightbox(this.column);
-    if (typeof ResizeObserver !== 'undefined') {
-      this.resize = new ResizeObserver(() => {
-        // The decision bodies' clamp is width-bound, and it answers the resize.
-        // The tool rows no longer do: whether a row opens is a fact about its
-        // content, not about the pane's width.
-        remeasureDecisionBodies(this.column);
-        // A card row's cut is width-bound too: the label track and the value
-        // track share the pane, so a resize can cut or free either.
-        remeasureRows(this.column);
-      });
-      this.resize.observe(this.column);
-    }
   }
-
-  private resize: ResizeObserver | null = null;
 
   get isEmpty(): boolean {
     return this.blocks.size === 0 && this.tools.size === 0;
   }
 
   /** The empty state is typography: kicker, display line, one hand note. */
-  renderEmptyState(team?: EmptyTeamBlock): void {
+  renderEmptyState(): void {
     if (this.emptyEl) return;
     const wrap = this.column.createDiv({ cls: 'aic-empty' });
     const k = wrap.createDiv({ cls: 'aic-kicker aic-kicker-wide' });
-    k.createSpan({ text: 'AI TEAM' });
+    k.createSpan({ text: 'AI CHAT' });
     k.createSpan({ cls: 'aic-middot', text: '·' });
     k.createSpan({ text: 'ICOR FOR LIFE' });
     wrap.createDiv({ cls: 'aic-empty-display', text: 'What are we working on?' });
-    wrap.createDiv({ cls: 'aic-empty-hand', text: 'the team reads this vault' });
+    wrap.createDiv({ cls: 'aic-empty-hand', text: 'it reads this vault' });
     this.emptyEl = wrap;
-    if (team) this.renderEmptyTeam(team);
   }
 
   /**
-   * Repaint only the team block of the empty state. A setup that just wrote
-   * eight agents changes exactly one thing on this screen, and rebuilding the
-   * whole empty state would also throw away the resume rows under it.
+   * What the chat found in this vault to work from, one quiet line under the
+   * hand note: the vault's AGENTS.md, its skills and its schema. Absent parts
+   * are left out; a vault with none of them gets no line at all.
    */
-  renderEmptyTeam(team: EmptyTeamBlock): void {
+  renderEmptyVault(parts: readonly string[]): void {
     if (!this.emptyEl) return;
-    this.emptyEl.querySelector('.aic-empty-team')?.remove();
-    const block = this.emptyEl.createDiv({ cls: 'aic-empty-team' });
-    /* Placed right under the hand note, ahead of the resume rows: the resume
-       block is appended later by the view, and a query-then-insert keeps the
-       order stable whichever arrives first. */
+    this.emptyEl.querySelector('.aic-empty-vault')?.remove();
+    if (parts.length === 0) return;
+    const line = this.emptyEl.createDiv({ cls: 'aic-empty-vault' });
+    line.setText(parts.join(' · '));
     const sessions = this.emptyEl.querySelector('.aic-sessions');
-    if (sessions) this.emptyEl.insertBefore(block, sessions);
-    if (team.detected) {
-      const { count, onInsights } = team.detected;
-      block.createSpan({
-        cls: 'aic-empty-team-line',
-        text: `${count} agent${count === 1 ? '' : 's'} on the team`,
-      });
-      const open = block.createEl('button', { cls: 'aic-text-btn aic-insights-btn', type: 'button', text: 'Open AI team insights' });
-      open.setAttr('aria-label', 'Open AI team insights');
-      open.addEventListener('click', onInsights);
-      return;
-    }
-    block.addClass('is-setup');
-    block.createDiv({ cls: 'aic-kicker', text: 'AI TEAM' });
-    block.createDiv({ cls: 'aic-empty-team-line', text: 'No AI team in this vault yet.' });
-    const btn = block.createEl('button', { cls: 'aic-setup-btn', type: 'button', text: 'Set up the ICOR AI team' });
-    btn.setAttr('aria-label', 'Set up the ICOR AI team in this vault');
-    btn.addEventListener('click', () => {
-      /* Disabled for the duration, and never re-enabled here: the view repaints
-         this block when the setup resolves, in whichever state the vault is
-         then in. A failed setup leaves the vault without a team and the
-         repaint offers the button again. */
-      btn.disabled = true;
-      btn.setText('Setting up the team');
-      void team.onSetup();
-    });
-  }
-
-  /**
-   * The last sessions, read back. Drawn AFTER the resume rows so the order on
-   * screen is what a new sitting needs: who to resume, then what was
-   * concluded last time, then how much is open. A vault without session logs
-   * gets no block at all: an empty LAST SESSIONS kicker would be chrome
-   * announcing an absence.
-   */
-  renderEmptyMemory(memory: EmptyMemoryBlock): void {
-    if (!this.emptyEl) return;
-    this.emptyEl.querySelector('.aic-memory')?.remove();
-    if (memory.logs.length === 0 && memory.tasks === null) return;
-    const block = this.emptyEl.createDiv({ cls: 'aic-memory' });
-    if (memory.logs.length > 0) {
-      kicker(block, 'LAST SESSIONS');
-      for (const log of memory.logs) {
-        const row = block.createEl('button', { cls: 'aic-memory-row', type: 'button' });
-        const head = row.createDiv({ cls: 'aic-memory-head' });
-        if (log.date) {
-          head.createSpan({ cls: 'aic-memory-date', text: log.date });
-          head.createSpan({ cls: 'aic-middot', text: '·' });
-        }
-        head.createSpan({ cls: 'aic-memory-title', text: log.title });
-        if (log.insight) row.createDiv({ cls: 'aic-memory-insight', text: log.insight });
-        row.setAttr('aria-label', `Open the session log: ${log.title}`);
-        row.addEventListener('click', () => memory.onOpenLog(log.path));
-      }
-    }
-    if (memory.tasks) {
-      const { open, inProgress } = memory.tasks;
-      const line = block.createEl('button', { cls: 'aic-memory-tasks', type: 'button' });
-      line.setText(`${open} task${open === 1 ? '' : 's'} open · ${inProgress} in progress`);
-      line.setAttr('aria-label', `${open} tasks open, ${inProgress} in progress. Open the newest open task.`);
-      line.addEventListener('click', memory.onOpenTasks);
-    }
+    if (sessions) this.emptyEl.insertBefore(line, sessions);
   }
 
   /** At most three resume rows, and only when there is history to resume. */
@@ -380,13 +276,7 @@ export class StreamRenderer {
         break;
       case 'text-open':
         this.closeToolGroup();
-        /* HELD BACK, when the reply is going to be a card.
-           Creating the block here is what made the raw format visible: the
-           source streams in section by section as plain text and is only
-           replaced by the rendered card at the end. In hold mode the block is
-           not created until there is a finished document to put in it. */
-        if (this.holding()) this.showWorking('writing');
-        else this.ensureBlock(event.blockId, 'aic-assistant');
+        this.ensureBlock(event.blockId, 'aic-assistant');
         break;
       case 'text-delta':
         this.appendDelta(event.blockId, event.text);
@@ -510,13 +400,11 @@ export class StreamRenderer {
       case 'aborted':
         this.hideWorking();
         this.commitThinking();
-        this.flushHeld();
         this.settleRunningRows();
         break;
       case 'error':
         this.hideWorking();
         this.commitThinking();
-        this.flushHeld();
         this.settleRunningRows();
         this.appendError(event.message);
         break;
@@ -644,50 +532,14 @@ export class StreamRenderer {
     return el;
   }
 
-  /* True while a reply is being withheld until it is whole.
-   *
-   * Only in structured mode, and the reason is what the two modes stream. An
-   * ordinary reply streams as the prose it will end up being, so watching it
-   * arrive is the feature. A structured reply streams as its SOURCE - kickers,
-   * rules, row markup - which is assembled into a card at the end, so watching
-   * it arrive means watching the scaffolding get built and then swapped for the
-   * building. Holding costs the ordinary case nothing because the ordinary case
-   * never holds. */
-  private holding(): boolean {
-    return this.callbacks.structured();
-  }
-
   private appendDelta(blockId: string, text: string): void {
     const next = (this.blockText.get(blockId) ?? '') + text;
     this.blockText.set(blockId, next);
-    if (this.holding()) {
-      // Accumulate only. Nothing reaches the column until the block finalizes,
-      // and the working indicator is what says the turn is alive meanwhile.
-      this.heldBlockId = blockId;
-      this.showWorking('writing');
-      return;
-    }
     const el = this.ensureBlock(blockId, 'aic-assistant');
     el.setText(next);
     // Visible streaming text is its own liveness signal; the indicator would
     // just sit under it repeating what the caret already says.
     this.hideWorking();
-  }
-
-  /* THE ESCAPE HATCH, and it is the reason holding is safe.
-   *
-   * A turn that ends without a `text-final` - interrupted, errored, or a
-   * provider that simply stopped - would otherwise leave every withheld
-   * character in a Map with no element to put it in, and the user would see a
-   * turn that produced nothing. Whatever was held is rendered on the way out,
-   * as the text it is. Silence is never the failure mode of a feature whose
-   * whole job is to stay quiet for a while. */
-  private flushHeld(): void {
-    for (const [blockId, text] of this.blockText) {
-      if (this.blocks.has(blockId)) continue;
-      if (!text.trim()) continue;
-      void this.finalizeMarkdown(blockId, text);
-    }
   }
 
   private async finalizeMarkdown(blockId: string, text: string): Promise<void> {
@@ -705,25 +557,13 @@ export class StreamRenderer {
     this.blockText.set(blockId, source);
     el.empty();
 
-    if (this.callbacks.structured()) {
-      const doc = parseStructured(source);
-      if (doc.structured) {
-        // The block stops being prose entirely: the card is the container now.
-        el.removeClass('aic-assistant', 'is-rendered');
-        el.addClass('aic-structured');
-        el.dataset.blockId = blockId;
-        renderStructured(el, doc, this.callbacks.renderHost, (host, text) => {
-          void MarkdownRenderer.render(this.app, text, host, this.sourcePath, this.owner);
-        });
-        this.callbacks.onDecisions(decisionsOf(doc), blockId);
-        this.renderActionBar(el, { blockId, text: source, el, role: 'assistant', key: null });
-        return;
-      }
-      // Not in the format is the common case and must render as ordinary chat.
-    }
-
     el.addClass('is-rendered');
-    await MarkdownRenderer.render(this.app, source, el, this.sourcePath, this.owner);
+    /* What the model wrote is untrusted: a remote image would be fetched the
+       moment it renders, carrying whatever the URL holds. Neutralised before
+       the renderer sees it, stripped again after (src/safety/untrusted.ts).
+       The action bar copies the reply as it was written. */
+    await MarkdownRenderer.render(this.app, neutraliseUntrustedMarkdown(source), el, this.sourcePath, this.owner);
+    stripRemoteMedia(el);
     this.renderActionBar(el, { blockId, text: source, el, role: 'assistant', key: null });
   }
 
@@ -784,7 +624,6 @@ export class StreamRenderer {
     this.working = null;
     this.emptyEl = null;
     this.thinkingText = '';
-    this.heldBlockId = null;
     this.thinkingOpen = false;
   }
 
@@ -847,18 +686,9 @@ export class StreamRenderer {
    * is never sent the words. A disclosure wired only to that text would be a
    * control that opens onto nothing, every time, on the default model.
    *
-   * So the box falls back to the thing that IS available and is arguably the
-   * better answer to "what is it working on": the live draft. In structured
-   * mode the reply is being withheld, and the text being withheld is sitting
-   * right here in `blockText`. Opening the box gives back exactly what the
-   * hold took away, on demand instead of by force.
-   *
-   * Reasoning first when there is any, because when a model DOES expose it, it
-   * is the more informative of the two. */
+   * So the box opens only when there is reasoning to read. */
   private readableText(): string {
-    if (this.thinkingText.trim()) return this.thinkingText;
-    if (this.heldBlockId === null) return '';
-    return this.blockText.get(this.heldBlockId) ?? '';
+    return this.thinkingText.trim() ? this.thinkingText : '';
   }
 
   /** Repaint label, disclosure state and body. Cheap enough for every delta. */
@@ -880,7 +710,7 @@ export class StreamRenderer {
       w.head.setAttr('aria-expanded', this.thinkingOpen ? 'true' : 'false');
       w.head.setAttr(
         'aria-label',
-        this.thinkingOpen ? 'Hide what the team is working on' : 'Show what the team is working on',
+        this.thinkingOpen ? 'Hide the reasoning' : 'Show the reasoning',
       );
     } else {
       w.head.removeAttribute('role');
@@ -924,7 +754,6 @@ export class StreamRenderer {
   private commitThinking(): void {
     const text = this.thinkingText;
     this.thinkingText = '';
-    this.heldBlockId = null;
     this.thinkingOpen = false;
     if (!text.trim()) return;
     const details = this.column.createEl('details', { cls: 'aic-fold' });
@@ -1040,7 +869,7 @@ export class StreamRenderer {
 
   /* THE ROW SAYS WHAT WAS DONE, and opens onto how.
    *
-   * The closed row is an icon for the tool family and one sentence: "Read 04
+   * The closed row is an icon for the tool family and one sentence: "Read 02
    * Inner World/Contacts/People/bernd-martin.md", "Ran Open the demo note in
    * Obsidian". It used to be the tool's NAME in a kicker and the raw argument
    * beside it, which for Bash is the shell command - every row in a session
@@ -1264,7 +1093,7 @@ export class StreamRenderer {
    *
    * Holger Schwan, 2026-09-15: an AskUserQuestion arrived as a bare permission
    * card - "Claude wants to run AskUserQuestion", Allow once / Always allow /
-   * Deny - so the questions the team had actually asked were nowhere on
+   * Deny - so the questions the model had actually asked were nowhere on
    * screen and no answer could be given. The questions were in the request's
    * input the whole time and the seam threw them away; see
    * `provider/questions.ts` for what the wire really carries.
@@ -1283,7 +1112,7 @@ export class StreamRenderer {
     const live = typeof this.callbacks.onQuestion === 'function';
     const wrap = this.column.createDiv({ cls: 'aic-question' });
     wrap.setAttr('role', 'group');
-    wrap.setAttr('aria-label', 'The team is asking you a question');
+    wrap.setAttr('aria-label', 'A question for you');
     const chosen = new Map<string, Set<string>>();
     const free = new Map<string, string>();
     let submit: HTMLButtonElement | null = null;
@@ -1305,7 +1134,7 @@ export class StreamRenderer {
       return answer;
     };
     // Send stays inert until something has actually been answered: a card that
-    // can be sent empty is a control that promises the team an answer and
+    // can be sent empty is a control that promises the model an answer and
     // hands it nothing.
     const repaintSubmit = (): void => {
       if (submit) submit.disabled = !isAnswered(answerOf());
@@ -1470,16 +1299,12 @@ export class StreamRenderer {
    *
    * The subagent view replays a stored event log, and a stored log has no
    * turn-end: the bus records what was forwarded and the lifecycle arrives as
-   * a separate close signal, not as an event in the log. Under held-back
-   * structured replies that combination rendered NOTHING - every delta was
-   * accumulated waiting for a final or a turn-end that would never come, and
-   * the user opened a finished subagent onto a blank pane. This is the same
-   * escape hatch the live stream runs at turn-end, callable by a replayer
-   * that knows the run is over. */
+   * a separate close signal, not as an event in the log. This is the same
+   * close the live stream runs at turn-end, callable by a replayer that knows
+   * the run is over. */
   settleReplay(): void {
     this.hideWorking();
     this.commitThinking();
-    this.flushHeld();
     this.settleRunningRows();
     this.closeOpenQuestionCards();
   }
@@ -1488,7 +1313,7 @@ export class StreamRenderer {
    *
    * A follow-up sent mid-turn lands in the stream at once, because it was
    * sent, but the CLI will not read it until the running turn ends. Without a
-   * mark the well reads as a message the team is answering right now, which is
+   * mark the well reads as a message the model is answering right now, which is
    * exactly the misreading the old Stop-on-Enter behaviour came from. The mark
    * is a kicker in the well's corner and it leaves when the running turn ends. */
   markLastWellQueued(): void {
@@ -1511,7 +1336,7 @@ export class StreamRenderer {
     }
   }
 
-  /** A quiet line of plugin-voice narration. Never styled as the team talking. */
+  /** A quiet line of plugin-voice narration. Never styled as the assistant talking. */
   note(text: string): void {
     this.clearEmptyState();
     this.column.createDiv({ cls: 'aic-note', text });
@@ -1578,15 +1403,12 @@ export class StreamRenderer {
   destroy(): void {
     this.wells.clear();
     this.lightbox.close();
-    this.resize?.disconnect();
-    this.resize = null;
     this.blocks.clear();
     this.blockText.clear();
     this.tools.clear();
     this.group = null;
     this.working = null;
     this.thinkingText = '';
-    this.heldBlockId = null;
   }
 }
 

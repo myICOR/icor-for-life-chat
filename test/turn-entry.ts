@@ -23,16 +23,13 @@ declare global {
   interface Window {
     aicTurn?: {
       messageNodes: number;
-      rawNodes: number;
-      structuredNodes: number;
+      renderedNodes: number;
       texts: string[];
       /* The state of the column at the moment the LAST text delta had arrived
-         and the final event had not. This is the whole of the hold-back
-         contract: before the fix, the raw source of the card was on screen
-         here, section by section, and was then swapped for the rendered card. */
+         and the final event had not: the reply streams into the one node it
+         will end in. */
       mid: {
-        rawNodes: number;
-        structuredNodes: number;
+        assistantNodes: number;
         columnText: string;
         working: boolean;
         workingLabel: string;
@@ -53,8 +50,7 @@ function snapshot(column: HTMLElement): Window['aicTurn'] extends undefined ? ne
   const working = column.querySelector('.aic-thinking');
   const body = column.querySelector('.aic-thinking-body');
   return {
-    rawNodes: column.querySelectorAll(':scope > .aic-assistant').length,
-    structuredNodes: column.querySelectorAll(':scope > .aic-structured').length,
+    assistantNodes: column.querySelectorAll(':scope > .aic-assistant').length,
     columnText: (column.textContent ?? '').trim(),
     working: !!working,
     workingLabel: (column.querySelector('.aic-thinking-label')?.textContent ?? '').trim(),
@@ -73,7 +69,6 @@ async function mount(): Promise<void> {
       onSubmit: () => {}, onStop: () => {}, onModeChange: () => {},
       onModelChange: () => {}, onEffortChange: () => {},
     },
-    badge: { navigate: () => {} },
   });
 
   /* Every path the context pill asked to open. The pill named a note and did
@@ -86,14 +81,7 @@ async function mount(): Promise<void> {
     '',
     {
       onApproval: () => {},
-      // Structured replies are the shipped default, and the format is the whole
-      // point of the product: the census runs in the mode users are actually in.
-      structured: () => true,
-      renderHost: {
-        home: '/', insertCode: () => {}, openFile: (path: string) => { opened.push(path); }, revealFile: () => {},
-        openUrl: () => {}, copy: () => {}, decisionState: () => null,
-      },
-      onDecisions: () => {},
+      renderHost: { openFile: (path: string) => { opened.push(path); } },
     },
   );
   /* THE USER'S OWN TURN, with a picture on it. A 1x1 PNG is enough: the census
@@ -102,16 +90,15 @@ async function mount(): Promise<void> {
   const PNG_1X1 =
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
   stream.appendUserWell(
-    'Give me a structured reply about yourself.',
+    'Tell me about yourself.',
     '2026-08-31',
     [{ name: 'pasted.png', mediaType: 'image/png', data: PNG_1X1 }],
     '00 Daily Scratchpad/2026/08/2026-08-31.md',
   );
 
   const normalizer = new Normalizer();
-  /* The census is taken at the LAST moment before the final event, which is the
-     only moment the hold-back is observable: after it, held and unheld look
-     identical because both have rendered the card. */
+  /* The census is taken at the LAST moment before the final event, so it
+     can say the streamed text is already in the node the final lands on. */
   const events = [];
   for (const frame of RECORDED as unknown[]) {
     for (const event of normalizer.normalize(frame)) {
@@ -129,7 +116,7 @@ async function mount(): Promise<void> {
   await new Promise((r) => setTimeout(r, 0));
 
   const raw = Array.from(pane.column.querySelectorAll(':scope > .aic-assistant'));
-  const structured = Array.from(pane.column.querySelectorAll(':scope > .aic-structured'));
+  const rendered = raw.filter((el) => el.classList.contains('is-rendered'));
 
   /* THE DISCLOSURE ACTUALLY OPENS. Re-shown deliberately: the indicator is
      removed when the turn ends, so this drives it the way a user does mid-turn -
@@ -173,18 +160,13 @@ async function mount(): Promise<void> {
   /* THE CONVERSATION IS SELECTABLE. Obsidian's chrome is not, and a custom
      view inherits that: the whole transcript behaved like a picture of one. */
   /* A SECOND, ISOLATED RENDERER for the redacted-reasoning case. Isolated
-     because the recorded turn may or may not carry reasoning text, and a gate
-     that only passes when the recording happens to be empty is a gate that
-     will go green for the wrong reason one day. Here there is provably none. */
+     because the recorded turn may or may not carry reasoning text. Here there
+     is provably none, so the indicator must not offer to open onto nothing. */
   const redactedHost = document.body.createDiv({ cls: 'aic-root' });
   const redactedCol = redactedHost.createDiv({ cls: 'aic-column' });
   const redactedStream = new StreamRenderer({} as App, new Component() as never, redactedCol, '', {
-    onApproval: () => {}, structured: () => true,
-    renderHost: {
-      home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
-      openUrl: () => {}, copy: () => {}, decisionState: () => null,
-    },
-    onDecisions: () => {},
+    onApproval: () => {},
+    renderHost: { openFile: () => {} },
   });
   // Exactly what the provider sends: a thinking block that carries no words.
   redactedStream.apply({ kind: 'thinking-open', blockId: 'r0', stream: null });
@@ -197,41 +179,6 @@ async function mount(): Promise<void> {
     body: (redactedCol.querySelector('.aic-thinking-body')?.textContent ?? '').trim(),
   };
 
-  /* THE DECISION DOOR, driven like a user drives it. One long body (cut by
-     the three-line clamp) and one short (fits). The affordance is measured on
-     a frame, so the census waits a frame before reading. */
-  const decHost = document.body.createDiv({ cls: 'aic-root aic-decision-probe' });
-  decHost.setCssStyles({ width: '420px' });
-  const decCol = decHost.createDiv({ cls: 'aic-column' });
-  const decStream = new StreamRenderer({} as App, new Component() as never, decCol, '', {
-    onApproval: () => {}, structured: () => true,
-    renderHost: {
-      home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
-      openUrl: () => {}, copy: () => {}, decisionState: () => null,
-    },
-    onDecisions: () => {},
-  });
-  const LONG = Array.from({ length: 12 }, (_, i) => `sentence ${i} of a body the clamp will certainly cut at this width`).join(' ');
-  decStream.apply({ kind: 'text-open', blockId: 'd1', stream: null });
-  decStream.apply({
-    kind: 'text-final', blockId: 'd1', stream: null,
-    text: ['DECISION m3x7p · Four more invoices carry the same stale tag', LONG, '', 'DECISION q9r2s · short one', 'fits on one line'].join('\n'),
-  });
-  await new Promise((r) => window.requestAnimationFrame(() => r(undefined)));
-  await new Promise((r) => window.requestAnimationFrame(() => r(undefined)));
-  const bodies = Array.from(decCol.querySelectorAll('.aic-decision-body')) as HTMLElement[];
-  const longBody = bodies[0] ?? null;
-  const shortBody = bodies[1] ?? null;
-  const clampedHeight = longBody?.clientHeight ?? 0;
-  longBody?.click();
-  const decisions = {
-    longExpandable: !!longBody?.classList.contains('is-expandable'),
-    longOpenAfterClick: !!longBody?.classList.contains('is-expanded'),
-    longFullHeight: (longBody?.clientHeight ?? 0) > clampedHeight,
-    shortExpandable: !!shortBody?.classList.contains('is-expandable'),
-    shortRole: shortBody?.getAttribute('role') ?? '',
-  };
-
   /* THE BUSY LADDER, walked step by step. The defect: between send and the
      model's first signal - and again between a tool's result and the model's
      next move - the pane held perfectly still, and fifteen still seconds read
@@ -240,12 +187,8 @@ async function mount(): Promise<void> {
   const busyHost = document.body.createDiv({ cls: 'aic-root aic-busy-probe' });
   const busyCol = busyHost.createDiv({ cls: 'aic-column' });
   const busyStream = new StreamRenderer({} as App, new Component() as never, busyCol, '', {
-    onApproval: () => {}, structured: () => true,
-    renderHost: {
-      home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
-      openUrl: () => {}, copy: () => {}, decisionState: () => null,
-    },
-    onDecisions: () => {},
+    onApproval: () => {},
+    renderHost: { openFile: () => {} },
   });
   const busyLabel = (): string =>
     (busyCol.querySelector('.aic-thinking-label')?.textContent ?? '').trim();
@@ -258,8 +201,8 @@ async function mount(): Promise<void> {
   busyStream.apply({ kind: 'thinking-open', blockId: 'bth', stream: null });
   const whileThinking = busyLabel();
   busyStream.apply({ kind: 'text-open', blockId: 'btx', stream: null });
-  busyStream.apply({ kind: 'text-delta', blockId: 'btx', text: 'LARRY · x · COMPLETE', stream: null });
-  const whileHeld = busyLabel();
+  busyStream.apply({ kind: 'text-delta', blockId: 'btx', text: 'the answer so far', stream: null });
+  const whileWriting = busyLabel();
   busyStream.apply({
     kind: 'turn-end', stream: null, durationMs: 1, isError: false, text: '',
     usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, totalTokens: 2, costUsd: 0 },
@@ -271,45 +214,35 @@ async function mount(): Promise<void> {
   const plainHost = document.body.createDiv({ cls: 'aic-root' });
   const plainCol = plainHost.createDiv({ cls: 'aic-column' });
   const plainStream = new StreamRenderer({} as App, new Component() as never, plainCol, '', {
-    onApproval: () => {}, structured: () => false,
-    renderHost: {
-      home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
-      openUrl: () => {}, copy: () => {}, decisionState: () => null,
-    },
-    onDecisions: () => {},
+    onApproval: () => {},
+    renderHost: { openFile: () => {} },
   });
   plainStream.apply({ kind: 'user-turn', text: 'go', contextNote: null, contextPath: null, images: [], stream: null });
   plainStream.apply({ kind: 'text-open', blockId: 'p1', stream: null });
   plainStream.apply({ kind: 'text-delta', blockId: 'p1', text: 'visible words', stream: null });
   const busy = {
-    afterSend, duringTool, afterResult, whileThinking, whileHeld, afterEnd,
+    afterSend, duringTool, afterResult, whileThinking, whileWriting, afterEnd,
     plainStreamShows: (plainCol.querySelector('.aic-thinking-label')?.textContent ?? '').trim(),
   };
 
   /* THE SUBAGENT REPLAY SHAPE. A stored log ends with nothing: the lifecycle
-     close is a bus signal, not an event in the log. Under held-back structured
-     replies that meant every delta waited forever for a final that never comes,
-     and a finished subagent opened onto a blank pane. `settleReplay` is the
-     renderer's answer, and this drives it with exactly that shape. */
+     close is a bus signal, not an event in the log. `settleReplay` closes the
+     run, and the words must be on screen before and after it. */
   const subHost = document.body.createDiv({ cls: 'aic-root aic-subreplay-probe' });
   const subCol = subHost.createDiv({ cls: 'aic-column' });
   const subStream = new StreamRenderer({} as App, new Component() as never, subCol, '', {
-    onApproval: () => {}, structured: () => true,
-    renderHost: {
-      home: '/', insertCode: () => {}, openFile: () => {}, revealFile: () => {},
-      openUrl: () => {}, copy: () => {}, decisionState: () => null,
-    },
-    onDecisions: () => {},
+    onApproval: () => {},
+    renderHost: { openFile: () => {} },
   });
   subStream.apply({ kind: 'text-open', blockId: 's1', stream: null });
   subStream.apply({ kind: 'text-delta', blockId: 's1', text: 'Counted 281 notes; ', stream: null });
   subStream.apply({ kind: 'text-delta', blockId: 's1', text: 'four carry the stale tag.', stream: null });
-  const beforeSettle = subCol.querySelectorAll(':scope > .aic-assistant, :scope > .aic-structured').length;
+  const beforeSettle = subCol.querySelectorAll(':scope > .aic-assistant').length;
   subStream.settleReplay();
   await new Promise((r) => setTimeout(r, 0));
   const subagentReplay = {
     beforeSettle,
-    afterSettle: subCol.querySelectorAll(':scope > .aic-assistant, :scope > .aic-structured').length,
+    afterSettle: subCol.querySelectorAll(':scope > .aic-assistant').length,
     text: (subCol.textContent ?? '').trim().slice(0, 80),
   };
 
@@ -320,10 +253,9 @@ async function mount(): Promise<void> {
     toolRow: getComputedStyle(toolRow as HTMLElement).userSelect,
   };
   window.aicTurn = {
-    messageNodes: raw.length + structured.length,
-    rawNodes: raw.length,
-    structuredNodes: structured.length,
-    texts: [...raw, ...structured].map((el) => (el.textContent ?? '').slice(0, 80)),
+    messageNodes: raw.length,
+    renderedNodes: rendered.length,
+    texts: raw.map((el) => (el.textContent ?? '').slice(0, 80)),
     mid,
     opened: thinkingOpened,
     user: {
@@ -338,7 +270,6 @@ async function mount(): Promise<void> {
     lightbox,
     select,
     redacted,
-    decisions,
     subagentReplay,
     busy,
   };

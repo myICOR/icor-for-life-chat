@@ -1,0 +1,749 @@
+{
+  "$comment": "The structure of an ICOR for Life folder: every type of note, where it lives, its fields, the values a field allows and which types its links point to. Plugins, scripts, skills and any AI read this one file. Change the structure here first.",
+  "schema": 1,
+  "common": [
+    "type",
+    "created",
+    "tags"
+  ],
+  "rooms": {
+    "00 Daily Scratchpad": "your raw writing, one note a day; never edited by an AI",
+    "01 Inbox": "scans (Scanner Inbox/) and anything not yet sorted",
+    "02 Planner": "tasks synced from your task apps by the Planner plugin",
+    "03 WiP": "work in progress, dated, in Workstreams/, Projects/ or Operations/; finished work goes to _archive/",
+    "04 Inner World": "what you know and who you know: Journal, Notes, Contacts, My Life",
+    "05 Assets": "files only (Images/, Audio/, Documents/), embedded from notes",
+    "06 Outer World": "what others made: one source note per book, article, video, podcast, post or paper, with your highlights",
+    "07 Databases": "data too large or row-shaped for notes; sources only"
+  },
+  "my_life": [
+    "key-element",
+    "goal",
+    "project",
+    "topic",
+    "habit"
+  ],
+  "worlds": {
+    "inner": "04 Inner World",
+    "outer": "06 Outer World"
+  },
+  "types": {
+    "capture": {
+      "label": "Capture",
+      "description": "Older clips from the Outer World inbox, before sources had their own room.",
+      "folder": "01 Inbox/Outer World",
+      "template": null,
+      "icon": "inbox",
+      "owner": "you",
+      "required": [
+        "captured",
+        "source_url"
+      ],
+      "fields": [
+        "author",
+        "captured",
+        "created",
+        "my_thought",
+        "processed",
+        "processed_into",
+        "processed_summary",
+        "published",
+        "source_url",
+        "tags"
+      ],
+      "values": {},
+      "links": {}
+    },
+    "company": {
+      "label": "Company",
+      "description": "One company or organisation.",
+      "folder": "04 Inner World/Contacts/Companies",
+      "template": "company.md",
+      "icon": "building-2",
+      "owner": "you",
+      "required": [
+        "name"
+      ],
+      "fields": [
+        "created",
+        "industry",
+        "name",
+        "people",
+        "tags",
+        "website"
+      ],
+      "values": {},
+      "links": {
+        "people": {
+          "to": "person",
+          "many": true
+        }
+      }
+    },
+    "document": {
+      "label": "Document",
+      "description": "A note with a file attached (a contract, an invoice, an ID); the file lives in 05 Assets/Documents.",
+      "folder": "04 Inner World/Notes",
+      "template": "document.md",
+      "icon": "file-badge",
+      "owner": "you",
+      "required": [
+        "doc_type",
+        "source_file"
+      ],
+      "fields": [
+        "amount",
+        "companies",
+        "created",
+        "currency",
+        "doc_type",
+        "expiry_date",
+        "issued_on",
+        "key_elements",
+        "people",
+        "preview_image",
+        "processed",
+        "processed_into",
+        "processed_summary",
+        "projects",
+        "source_file",
+        "tags",
+        "topics"
+      ],
+      "values": {
+        "doc_type": [
+          "contract",
+          "invoice",
+          "receipt",
+          "id",
+          "certificate",
+          "statement",
+          "letter",
+          "manual",
+          "other"
+        ]
+      },
+      "links": {
+        "projects": {
+          "to": "project",
+          "many": true
+        },
+        "key_elements": {
+          "to": "key-element",
+          "many": true
+        },
+        "topics": {
+          "to": "topic",
+          "many": true
+        },
+        "people": {
+          "to": "person",
+          "many": true
+        },
+        "companies": {
+          "to": "company",
+          "many": true
+        }
+      }
+    },
+    "goal": {
+      "label": "Goal",
+      "description": "An outcome you want, in one of your Key Elements.",
+      "folder": "04 Inner World/My Life/Goals",
+      "template": "goal.md",
+      "icon": "target",
+      "owner": "you",
+      "required": [
+        "status"
+      ],
+      "fields": [
+        "created",
+        "key_elements",
+        "status",
+        "tags",
+        "target_date",
+        "workstreams"
+      ],
+      "values": {
+        "status": [
+          "not-achieved",
+          "achieved"
+        ]
+      },
+      "links": {
+        "key_elements": {
+          "to": "key-element",
+          "many": true
+        }
+      }
+    },
+    "habit": {
+      "label": "Habit",
+      "description": "A habit you keep.",
+      "folder": "04 Inner World/My Life/Habits",
+      "template": "habit.md",
+      "icon": "repeat",
+      "owner": "you",
+      "required": [],
+      "fields": [
+        "created",
+        "name",
+        "planner_habit",
+        "status",
+        "tags"
+      ],
+      "values": {
+        "status": [
+          "active",
+          "paused",
+          "abandoned"
+        ]
+      },
+      "links": {
+        "planner_habit": {
+          "to": "planner-habit",
+          "many": false
+        }
+      }
+    },
+    "icor-reflection": {
+      "label": "Icor reflection",
+      "description": "",
+      "folder": null,
+      "template": null,
+      "icon": null,
+      "owner": "plugin",
+      "required": [
+        "category",
+        "myicor_id",
+        "reflected_at"
+      ],
+      "fields": [
+        "category",
+        "created",
+        "myicor_id",
+        "pinned",
+        "quality_score",
+        "reflected_at",
+        "synced_at",
+        "tags"
+      ],
+      "values": {},
+      "links": {}
+    },
+    "journal": {
+      "label": "Journal",
+      "description": "Something that happened or was thought, written on purpose, with a date: interaction, note, thought or milestone.",
+      "folder": "04 Inner World/Journal",
+      "template": "journal.md",
+      "icon": "book-heart",
+      "owner": "you",
+      "required": [
+        "date",
+        "journal_type"
+      ],
+      "fields": [
+        "created",
+        "date",
+        "format",
+        "journal_type",
+        "key_element",
+        "linked_people",
+        "linked_projects",
+        "linked_topics",
+        "mood",
+        "source",
+        "tags"
+      ],
+      "values": {
+        "journal_type": [
+          "interaction",
+          "note",
+          "thought",
+          "milestone"
+        ],
+        "format": [
+          "text",
+          "voice",
+          "photo",
+          "meeting-notes",
+          "other"
+        ]
+      },
+      "links": {
+        "linked_people": {
+          "to": "person",
+          "many": true
+        },
+        "linked_topics": {
+          "to": "topic",
+          "many": true
+        },
+        "linked_projects": {
+          "to": "project",
+          "many": true
+        },
+        "key_element": {
+          "to": "key-element",
+          "many": false
+        }
+      },
+      "path": "YYYY/MM/YYYY-MM-DD_<slug>.md",
+      "sections": [
+        "## Original Text",
+        "## Expansion"
+      ]
+    },
+    "key-element": {
+      "label": "Key Element",
+      "description": "A big area of your life (Health, Family, Work, Finances).",
+      "folder": "04 Inner World/My Life/Key Elements",
+      "template": "key-element.md",
+      "icon": "gem",
+      "owner": "you",
+      "required": [],
+      "fields": [
+        "created",
+        "goals",
+        "people",
+        "tags"
+      ],
+      "values": {},
+      "links": {
+        "people": {
+          "to": "person",
+          "many": true
+        },
+        "goals": {
+          "to": "goal",
+          "many": true
+        }
+      }
+    },
+    "note": {
+      "label": "Note",
+      "description": "Your knowledge about one subject: an idea, an outline, meeting notes, a draft. What someone else made is a source in 06 Outer World.",
+      "folder": "04 Inner World/Notes",
+      "template": "note.md",
+      "icon": "file-text",
+      "owner": "you",
+      "required": [
+        "note_type"
+      ],
+      "fields": [
+        "ai_summary",
+        "audio_retained",
+        "companies",
+        "created",
+        "idea_status",
+        "key_elements",
+        "note_type",
+        "people",
+        "projects",
+        "source_url",
+        "tags",
+        "topics",
+        "transcribed_by",
+        "transcript"
+      ],
+      "values": {
+        "note_type": [
+          "idea",
+          "outline",
+          "meeting",
+          "draft",
+          "other"
+        ],
+        "idea_status": [
+          "open",
+          "promoted",
+          "parked",
+          "dropped"
+        ]
+      },
+      "links": {
+        "projects": {
+          "to": "project",
+          "many": true
+        },
+        "key_elements": {
+          "to": "key-element",
+          "many": true
+        },
+        "topics": {
+          "to": "topic",
+          "many": true
+        },
+        "people": {
+          "to": "person",
+          "many": true
+        },
+        "companies": {
+          "to": "company",
+          "many": true
+        }
+      }
+    },
+    "pdf-highlight": {
+      "label": "Pdf highlight",
+      "description": "",
+      "folder": null,
+      "template": null,
+      "icon": null,
+      "owner": "plugin",
+      "required": [
+        "anchor",
+        "color",
+        "created",
+        "cssclasses",
+        "highlight_id",
+        "page",
+        "rects",
+        "source_file"
+      ],
+      "fields": [
+        "anchor",
+        "canvases",
+        "color",
+        "created",
+        "cssclasses",
+        "document",
+        "highlight_id",
+        "image",
+        "linked_notes",
+        "page",
+        "quote",
+        "rects",
+        "selection",
+        "source_file",
+        "tags"
+      ],
+      "values": {
+        "anchor": [
+          "selection",
+          "rect"
+        ]
+      },
+      "links": {}
+    },
+    "person": {
+      "label": "Person",
+      "description": "One person you know: their properties (role, relation, email). The story lives in journal entries that link to them.",
+      "folder": "04 Inner World/Contacts/People",
+      "template": "person.md",
+      "icon": "user",
+      "owner": "you",
+      "required": [
+        "name"
+      ],
+      "fields": [
+        "aliases",
+        "birthday",
+        "companies",
+        "created",
+        "email",
+        "last_contact",
+        "name",
+        "next_action",
+        "relation",
+        "role",
+        "tags"
+      ],
+      "values": {},
+      "links": {
+        "companies": {
+          "to": "company",
+          "many": true
+        }
+      }
+    },
+    "planner-habit": {
+      "label": "Planner habit",
+      "description": "",
+      "folder": null,
+      "template": null,
+      "icon": null,
+      "owner": "plugin",
+      "required": [
+        "cadence",
+        "name",
+        "status"
+      ],
+      "fields": [
+        "cadence",
+        "cadence_days",
+        "created",
+        "created_at",
+        "linked_note",
+        "month_day",
+        "name",
+        "started_on",
+        "status",
+        "tags"
+      ],
+      "values": {
+        "cadence": [
+          "daily",
+          "weekdays",
+          "weekly",
+          "monthly"
+        ],
+        "status": [
+          "active",
+          "paused",
+          "archived"
+        ]
+      },
+      "links": {}
+    },
+    "planner-item": {
+      "label": "Planner item",
+      "description": "",
+      "folder": null,
+      "template": null,
+      "icon": null,
+      "owner": "plugin",
+      "required": [
+        "external_id",
+        "priority",
+        "source",
+        "status",
+        "title"
+      ],
+      "fields": [
+        "created",
+        "created_at",
+        "done_at",
+        "done_local",
+        "due",
+        "due_string",
+        "external_id",
+        "last_completed_due",
+        "linked_note",
+        "occurrences",
+        "parent_id",
+        "planned_day",
+        "planned_half",
+        "planned_order",
+        "priority",
+        "recurring",
+        "reopen_pending",
+        "source",
+        "source_status",
+        "status",
+        "synced_at",
+        "tags",
+        "title",
+        "url",
+        "weekly_goal"
+      ],
+      "values": {
+        "status": [
+          "open",
+          "done"
+        ]
+      },
+      "links": {}
+    },
+    "planner-routine": {
+      "label": "Planner routine",
+      "description": "",
+      "folder": null,
+      "template": null,
+      "icon": null,
+      "owner": "plugin",
+      "required": [
+        "active",
+        "end",
+        "name",
+        "routine_type",
+        "start",
+        "weekdays"
+      ],
+      "fields": [
+        "active",
+        "created",
+        "created_at",
+        "end",
+        "name",
+        "routine_type",
+        "start",
+        "tags",
+        "weekdays"
+      ],
+      "values": {
+        "routine_type": [
+          "morning",
+          "afternoon",
+          "evening"
+        ],
+        "active": [
+          "true",
+          "false"
+        ]
+      },
+      "links": {}
+    },
+    "planner-week": {
+      "label": "Planner week",
+      "description": "",
+      "folder": null,
+      "template": null,
+      "icon": null,
+      "owner": "plugin",
+      "required": [
+        "week"
+      ],
+      "fields": [
+        "created",
+        "created_at",
+        "tags",
+        "week"
+      ],
+      "values": {},
+      "links": {}
+    },
+    "project": {
+      "label": "Project",
+      "description": "Work with an end that serves a goal. Every project names its goal.",
+      "folder": "04 Inner World/My Life/Projects",
+      "template": "project.md",
+      "icon": "folder-kanban",
+      "owner": "you",
+      "required": [
+        "goal",
+        "status"
+      ],
+      "fields": [
+        "created",
+        "end_date",
+        "external_links",
+        "focus_rank",
+        "goal",
+        "key_elements",
+        "start_date",
+        "status",
+        "tags",
+        "workstreams"
+      ],
+      "values": {
+        "status": [
+          "active",
+          "done",
+          "paused",
+          "dropped"
+        ]
+      },
+      "links": {
+        "goal": {
+          "to": "goal",
+          "many": false
+        },
+        "key_elements": {
+          "to": "key-element",
+          "many": true
+        }
+      }
+    },
+    "scratchpad": {
+      "label": "Scratchpad",
+      "description": "Your raw writing for one day. Never edited by an AI; stamped when processed.",
+      "folder": "00 Daily Scratchpad",
+      "template": null,
+      "icon": "notebook-pen",
+      "owner": "you",
+      "required": [
+        "date"
+      ],
+      "fields": [
+        "created",
+        "date",
+        "processed",
+        "processed_into",
+        "processed_summary",
+        "session_ids",
+        "source",
+        "tags"
+      ],
+      "values": {},
+      "links": {},
+      "path": "YYYY/MM/YYYY-MM-DD.md"
+    },
+    "topic": {
+      "label": "Topic",
+      "description": "A subject you follow over time.",
+      "folder": "04 Inner World/My Life/Topics",
+      "template": "topic.md",
+      "icon": "hash",
+      "owner": "you",
+      "required": [],
+      "fields": [
+        "created",
+        "related_topics",
+        "tags"
+      ],
+      "values": {},
+      "links": {
+        "related_topics": {
+          "to": "topic",
+          "many": true
+        }
+      }
+    },
+    "source": {
+      "label": "Source",
+      "description": "Something someone else made: a book, article, video, podcast, post or paper, with your highlights. Synced by the Web Clipper or Readwise, linked to what it serves.",
+      "folder": "06 Outer World",
+      "template": "source.md",
+      "icon": "library",
+      "owner": "you",
+      "required": [
+        "source_type"
+      ],
+      "fields": [
+        "author",
+        "captured",
+        "consumed",
+        "created",
+        "key_elements",
+        "my_thought",
+        "people",
+        "projects",
+        "published",
+        "source_type",
+        "source_url",
+        "tags",
+        "topics"
+      ],
+      "values": {
+        "source_type": [
+          "book",
+          "article",
+          "video",
+          "podcast",
+          "post",
+          "paper",
+          "other"
+        ]
+      },
+      "links": {
+        "projects": {
+          "to": "project",
+          "many": true
+        },
+        "key_elements": {
+          "to": "key-element",
+          "many": true
+        },
+        "topics": {
+          "to": "topic",
+          "many": true
+        },
+        "people": {
+          "to": "person",
+          "many": true
+        }
+      }
+    }
+  }
+}

@@ -40,8 +40,6 @@
 import { INK_PLUGIN_ATTR, INK_PLUGIN_NAME } from '../constants';
 import { Composer } from './composer/Composer';
 import type { ComposerCallbacks, ComposerState } from './composer/Composer';
-import { DecisionBadge } from './composer/DecisionBadge';
-import type { BadgeHost } from './composer/DecisionBadge';
 import { Statusline } from './composer/Statusline';
 import type { FactId } from '../model/facts';
 
@@ -50,8 +48,6 @@ export interface PaneOptions {
   composer: ComposerState;
   /** Where the composer sends what the user does. */
   callbacks: ComposerCallbacks;
-  /** Where the decision badge sends a navigate request. */
-  badge: BadgeHost;
   /** The user's eight readout switches. Omitted means every readout on. */
   facts?: () => Record<FactId, boolean>;
 }
@@ -75,16 +71,8 @@ export interface Pane {
   dock: HTMLElement;
   /** Rung 2. Empty until a subagent opens; `renderChipTray` owns `is-empty`. */
   chipTray: HTMLElement;
-  /**
-   * The team strip, between rung 2 and rung 3. Zero height until a turn has
-   * ended in a vault with a team; `renderTeamStrip` owns `is-empty`. Not a
-   * numbered rung: the census is a property of the four it names, and this
-   * is a bare sibling between two of them.
-   */
-  teamStrip: HTMLElement;
   /** Rung 3. */
   composer: Composer;
-  badge: DecisionBadge;
   /** Rung 4, and its element, so a caller can assert on it without a query. */
   statusline: Statusline;
   facts: HTMLElement;
@@ -113,9 +101,7 @@ export function buildPane(root: HTMLElement, opts: PaneOptions): Pane {
 
   const dock = root.createDiv({ cls: 'aic-dock' });
   const chipTray = dock.createDiv({ cls: 'aic-chips is-empty' });
-  const teamStrip = dock.createDiv({ cls: 'aic-team is-empty' });
   const composer = new Composer(dock, opts.composer, opts.callbacks);
-  const badge = new DecisionBadge(composer.badgeContainer, dock, opts.badge);
 
   /* RUNG 4 IS THE CARD'S LAST CHILD, and it used to be the ROOT's.
    *
@@ -136,5 +122,5 @@ export function buildPane(root: HTMLElement, opts: PaneOptions): Pane {
   const facts = composer.factsEl;
   const statusline = opts.facts ? new Statusline(facts, opts.facts) : new Statusline(facts);
 
-  return { root, engineStatus, pins, scroller, column, dock, chipTray, teamStrip, composer, badge, statusline, facts };
+  return { root, engineStatus, pins, scroller, column, dock, chipTray, composer, statusline, facts };
 }

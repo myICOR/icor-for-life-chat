@@ -1,6 +1,6 @@
-# ICOR for Life - AI Chat
+# ICOR AI Chat
 
-**Your AI team, in the room with your notes.**
+**A chat, right beside your notes.**
 
 Ask a question next to the note you are working on, and get an answer from a
 model that already knows which note is open and which lines you selected.
@@ -15,13 +15,40 @@ person it is about and the six other notes that would have changed the
 answer.
 
 This is a window onto a model that is already in your vault. It reads your
-vault's own instructions, so your team behaves the way you wrote it, not the
-way a plugin decided.
+vault's own instructions, so it behaves the way your vault says, not the way
+a plugin decided. Anyone who wants a chat next to their notes can use it.
 
-**The plugin is a window, not a second brain.** Behaviour, identity and context
-rules live in your vault's own files. It sends no instructions of its own,
-with one visible exception in settings, which makes answers come back as ICOR
-cards instead of terminal text.
+**The plugin is a window, not a second brain.** Behaviour and context rules
+live in your vault's own files. The plugin sends no instructions of its own.
+
+## What it reads
+
+Everything the chat knows about how to work comes from the vault:
+
+- **`AGENTS.md`** at the vault root (or `CLAUDE.md` when there is no
+  `AGENTS.md`): the principles and where things live.
+- **Skills**, one folder each in `_System/Skills/<name>/SKILL.md`: how to do a
+  piece of work, step by step. The copies in `.agents/skills/` and
+  `.claude/skills/` count too, so a vault set up before `_System/` existed
+  still works.
+- **`_System/schema.json`** (in older vaults `.icor-for-life/schema.json`):
+  the top folders grouped by stage (Input, Control, Output; Refine has no
+  folder), every type of note, its folder, its fields, the values a field
+  allows and which type a link points to.
+- **The note you have open**, the text you selected, and the notes you name
+  with `[[`, `@` or the `+` menu.
+
+The ICOR for Life vault ships all three files. In any other vault the chat
+works with whatever is there, and with none of them it is a plain chat with
+your notes as context. The empty chat lists what it found, for example
+`AGENTS.md · 9 skills · schema, 19 types`.
+
+Claude Code and Codex read `AGENTS.md`, `CLAUDE.md` and their skill folders
+themselves, because they run with your vault as their working folder. With
+your own API key, the plugin reads the three files (through Obsidian's file
+adapter, which also reaches the older hidden folders Obsidian does not index)
+and sends them as the instructions with every message; the model reads a
+skill's full text when it needs it.
 
 ## Before you start
 
@@ -45,7 +72,8 @@ Optionally, the Codex command line tool as a second engine.
 ## Getting started
 
 1. Install the Claude Code command line tool and sign in.
-2. Enable the plugin and open the chat pane.
+2. Enable the plugin and open the chat pane from the robot in the ribbon on
+   the left (or **New conversation** in the command palette).
 3. Ask something about the note you have open.
 
 ## Continue on your phone
@@ -88,9 +116,12 @@ The key lives where you choose:
   why this plugin's entries carry its name:
   `icor-for-life-chat-anthropic-api-key` and
   `icor-for-life-chat-openrouter-api-key`.
-- **An env file in the vault**, by default
-  `06 AI Team/AI Team Knowledge/.env`, as `ANTHROPIC_API_KEY=` and
-  `OPENROUTER_API_KEY=`. Keep that file out of anything that syncs or
+- **An env file in the vault**, by default `.icor-for-life/.env`, as
+  `ANTHROPIC_API_KEY=` and `OPENROUTER_API_KEY=`. A vault set up before
+  November 2026 (ICOR for Life 2.x) keeps its keys in
+  `06 AI Team/AI Team Knowledge/.env`; the
+  plugin reads that file too when the new one has no key, and writes to
+  whichever of the two exists. Keep the file out of anything that syncs or
   publishes your vault.
 
 The plugin reads only the place you chose. The settings tab shows where
@@ -98,11 +129,14 @@ each key is and can move it. No key is ever shown back.
 
 ## Settings
 
-Plumbing only, by design: where the program is, which model, how hard it
-thinks, the default permission mode, where conversations are archived and for
-how long.
+Plumbing only, by design, and few of them: where the program is, which
+model, how hard it thinks, the default permission mode, whether the open note
+travels with a message, and where conversations are archived and for how
+long. Conversations are archived in `AI Sessions/` unless you name another
+folder; a 2.x vault that already has `06 AI Team/AI Sessions/` keeps using
+it.
 
-There is no prompt box, because your vault already has one.
+There is no prompt box, because your vault already has one: its `AGENTS.md`.
 
 ## What it touches
 
@@ -110,17 +144,12 @@ There is no prompt box, because your vault already has one.
 - **Reads and writes notes in your vault**, with your permission, the same as
   you would.
 - **Archives your conversations** as notes in a folder you choose.
-- **Reads your life snapshot, if one is there.** When the pane opens and again
-  before the first message of a conversation, the plugin reads
-  `.icor-for-life/scripts/snapshot.json` in your vault: the file the ICOR for
-  Life `life-snapshot.py` script writes, holding the names of your open goals,
-  your focus projects, your week and your key elements. It is only ever read,
-  never written, and if it is not there the pane says so and nothing is
-  invented. The file is per device, because Obsidian Sync skips folders whose
-  name starts with a dot, so running the script on your laptop does not put it
-  on your phone. On the **own API key** engine, the short brief built from it
-  travels to the model provider with the first message, the same way the note
-  context you pin already does.
+- **Saves a reply as a note** when you ask, in your Daily notes folder as
+  `YYYY/MM/YYYYMMDDHHmm.md`: the folder Obsidian's Daily notes setting names,
+  else `00 Daily Notes/` when the vault has it, else the vault root. A 2.x
+  vault's `00 Daily Scratchpad/` keeps working while it exists.
+- **Reads your vault's `AGENTS.md`, skills and schema**, never writes them
+  (see "What it reads").
 
 **The plugin itself makes no network calls on the default engine.** Your
 command line tool talks to Anthropic under your own account.

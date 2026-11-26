@@ -1,15 +1,16 @@
-/* ICOR for Life - AI Chat - the ICOR AI team inside the vault.
+/* ICOR AI Chat - a chat panel inside the vault.
  *
  * The plugin is a window, not a second brain: it hosts an agent runtime's
- * session (Claude Code today, behind the Provider seam) whose working
- * directory is the vault, so the vault's own CLAUDE.md, AGENTS.md and .claude/
- * are what the team reads. The plugin contributes no system prompt
- * of its own beyond one opt-in, plugin-owned format instruction.
+ * session (Claude Code or Codex, behind the Provider seam) whose working
+ * directory is the vault, so the vault's own AGENTS.md, CLAUDE.md and skill
+ * folders are what the model reads. On the own-key engine the plugin hands
+ * the same files over itself (src/vault/vaultContext.ts). It contributes no
+ * instructions of its own.
  *
  * Independent implementation from a behavioural specification; no code is
  * inherited from any other repository. */
 
-import { FileSystemAdapter, Menu, Notice, Platform, Plugin, TFile, setIcon } from 'obsidian';
+import { FileSystemAdapter, Menu, Notice, Platform, Plugin, TFile } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 /* `node:os` is NOT imported at module scope on purpose (2026-09-06, mobile
  * hardening): this file is the plugin's entry point, loaded on every
@@ -17,15 +18,12 @@ import type { WorkspaceLeaf } from 'obsidian';
  * top-of-file `import` would `require('node:os')` the instant the plugin
  * loads; the `get homeDir()` getter below defers that call and never makes
  * it off the desktop, where `Platform.isDesktopApp` guards it. */
-import { INK_PLUGIN_ATTR, INK_PLUGIN_NAME, VIEW_TYPE_CHAT, VIEW_TYPE_INSIGHTS, VIEW_TYPE_SUBAGENT } from './constants';
+import { INK_PLUGIN_ATTR, INK_PLUGIN_NAME, VIEW_TYPE_CHAT, VIEW_TYPE_SUBAGENT } from './constants';
 import { SubagentView } from './view/SubagentView';
-import { InsightsView } from './view/InsightsView';
-import { detectTeam } from './team/detect';
-import type { TeamRoster } from './team/detect';
 import { SubagentBus } from './state/subagents';
 import { ReplyActionRegistry } from './view/actions';
-import type { RenderHost } from './structured/render';
-import type { ItemView } from 'obsidian';
+import type { RenderHost } from './view/stream/StreamRenderer';
+
 import { availableProviders, missingProviderMessage, providerFor, providerMaturity } from './provider/registry';
 import { catalogFor, parseCatalogCache, withCatalog } from './model/catalogCache';
 import type { CatalogCache } from './model/catalogCache';
@@ -33,19 +31,17 @@ import { needsAdoption } from './view/leafRoute';
 import { providerFromFrontmatter, resumableSessionId } from './archive/resume';
 import { shortAge } from './view/dom';
 import { ChatView } from './view/ChatView';
-import { captureTaskAction, startDeliverableAction } from './wip/actions';
-import { openTaskCount } from './team/load';
 import { routeChatLeaf } from './view/leafRoute';
 import { terminalHoldsSession, terminalLeafFor } from './view/handoff';
 import { ChatSettingsTab } from './settings/SettingsTab';
 import { DEFAULT_SETTINGS, archiveRoot, pathSettingKey, settingsFrom } from './model/settings';
+import { ARCHIVE_FOLDER_LEGACY } from './constants';
 import { offerInstall } from './provider/install';
 import type { ChatSettings } from './model/settings';
 import type { ModelChoice } from './model/types';
 import type { AuthSource, DetectEnvironment, Detection, Provider, ProviderId } from './provider/types';
 import { splitExtraPath } from './provider/extraPath';
 import { handoverText } from './archive/handover';
-import { installMemory } from './team/memory';
 import { parseHeldSessions } from './remoteControl/held';
 import { OWN_KEY_STORAGE_KEY, effectiveBackend, loadOwnKeySettings, migratePlaintextKeys, secretStorageOf } from './engine';
 
@@ -53,18 +49,15 @@ import { OWN_KEY_STORAGE_KEY, effectiveBackend, loadOwnKeySettings, migratePlain
  * whole panel section, not an icon. It is gone for good; the name survives
  * only so an upgrade that happens while Obsidian is running can sweep the node
  * the previous build left behind, which would otherwise sit there unstyled -
- * its CSS went with it. The toolbar launcher below is a different element with
- * a different class ON PURPOSE, or this sweep would delete it at load. */
+ * its CSS went with it. (The icon in the explorer's tool-button row, 0.16 to
+ * 0.17.1, needs no sweep: the build that made it removes it on unload.) */
 const RETIRED_LAUNCHER_CLASS = 'aic-launcher';
-
-/** The icon-only entry in the file explorer's tool-button row. */
-const TREE_LAUNCHER_CLASS = 'aic-tree-launcher';
 
 /** Recent conversations offered in the launcher menu. */
 const RIBBON_SESSION_LIMIT = 6;
 
 /** The launcher's tooltip and its menu's token-carrier class. */
-const INK_RIBBON_TOOLTIP = 'AI Team';
+const INK_RIBBON_TOOLTIP = 'AI chat';
 const RIBBON_MENU_CLASS = 'aic-menu';
 
 export default class IcorChatPlugin extends Plugin {
@@ -72,8 +65,8 @@ export default class IcorChatPlugin extends Plugin {
   /** One bus per vault: a subagent transcript outlives the chip that opened it. */
   readonly subagents = new SubagentBus();
   /* EVERY ACTION A REPLY OFFERS, from one list. The view registers the
-     built-ins (copy, insert, save, edit and resend, regenerate); the rooms
-     (WiP, tasks, memory) register theirs here and the bar draws them all alike. */
+     built-ins (copy, insert, save, edit and resend, regenerate); anything
+     else registers here and the bar draws them all alike. */
   readonly replyActions = new ReplyActionRegistry();
 
   /* WHAT EACH RUNTIME'S DETECTION FOUND, refreshed at load and whenever a
@@ -143,7 +136,6 @@ export default class IcorChatPlugin extends Plugin {
     await this.loadSettings();
     await this.loadCatalogCache();
     await this.loadRemoteControlHeld();
-    installMemory(this);
     /* Claude Code and Codex are desktop CLIs, spawned as a child process;
      * neither can exist on mobile, which cannot spawn one. Probing for them
      * there would do nothing useful and would force `provider/registry.ts`
@@ -161,11 +153,10 @@ export default class IcorChatPlugin extends Plugin {
 
     this.registerView(VIEW_TYPE_CHAT, (leaf) => new ChatView(leaf, this));
     this.registerView(VIEW_TYPE_SUBAGENT, (leaf) => new SubagentView(leaf, this));
-    this.registerView(VIEW_TYPE_INSIGHTS, (leaf) => new InsightsView(leaf, this));
 
     this.addCommand({
       id: 'open-chat',
-      name: 'New conversation with the AI team',
+      name: 'New conversation',
       callback: () => void this.openChat(),
     });
 
@@ -213,37 +204,12 @@ export default class IcorChatPlugin extends Plugin {
       },
     });
 
-    this.addCommand({
-      id: 'open-insights',
-      name: 'Open AI team insights',
-      callback: () => void this.openInsights(),
-    });
-
-    /* THE WIP ROOM'S TWO REPLY ACTIONS (R1, R5), registered rather than
-       built into the bar, so the next room is a registration too. */
-    this.replyActions.register(startDeliverableAction());
-    this.replyActions.register(captureTaskAction());
-
-    /* Closing a session is a slash command the CLI already exposes; this
-       puts it in the composer of the active chat and hands over the caret,
-       so the ritual is one command away from the palette (R5). */
-    this.addCommand({
-      id: 'close-session',
-      name: 'Close session with the AI team',
-      checkCallback: (checking) => {
-        const view = this.activeChatView();
-        if (!view) return false;
-        if (!checking) view.insertIntoComposer('/close-session ');
-        return true;
-      },
-    });
-
     /* Resuming from the archive. The conversation note carries every session id
      * the thread ever had, so the vault itself is a way back into a
      * conversation - not just this session's memory of one. */
     this.addCommand({
       id: 'resume-conversation',
-      name: 'Resume this conversation with the AI team',
+      name: 'Resume this conversation',
       checkCallback: (checking) => {
         const file = this.app.workspace.getActiveFile();
         const archived = file ? this.archivedSession(file) : null;
@@ -293,74 +259,32 @@ export default class IcorChatPlugin extends Plugin {
 
     this.addSettingTab(new ChatSettingsTab(this.app, this));
 
-    /* TWO VISIBLE ENTRY POINTS, AND THE DIFFERENCE BETWEEN THEM IS THE HOST.
+    /* ONE VISIBLE ENTRY POINT: OBSIDIAN'S OWN RIBBON.
      *
-     * The ribbon is Obsidian's own place for a plugin entry, and for a plain
-     * Obsidian vault it is the right one and the only one this plugin should
-     * need. But the ICOR for Life scaffold HIDES the left ribbon, and an icon
-     * on a hidden surface is not an entry point - measured the hard way: the
-     * robot was invisible in that vault for as long as the ribbon was its only
-     * home. So the file-tree toolbar carries a second one, which is the only
-     * visible route wherever the ribbon is hidden and a duplicate wherever it
-     * is not.
-     *
-     * Both open the same menu. Neither is the only route: `open-chat` is a
-     * command, so the palette and a hotkey always reach the same function. */
+     * The ribbon is Obsidian's place for a plugin entry, and since 0.17.2 it
+     * is this plugin's only one (Tom, 2026-11-23): the icon that also sat in
+     * the file explorer's tool-button row is gone, and a member reorders or
+     * hides the robot in Settings, Appearance, Ribbon menu like any other
+     * plugin's icon. It is not the only route: `open-chat` is a command, so
+     * the palette and a hotkey always reach a conversation. Obsidian removes
+     * the icon on unload. */
     this.addRibbonIcon('bot', INK_RIBBON_TOOLTIP, (evt) =>
       void this.openLauncherMenu({ x: evt.clientX, y: evt.clientY }));
 
-    this.app.workspace.onLayoutReady(() => {
-      // An in-place upgrade from a build that injected into the file tree
-      // leaves its node behind, and its stylesheet is gone.
-      this.sweepRetiredLauncher();
-      this.mountTreeLauncher();
-    });
-    this.registerEvent(this.app.workspace.on('layout-change', () => this.mountTreeLauncher()));
+    // An in-place upgrade from a build that injected into the file tree
+    // leaves its node behind, and its stylesheet is gone.
+    this.app.workspace.onLayoutReady(() => this.sweepRetiredLauncher());
   }
 
   override onunload(): void {
     // A runtime with a shared service process releases it here.
     for (const provider of availableProviders()) provider.dispose?.();
     this.sweepRetiredLauncher();
-    for (const el of Array.from(document.querySelectorAll(`.${TREE_LAUNCHER_CLASS}`))) el.remove();
     this.subagents.clear();
   }
 
   private sweepRetiredLauncher(): void {
     for (const el of Array.from(document.querySelectorAll(`.${RETIRED_LAUNCHER_CLASS}`))) el.remove();
-  }
-
-  /* The icon-only launcher in the file explorer's tool-button row, under the
-   * ICOR for Life mark. The suite's own pattern: ICOR for Life - Focus mounts its map
-   * launcher in the same row the same way, and the INKLINE theme styles the
-   * whole slot rather than any one plugin's button.
-   *
-   * The menu is anchored to the BUTTON rather than to the cursor, so a click
-   * and a keypress put it in the same place. The role, the tabindex and the
-   * key handler are deliberately more than Obsidian's own `addNavButton`,
-   * which makes a bare div with a click listener and no tab stop: the INKLINE
-   * theme already ships a `:focus-visible` ring for this slot, and a ring
-   * nothing can ever focus is a rule that reads as enforced and never fires. */
-  private mountTreeLauncher(): void {
-    for (const leaf of this.app.workspace.getLeavesOfType('file-explorer')) {
-      const row = leaf.view?.containerEl?.querySelector('.nav-buttons-container');
-      if (!row || row.querySelector(`.${TREE_LAUNCHER_CLASS}`)) continue;
-      const btn = row.createDiv({ cls: `clickable-icon nav-action-button ${TREE_LAUNCHER_CLASS}` });
-      setIcon(btn, 'bot');
-      btn.setAttr('aria-label', INK_RIBBON_TOOLTIP);
-      btn.setAttr('role', 'button');
-      btn.setAttr('tabindex', '0');
-      const open = (): void => {
-        const rect = btn.getBoundingClientRect();
-        void this.openLauncherMenu({ x: rect.left, y: rect.bottom });
-      };
-      this.registerDomEvent(btn, 'click', open);
-      this.registerDomEvent(btn, 'keydown', (evt: KeyboardEvent) => {
-        if (evt.key !== 'Enter' && evt.key !== ' ') return;
-        evt.preventDefault();
-        open();
-      });
-    }
   }
 
   /* ------------------------------------------------------------ runtimes */
@@ -570,9 +494,9 @@ export default class IcorChatPlugin extends Plugin {
   }
 
   /* The launcher menu: start a conversation, or pick up one of the recent
-   * ones. Shared by both entry points, which is why it takes a POINT rather
-   * than an event - a keypress has no cursor, and a menu that lands at 0,0 for
-   * keyboard users is a menu that only works for a mouse.
+   * ones. It takes a POINT rather than an event, so a caller without a cursor
+   * (a keypress) can still place it; a menu that lands at 0,0 for keyboard
+   * users is a menu that only works for a mouse.
    *
    * Obsidian's own Menu chrome, deliberately. The dropdown carries the plugin's
    * token block and its INKLINE declaration so a theme can skin it, and no
@@ -639,25 +563,6 @@ export default class IcorChatPlugin extends Plugin {
     menu.showAtPosition(at);
   }
 
-  /** The AI team as the vault has it right now, or null in a bare vault. */
-  teamRoster(): TeamRoster | null {
-    return detectTeam(this.app);
-  }
-
-  /* THE INSIGHTS TAB: one per vault, in the main area. It is a page to read,
-   * so it does not ride the right sidebar the chat lives in, and a second
-   * click reveals the one that is open rather than minting another. */
-  async openInsights(): Promise<void> {
-    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_INSIGHTS)[0];
-    if (existing) {
-      await this.app.workspace.revealLeaf(existing);
-      return;
-    }
-    const leaf = this.app.workspace.getLeaf('tab');
-    await leaf.setViewState({ type: VIEW_TYPE_INSIGHTS, active: true });
-    await this.app.workspace.revealLeaf(leaf);
-  }
-
   /** Open a subagent's transcript in its own tab. */
   async openSubagent(agentId: string): Promise<void> {
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_SUBAGENT)) {
@@ -673,18 +578,9 @@ export default class IcorChatPlugin extends Plugin {
   }
 
 
-  /** The affordances a structured block needs, shared by both view types. */
-  renderHostFor(view: ItemView): RenderHost {
-    return {
-      home: this.homeDir,
-      insertCode: () => undefined,
-      openFile: (path) => void this.openPath(path),
-      revealFile: (path) => this.revealPath(path),
-      openUrl: (url) => window.open(url, '_blank'),
-      copy: (text) => void navigator.clipboard.writeText(text),
-      decisionState: () => null,
-      ...(view ? {} : {}),
-    };
+  /** What a rendered block can ask for, shared by both view types. */
+  renderHostFor(): RenderHost {
+    return { openFile: (path) => void this.openPath(path) };
   }
 
   async openPath(path: string): Promise<void> {
@@ -760,11 +656,6 @@ export default class IcorChatPlugin extends Plugin {
     return able.length === 1 ? able[0] ?? null : null;
   }
 
-  /** Open and in-progress task counts from the Tasks room, or null when the room is absent. */
-  openTaskCount(): Promise<{ open: number; inProgress: number } | null> {
-    return openTaskCount(this.app);
-  }
-
   /** The vault's absolute path: the working directory every session runs in. */
   get vaultPath(): string {
     const adapter = this.app.vault.adapter;
@@ -783,13 +674,13 @@ export default class IcorChatPlugin extends Plugin {
     }
   }
 
-  /** True when this looks like an ICOR for Life vault rather than a bare one. */
-  get scaffoldDetected(): boolean {
-    return this.app.vault.getAbstractFileByPath('06 AI Team') !== null;
+  /** True when the vault already keeps conversations where 0.16 and older put them. */
+  get legacyArchiveDetected(): boolean {
+    return this.app.vault.getAbstractFileByPath(ARCHIVE_FOLDER_LEGACY) !== null;
   }
 
   defaultArchiveFolder(): string {
-    return archiveRoot({ ...this.settings, archiveFolder: '' }, this.scaffoldDetected);
+    return archiveRoot({ ...this.settings, archiveFolder: '' }, this.legacyArchiveDetected);
   }
 
   /* THE CHAT OPENS IN THE RIGHT SIDEBAR, beside the planner tray - Tom,

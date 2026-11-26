@@ -11,10 +11,9 @@
  * file only decides what the model is told. That split is what lets the
  * preamble be asserted headless, cap and dedupe included. */
 
-/* Three kinds joined on 2026-09-04 (R1, R5, R9): a WiP folder, the open task
- * list, and the notes linked from or to the open note. Each resolves to paths
+/* `linked` is the notes linked from or to the open note. It resolves to paths
  * like a folder does; what differs is where the paths come from. */
-export type ContextKind = 'active' | 'note' | 'folder' | 'tag' | 'property' | 'wip' | 'tasks' | 'linked';
+export type ContextKind = 'active' | 'note' | 'folder' | 'tag' | 'property' | 'linked';
 
 export interface ContextRef {
   kind: ContextKind;
@@ -103,8 +102,6 @@ export type ContextPick =
   | { kind: 'folder'; path: string }
   | { kind: 'tag'; tag: string }
   | { kind: 'property'; key: string; value: string }
-  | { kind: 'wip'; path: string }
-  | { kind: 'tasks' }
   | { kind: 'linked'; direction: 'from' | 'to'; path: string };
 
 /** The stable id a pick resolves to. One place, so a chip and a dedupe agree. */
@@ -119,10 +116,6 @@ export function contextPickId(pick: ContextPick): string {
       return pick.tag.startsWith('#') ? pick.tag : `#${pick.tag}`;
     case 'property':
       return `${pick.key}: ${pick.value}`;
-    case 'wip':
-      return pick.path;
-    case 'tasks':
-      return 'tasks:open';
     case 'linked':
       return `linked:${pick.direction}:${pick.path}`;
   }

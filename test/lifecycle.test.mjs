@@ -5,7 +5,7 @@ import {
   ApprovalBroker, toPermissionAnswer, ChatStore, reduce, emptyState,
   skipPermissions, archiveRoot, DEFAULT_SETTINGS,
   contextPreamble, withContext, selectionRangeLabel, MAX_SELECTION_CHARS,
-  STRUCTURED_REPLY_PROMPT,
+  settingsFrom,
   routeChatLeaf,
   needsAdoption,
 } from './build/pure.mjs';
@@ -91,11 +91,10 @@ test('skip-permissions is reachable from exactly one mode', () => {
   for (const m of ['default', 'plan', 'acceptEdits']) assert.equal(skipPermissions(m), false);
 });
 
-test('the archive root follows the vault layout', () => {
+test('the archive root keeps the folder an older vault used, else AI Sessions', () => {
   assert.equal(archiveRoot(DEFAULT_SETTINGS, true), '06 AI Team/AI Sessions');
   assert.equal(archiveRoot(DEFAULT_SETTINGS, false), 'AI Sessions');
   assert.equal(archiveRoot({ ...DEFAULT_SETTINGS, archiveFolder: ' Chats ' }, true), 'Chats');
-  assert.equal(archiveRoot({ ...DEFAULT_SETTINGS, vaultMode: 'scaffold' }, false), '06 AI Team/AI Sessions');
 });
 
 test('the shipped defaults are the safe ones', () => {
@@ -103,14 +102,15 @@ test('the shipped defaults are the safe ones', () => {
   assert.equal(DEFAULT_SETTINGS.cliPath, '');
 });
 
-/* Structured replies are the format the whole product is designed around, so a
- * user who never opens settings still gets it. It is not a safety default and
- * does not belong in the test above: it appends a plugin-owned instruction to
- * the system prompt, which is the ONE thing this plugin puts in the team's
- * mouth, and the README says so. Asserted here so the day somebody flips it
- * back is a day the suite argues. */
-test('structured replies ship ON', () => {
-  assert.equal(DEFAULT_SETTINGS.structuredReplies, true);
+/* The plugin brings no instructions of its own (0.17.0): the ICOR card format
+ * and its setting are gone, and a data.json that still carries the retired
+ * keys reads without them, so the next save drops them. */
+test('retired settings are read away, not carried forward', () => {
+  const read = settingsFrom({ structuredReplies: true, vaultMode: 'scaffold', factTeamStrip: true, factAgents: true, model: 'opus' });
+  for (const gone of ['structuredReplies', 'vaultMode', 'factTeamStrip', 'factAgents']) {
+    assert.equal(Object.prototype.hasOwnProperty.call(read, gone), false, `${gone} survived the read`);
+  }
+  assert.equal(read.model, 'opus', 'a live setting was lost on the way');
 });
 
 test('context is sent as a visible preamble, or not at all', () => {
@@ -134,11 +134,6 @@ test('a huge selection is truncated and says so', () => {
   });
   assert.ok(p.includes('[truncated]'));
   assert.ok(p.length < MAX_SELECTION_CHARS + 200);
-});
-
-test('the one prompt the plugin owns is a fixed constant, not a template', () => {
-  assert.ok(STRUCTURED_REPLY_PROMPT.includes('ICOR card format'));
-  assert.ok(!/\$\{|\{\{/.test(STRUCTURED_REPLY_PROMPT), 'no interpolation may reach the prompt');
 });
 
 /* ------------------------------------------------------- the chip tray */

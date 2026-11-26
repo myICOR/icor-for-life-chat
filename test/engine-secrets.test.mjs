@@ -38,7 +38,7 @@ function fakeAdapter(files = {}) {
   };
 }
 
-const ENV = '06 AI Team/AI Team Knowledge/.env';
+const ENV = '.icor-for-life/.env';
 const hostsWith = (store, files) => ({ store, env: fakeAdapter(files), envFilePath: ENV });
 
 /* ------------------------------------------------------------------ ids */
@@ -190,7 +190,9 @@ test('data.json has no key field to migrate: the settings shape carries none, an
   // The instrument's own control: the pre-release local-storage shape IS
   // credential-shaped, so silence above means clean, not unmeasured.
   assert.deepEqual(credentialShaped({ anthropicApiKey: 'x', allowEnvApiKey: true }), ['anthropicApiKey']);
-  for (const field of Object.keys(fixture)) assert.ok(field in DEFAULT_SETTINGS, `data.json carries ${field}, which no setting owns`);
+  // The fixture is an old record: it still carries settings 0.17.0 retired,
+  // and the reader must drop every one of them.
+  for (const field of Object.keys(settingsFrom(fixture))) assert.ok(field in DEFAULT_SETTINGS, `data.json carries ${field}, which no setting owns`);
   const store = fakeStore();
   assert.deepEqual(migratePlaintextKeys(fixture, store), { moved: [], cleaned: null }, 'the migration found something in a clean data.json');
   assert.deepEqual(migratePlaintextKeys(settingsFrom(fixture), store), { moved: [], cleaned: null });

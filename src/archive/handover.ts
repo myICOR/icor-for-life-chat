@@ -25,7 +25,8 @@ export const HANDOVER_CAP = 60_000;
  */
 export function handoverText(source: string, title: string): string {
   const body = stripFrontmatter(source).trim();
-  if (!body || !/^## (You|The team)$/m.test(body)) return '';
+  // `## The team` is how 0.16 and older wrote the replies.
+  if (!body || !/^## (You|Assistant|The team)$/m.test(body)) return '';
   const cut = body.length > HANDOVER_CAP;
   const kept = cut ? body.slice(body.length - HANDOVER_CAP) : body;
   return [

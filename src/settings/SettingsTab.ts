@@ -1,4 +1,4 @@
-/* Plumbing only. Nothing here changes what the team says or how it thinks:
+/* Plumbing only. Nothing here changes what the model says or how it thinks:
  * the vault's own CLAUDE.md governs behaviour, and the plugin never injects a
  * prompt of its own beyond the one opt-in structured-replies constant.
  *
@@ -237,7 +237,6 @@ export class ChatSettingsTab extends PluginSettingTab {
     const save = async (value: unknown): Promise<void> => {
       Object.assign(this.plugin.settings, { [c.key]: value });
       await this.plugin.saveSettings();
-      if (c.key === 'vaultMode') this.display();
     };
     switch (c.type) {
       case 'toggle':
