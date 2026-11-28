@@ -680,7 +680,7 @@ export default class IcorChatPlugin extends Plugin {
     return this.app.vault.getAbstractFileByPath(ARCHIVE_FOLDER_LEGACY) !== null;
   }
 
-  /** The ICOR for Life vault's Databases room (`05 Databases`), or null in any other vault. */
+  /** The ICOR for Life vault's Databases room (`11 Databases`), or null in any other vault. */
   get databasesRoom(): string | null {
     return detectDatabasesRoom(this.app);
   }

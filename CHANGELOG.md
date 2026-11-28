@@ -3,6 +3,10 @@
 Notable changes per release. Older releases are described in their commit
 messages (`git log --grep='^0\.'`) and on the GitHub releases page.
 
+## 0.17.6
+
+- The Workbench layout: the note-reading tool's example path is `02 My Life/Topics/example.md`, so the model is not shown a folder the vault no longer has. Conversations are still saved in the vault's Databases folder, now `11 Databases/AI Sessions`, found by name as before.
+
 ## 0.17.5
 
 Saving conversations is your choice (Tom, 2026-11-26).

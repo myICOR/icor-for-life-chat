@@ -11,7 +11,7 @@
  * which never copies `.icor-for-life/`. A folder called "Databases" alone is
  * not proof: any vault may have one.
  *
- * The room is the vault-root folder named `NN Databases` (`05 Databases` in
+ * The room is the vault-root folder named `NN Databases` (`11 Databases` in
  * 3.0). It is matched by its name, never by its number, because the number is
  * the room's place in the list and has moved between versions before.
  *
@@ -24,7 +24,7 @@
 import type { App, TAbstractFile, TFolder } from 'obsidian';
 import { SCHEMA_PATH } from './vaultContext';
 
-/** `05 Databases`, `07 Databases`: two digits, a space, the room's name. */
+/** `11 Databases`, `05 Databases`, `07 Databases`: two digits, a space, the room's name. */
 const DATABASES_ROOM = /^\d{2} Databases$/;
 
 /**
